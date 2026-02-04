@@ -1,0 +1,139 @@
+import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
+import { createClient } from "@supabase/supabase-js";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type SendPayload = {
+  to?: string;
+  subject?: string;
+  text?: string;
+  html?: string;
+  replyToEmailId?: string;
+};
+
+const getEnv = (key: string) => {
+  const value = process.env[key];
+  if (!value) throw new Error(`Missing env var ${key}`);
+  return value;
+};
+
+const getSupabase = () =>
+  createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+const findContactId = async (email?: string | null) => {
+  if (!email) return null;
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("contacts")
+    .select("id")
+    .ilike("email", email)
+    .maybeSingle();
+  return data?.id ?? null;
+};
+
+const buildReferencesHeader = (references?: string | null, messageId?: string) => {
+  const parts = [references, messageId].filter(Boolean) as string[];
+  if (!parts.length) return null;
+  const unique = Array.from(new Set(parts.join(" ").split(/\s+/)));
+  return unique.join(" ");
+};
+
+export async function POST(request: Request) {
+  let payload: SendPayload;
+  try {
+    payload = (await request.json()) as SendPayload;
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
+
+  if (!payload?.to) {
+    return NextResponse.json({ ok: false, error: "Missing to" }, { status: 400 });
+  }
+
+  const supabase = getSupabase();
+
+  let replyMessageId: string | null = null;
+  let replyReferences: string | null = null;
+  let replySubject: string | null = null;
+
+  if (payload.replyToEmailId) {
+    const { data } = await supabase
+      .from("emails")
+      .select("message_id_header, references, subject")
+      .eq("id", payload.replyToEmailId)
+      .maybeSingle();
+
+    replyMessageId = data?.message_id_header ?? null;
+    replyReferences = buildReferencesHeader(
+      data?.references ?? null,
+      replyMessageId ?? undefined
+    );
+    replySubject = data?.subject ?? null;
+  }
+
+  let subject = payload.subject?.trim() || replySubject || "";
+  if (payload.replyToEmailId && subject && !/^re:/i.test(subject)) {
+    subject = `Re: ${subject}`;
+  }
+
+  const transport = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: getEnv("GMAIL_USER"),
+      pass: getEnv("GMAIL_APP_PASSWORD"),
+    },
+  });
+
+  const headers: Record<string, string> = {};
+  if (replyMessageId) headers["In-Reply-To"] = replyMessageId;
+  if (replyReferences) headers["References"] = replyReferences;
+
+  const info = await transport.sendMail({
+    from: getEnv("GMAIL_USER"),
+    to: payload.to,
+    subject: subject || undefined,
+    text: payload.text,
+    html: payload.html,
+    headers,
+  });
+
+  const contactId = await findContactId(payload.to);
+  const now = new Date().toISOString();
+
+  const { data: insertedEmail } = await supabase
+    .from("emails")
+    .insert({
+      contact_id: contactId,
+      direction: "outbound",
+      gmail_uid: null,
+      message_id_header: info.messageId ?? null,
+      in_reply_to: replyMessageId,
+      references: replyReferences,
+      from_email: getEnv("GMAIL_USER"),
+      from_name: null,
+      to_email: payload.to,
+      subject: subject || null,
+      text_body: payload.text ?? null,
+      html_body: payload.html ?? null,
+      received_at: now,
+      raw: { messageId: info.messageId ?? null },
+    })
+    .select("id")
+    .single();
+
+  if (insertedEmail?.id) {
+    await supabase.from("notifications").insert({
+      type: "email_sent",
+      contact_id: contactId,
+      email_id: insertedEmail.id,
+      title: `Email inviata a ${payload.to}`,
+      body: subject || null,
+    });
+  }
+
+  return NextResponse.json({ ok: true, messageId: info.messageId });
+}

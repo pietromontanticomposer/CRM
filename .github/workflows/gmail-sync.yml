@@ -1,0 +1,18 @@
+name: Gmail IMAP Sync
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping sync endpoint
+        run: |
+          curl -sS -f -X GET "$SYNC_URL" \
+            -H "x-cron-secret: $CRON_SECRET"
+        env:
+          SYNC_URL: https://crm-smoky-eight.vercel.app/api/gmail/sync
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
