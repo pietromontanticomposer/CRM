@@ -15,6 +15,8 @@ type ParsedEmail = {
   from: ParsedAddress | null;
   to: string | null;
   toList: string[];
+  ccList: string[];
+  bccList: string[];
   subject: string | null;
   text: string | null;
   html: string | null;
@@ -71,6 +73,8 @@ const parseEmail = async (source: Buffer | Uint8Array): Promise<ParsedEmail> => 
   const parsed = await simpleParser(buffer);
   const from = parsed.from?.value?.[0] ?? null;
   const toList = parseAddressArray(parsed.to);
+  const ccList = parseAddressArray(parsed.cc);
+  const bccList = parseAddressArray(parsed.bcc);
 
   const rawHeaders = Array.from(parsed.headers.entries()).map(
     ([name, value]) => ({
@@ -83,6 +87,8 @@ const parseEmail = async (source: Buffer | Uint8Array): Promise<ParsedEmail> => 
     from: from ? { address: from.address, name: from.name } : null,
     to: parseAddressList(parsed.to),
     toList,
+    ccList,
+    bccList,
     subject: parsed.subject?.trim() || null,
     text: parsed.text || null,
     html: parsed.html || null,
@@ -131,13 +137,52 @@ const setLastUid = async (uid: number) => {
   });
 };
 
-const findContactId = async (email?: string | null) => {
-  if (!email) return null;
+const normalizeEmail = (value?: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length ? trimmed : null;
+};
+
+const uniqueEmails = (values: Array<string | null | undefined>) => {
+  const unique = new Set<string>();
+  for (const value of values) {
+    const normalized = normalizeEmail(value);
+    if (normalized) unique.add(normalized);
+  }
+  return Array.from(unique);
+};
+
+const buildRecipientList = (
+  toList: string[],
+  ccList: string[],
+  bccList: string[]
+) => {
+  const recipients: string[] = [];
+  const seen = new Set<string>();
+  const addAddress = (value: string) => {
+    const normalized = normalizeEmail(value);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    recipients.push(value);
+  };
+  for (const address of [...toList, ...ccList, ...bccList]) {
+    addAddress(address);
+  }
+  return recipients;
+};
+
+const findContactIdFromAddresses = async (
+  addresses: Array<string | null | undefined>
+) => {
+  const candidates = uniqueEmails(addresses);
+  if (!candidates.length) return null;
   const supabase = getSupabase();
+  const filter = candidates.map((email) => `email.ilike.${email}`).join(",");
   const { data } = await supabase
     .from("contacts")
     .select("id")
-    .ilike("email", email)
+    .or(filter)
+    .limit(1)
     .maybeSingle();
   return data?.id ?? null;
 };
@@ -248,22 +293,59 @@ const runSync = async (request: Request) => {
         const supabase = getSupabase();
         const { data: existing } = await supabase
           .from("emails")
-          .select("id")
+          .select("id, contact_id, from_email, to_email")
           .eq("gmail_uid", message.uid)
           .maybeSingle();
-
-        if (existing) continue;
 
         const parsed = await parseEmail(message.source as Buffer | Uint8Array);
         const fromEmail = parsed.from?.address ?? null;
         const fromName = parsed.from?.name ?? null;
-        const toPrimary = parsed.toList[0] ?? null;
+        const recipients = buildRecipientList(
+          parsed.toList,
+          parsed.ccList,
+          parsed.bccList
+        );
+        const recipientsDisplay = recipients.length
+          ? recipients.join(", ")
+          : null;
 
         const isOutbound =
-          fromEmail?.toLowerCase() === user.toLowerCase();
-        const contactEmail = isOutbound ? toPrimary : fromEmail;
-        const contactId = await findContactId(contactEmail);
+          normalizeEmail(fromEmail) === normalizeEmail(user);
+        const contactId = isOutbound
+          ? await findContactIdFromAddresses(
+              recipients.filter(
+                (address) => normalizeEmail(address) !== normalizeEmail(user)
+              )
+            )
+          : await findContactIdFromAddresses([fromEmail]);
         const direction = isOutbound ? "outbound" : "inbound";
+
+        if (existing) {
+          const shouldUpdateContact =
+            !existing.contact_id && Boolean(contactId);
+          const shouldUpdateFrom = !existing.from_email && Boolean(fromEmail);
+          const shouldUpdateTo =
+            Boolean(recipientsDisplay) &&
+            existing.to_email !== recipientsDisplay;
+
+          if (shouldUpdateContact || shouldUpdateFrom || shouldUpdateTo) {
+            await supabase
+              .from("emails")
+              .update({
+                contact_id: shouldUpdateContact
+                  ? contactId
+                  : existing.contact_id,
+                from_email: shouldUpdateFrom
+                  ? fromEmail
+                  : existing.from_email,
+                to_email: shouldUpdateTo
+                  ? recipientsDisplay
+                  : existing.to_email,
+              })
+              .eq("id", existing.id);
+          }
+          continue;
+        }
 
         const { data: insertedEmail, error } = await insertEmail({
           contact_id: contactId,
@@ -274,13 +356,15 @@ const runSync = async (request: Request) => {
           references: parsed.references,
           from_email: fromEmail,
           from_name: fromName,
-          to_email: parsed.to,
+          to_email: recipientsDisplay,
           subject: parsed.subject,
           text_body: parsed.text,
           html_body: parsed.html,
           received_at: parsed.date,
           raw: {
             uid: message.uid,
+            cc: parsed.ccList,
+            bcc: parsed.bccList,
             ...parsed.raw,
           },
         });
