@@ -19,6 +19,11 @@ const getEnv = (key: string) => {
   return value;
 };
 
+const getOptionalEnv = (key: string) => {
+  const value = process.env[key];
+  return value && value.trim().length > 0 ? value : null;
+};
+
 const getSupabase = () =>
   createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -40,6 +45,26 @@ const buildReferencesHeader = (references?: string | null, messageId?: string) =
   if (!parts.length) return null;
   const unique = Array.from(new Set(parts.join(" ").split(/\s+/)));
   return unique.join(" ");
+};
+
+const getSmtpConfig = () => {
+  const host =
+    getOptionalEnv("MAILDEV_HOST") ||
+    getOptionalEnv("SMTP_HOST") ||
+    null;
+  const portValue =
+    getOptionalEnv("MAILDEV_PORT") || getOptionalEnv("SMTP_PORT");
+  const port = portValue ? Number(portValue) : null;
+  if (!host || !port || !Number.isFinite(port)) return null;
+
+  const user = getOptionalEnv("SMTP_USER");
+  const pass = getOptionalEnv("SMTP_PASS");
+  return {
+    host,
+    port,
+    secure: port === 465,
+    auth: user && pass ? { user, pass } : undefined,
+  };
 };
 
 export async function POST(request: Request) {
@@ -80,20 +105,28 @@ export async function POST(request: Request) {
     subject = `Re: ${subject}`;
   }
 
-  const transport = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: getEnv("GMAIL_USER"),
-      pass: getEnv("GMAIL_APP_PASSWORD"),
-    },
-  });
+  const smtpConfig = getSmtpConfig();
+  const transport = smtpConfig
+    ? nodemailer.createTransport(smtpConfig)
+    : nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: getEnv("GMAIL_USER"),
+          pass: getEnv("GMAIL_APP_PASSWORD"),
+        },
+      });
 
   const headers: Record<string, string> = {};
   if (replyMessageId) headers["In-Reply-To"] = replyMessageId;
   if (replyReferences) headers["References"] = replyReferences;
 
+  const fromAddress =
+    getOptionalEnv("MAIL_FROM") ||
+    getOptionalEnv("GMAIL_USER") ||
+    "crm@local.test";
+
   const info = await transport.sendMail({
-    from: getEnv("GMAIL_USER"),
+    from: fromAddress,
     to: payload.to,
     subject: subject || undefined,
     text: payload.text,
@@ -113,7 +146,7 @@ export async function POST(request: Request) {
       message_id_header: info.messageId ?? null,
       in_reply_to: replyMessageId,
       references: replyReferences,
-      from_email: getEnv("GMAIL_USER"),
+      from_email: fromAddress,
       from_name: null,
       to_email: payload.to,
       subject: subject || null,
