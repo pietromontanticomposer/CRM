@@ -214,6 +214,18 @@ export default function CrmApp() {
     return threads;
   }, [emails, emailReadById]);
 
+  useEffect(() => {
+    if (!emailThreads.length) {
+      if (Object.keys(openThreads).length) {
+        setOpenThreads({});
+      }
+      return;
+    }
+    if (Object.keys(openThreads).length === 0) {
+      setOpenThreads({ [emailThreads[0].key]: true });
+    }
+  }, [emailThreads, openThreads]);
+
   const loadContacts = async () => {
     setLoading(true);
     setError(null);
@@ -905,6 +917,14 @@ export default function CrmApp() {
                           ...prev,
                           [thread.key]: isOpen,
                         }));
+                        if (!isOpen && selectedEmailId) {
+                          const isSelectedInThread = thread.messages.some(
+                            (message) => message.id === selectedEmailId
+                          );
+                          if (isSelectedInThread) {
+                            setSelectedEmailId(null);
+                          }
+                        }
                       }}
                     >
                       <summary className="cursor-pointer list-none">
@@ -1004,7 +1024,10 @@ export default function CrmApp() {
                   ))}
                 </div>
 
-                {selectedEmail && (
+                {selectedEmail &&
+                  openThreads[
+                    normalizeThreadSubject(selectedEmail.subject).toLowerCase()
+                  ] && (
                   <div className="rounded-xl border border-[var(--line)] bg-white p-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                       Dettaglio email
