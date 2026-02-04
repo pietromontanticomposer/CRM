@@ -145,6 +145,7 @@ export default function CrmApp() {
   const [emailReadById, setEmailReadById] = useState<Record<string, boolean>>(
     {}
   );
+  const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -301,6 +302,7 @@ export default function CrmApp() {
     setSelectedId(contact.id);
     setDraft(buildDraft(contact));
     setSelectedEmailId(null);
+    setOpenThreads({});
     loadEmails(contact.id, contact.email);
   };
 
@@ -894,7 +896,16 @@ export default function CrmApp() {
                     <details
                       key={thread.key}
                       className="rounded-2xl border border-[var(--line)] bg-white/70"
-                      defaultOpen={threadIndex === 0}
+                      open={openThreads[thread.key] ?? threadIndex === 0}
+                      onToggle={(event) => {
+                        const isOpen = (
+                          event.currentTarget as HTMLDetailsElement
+                        ).open;
+                        setOpenThreads((prev) => ({
+                          ...prev,
+                          [thread.key]: isOpen,
+                        }));
+                      }}
                     >
                       <summary className="cursor-pointer list-none">
                         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
