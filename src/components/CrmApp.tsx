@@ -92,6 +92,24 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
+const getTimestamp = (value?: string | null) => {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const normalizeThreadSubject = (subject?: string | null) => {
+  const fallback = "Senza oggetto";
+  if (!subject) return fallback;
+  let normalized = subject.trim();
+  if (!normalized) return fallback;
+  normalized = normalized.replace(/^(re|fw|fwd|ris)\s*:\s*/gi, "");
+  while (/^(re|fw|fwd|ris)\s*:\s*/i.test(normalized)) {
+    normalized = normalized.replace(/^(re|fw|fwd|ris)\s*:\s*/gi, "");
+  }
+  return normalized.trim() || fallback;
+};
+
 const getInitials = (name: string) => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => part[0]?.toUpperCase()).join("");
@@ -149,6 +167,51 @@ export default function CrmApp() {
       {} as Record<Status, number>
     );
   }, [contacts]);
+
+  const emailThreads = useMemo(() => {
+    if (!emails.length) return [];
+    const grouped = new Map<
+      string,
+      { key: string; subject: string; messages: EmailRow[] }
+    >();
+
+    emails.forEach((email) => {
+      const subject = normalizeThreadSubject(email.subject);
+      const key = subject.toLowerCase();
+      if (!grouped.has(key)) {
+        grouped.set(key, { key, subject, messages: [] });
+      }
+      grouped.get(key)!.messages.push(email);
+    });
+
+    const threads = Array.from(grouped.values()).map((thread) => {
+      thread.messages.sort(
+        (a, b) => getTimestamp(b.received_at) - getTimestamp(a.received_at)
+      );
+      const latest = thread.messages[0] ?? null;
+      const unreadCount = thread.messages.reduce((acc, message) => {
+        if (
+          message.direction === "inbound" &&
+          !(emailReadById[message.id] ?? true)
+        ) {
+          return acc + 1;
+        }
+        return acc;
+      }, 0);
+      return {
+        ...thread,
+        latestAt: latest?.received_at ?? null,
+        unreadCount,
+        total: thread.messages.length,
+      };
+    });
+
+    threads.sort(
+      (a, b) => getTimestamp(b.latestAt) - getTimestamp(a.latestAt)
+    );
+
+    return threads;
+  }, [emails, emailReadById]);
 
   const loadContacts = async () => {
     setLoading(true);
@@ -826,67 +889,108 @@ export default function CrmApp() {
                   </div>
                 )}
 
-                <div className="grid gap-2">
-                  {emails.map((email) => {
-                    const address =
-                      email.direction === "inbound"
-                        ? email.from_email
-                        : email.to_email;
-                    const preview =
-                      email.subject ||
-                      email.text_body?.replace(/\s+/g, " ").trim() ||
-                      "Senza oggetto";
-                    const isRead = emailReadById[email.id] ?? true;
-                    const directionLabel =
-                      email.direction === "inbound" ? "Ricevuta" : "Inviata";
-                    const directionStyle =
-                      email.direction === "inbound"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-amber-200 bg-amber-50 text-amber-700";
-                    return (
-                      <button
-                        key={email.id}
-                        type="button"
-                        onClick={() => handleSelectEmail(email.id)}
-                        className={`rounded-xl border px-3 py-2 text-left transition ${
-                          email.id === selectedEmailId
-                            ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                            : isRead
-                              ? "border-[var(--line)] bg-white"
-                              : "border-[var(--accent)] bg-[var(--panel-strong)]"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                          <span className="flex items-center gap-2">
-                            {!isRead && (
-                              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                <div className="grid gap-3">
+                  {emailThreads.map((thread, threadIndex) => (
+                    <details
+                      key={thread.key}
+                      className="rounded-2xl border border-[var(--line)] bg-white/70"
+                      defaultOpen={threadIndex === 0}
+                    >
+                      <summary className="cursor-pointer list-none">
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                          <div>
+                            <div className="text-sm font-semibold text-[var(--ink)]">
+                              {thread.subject}
+                            </div>
+                            <div className="mt-1 text-xs text-[var(--muted)]">
+                              Ultima attivita{" "}
+                              {formatDateTime(thread.latestAt)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 font-semibold text-[var(--muted)]">
+                              {thread.total} messaggi
+                            </span>
+                            {thread.unreadCount > 0 && (
+                              <span className="rounded-full border border-[var(--accent)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--accent)]">
+                                {thread.unreadCount} non letti
+                              </span>
                             )}
-                            <span>
-                              {email.direction === "inbound" ? "Da" : "A"}{" "}
-                              {address || "—"}
-                            </span>
-                          </span>
-                          <span className="flex items-center gap-2">
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
-                            >
-                              {directionLabel}
-                            </span>
-                            <span>{formatDateTime(email.received_at)}</span>
-                          </span>
+                          </div>
                         </div>
-                        <div
-                          className={`mt-1 text-sm text-[var(--ink)] ${
-                            isRead ? "font-semibold" : "font-bold"
-                          }`}
-                        >
-                          {preview.length > 120
-                            ? `${preview.slice(0, 120)}…`
-                            : preview}
+                      </summary>
+                      <div className="border-t border-[var(--line)] px-4 py-3">
+                        <div className="grid gap-2">
+                          {thread.messages.map((email) => {
+                            const address =
+                              email.direction === "inbound"
+                                ? email.from_email
+                                : email.to_email;
+                            const preview =
+                              email.subject ||
+                              email.text_body?.replace(/\s+/g, " ").trim() ||
+                              "Senza oggetto";
+                            const isRead = emailReadById[email.id] ?? true;
+                            const directionLabel =
+                              email.direction === "inbound"
+                                ? "Ricevuta"
+                                : "Inviata";
+                            const directionStyle =
+                              email.direction === "inbound"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-amber-200 bg-amber-50 text-amber-700";
+                            return (
+                              <button
+                                key={email.id}
+                                type="button"
+                                onClick={() => handleSelectEmail(email.id)}
+                                className={`rounded-xl border px-3 py-2 text-left transition ${
+                                  email.id === selectedEmailId
+                                    ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                                    : isRead
+                                      ? "border-[var(--line)] bg-white"
+                                      : "border-[var(--accent)] bg-[var(--panel-strong)]"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                                  <span className="flex items-center gap-2">
+                                    {!isRead && (
+                                      <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                                    )}
+                                    <span>
+                                      {email.direction === "inbound"
+                                        ? "Da"
+                                        : "A"}{" "}
+                                      {address || "—"}
+                                    </span>
+                                  </span>
+                                  <span className="flex items-center gap-2">
+                                    <span
+                                      className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
+                                    >
+                                      {directionLabel}
+                                    </span>
+                                    <span>
+                                      {formatDateTime(email.received_at)}
+                                    </span>
+                                  </span>
+                                </div>
+                                <div
+                                  className={`mt-1 text-sm text-[var(--ink)] ${
+                                    isRead ? "font-semibold" : "font-bold"
+                                  }`}
+                                >
+                                  {preview.length > 120
+                                    ? `${preview.slice(0, 120)}…`
+                                    : preview}
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                    </details>
+                  ))}
                 </div>
 
                 {selectedEmail && (

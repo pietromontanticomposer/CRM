@@ -57,6 +57,14 @@ textarea:focus {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent);
 }
 
+summary {
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
 ::selection {
   background: color-mix(in oklab, var(--accent) 25%, white 75%);
 }
