@@ -55,6 +55,23 @@ type EmailRow = {
   created_at: string | null;
 };
 
+type SummaryPayload = {
+  one_liner?: string;
+  highlights?: string[];
+  open_questions?: string[];
+  next_actions?: string[];
+  last_inbound?: string;
+  last_outbound?: string;
+};
+
+type SummaryState = {
+  raw: string;
+  parsed: SummaryPayload | null;
+  updatedAt?: string | null;
+  lastEmailAt?: string | null;
+  model?: string | null;
+};
+
 const emptyNewContact: NewContact = {
   name: "",
   email: "",
@@ -98,21 +115,6 @@ const getTimestamp = (value?: string | null) => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-const truncateText = (value: string, max = 160) => {
-  if (value.length <= max) return value;
-  return `${value.slice(0, max)}…`;
-};
-
-const splitSentences = (value?: string | null) => {
-  if (!value) return [];
-  const cleaned = value.replace(/\s+/g, " ").trim();
-  if (!cleaned) return [];
-  return (
-    cleaned.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((entry) => entry.trim()) ||
-    []
-  );
-};
-
 const normalizeThreadSubject = (subject?: string | null) => {
   const fallback = "Senza oggetto";
   if (!subject) return fallback;
@@ -144,6 +146,18 @@ const buildDraft = (contact: Contact): DraftContact => ({
   notes: contact.notes,
 });
 
+const SUMMARY_THREAD_KEY = "__contact__";
+
+const parseSummary = (value?: string | null) => {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as SummaryPayload;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 export default function CrmApp() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -161,6 +175,12 @@ export default function CrmApp() {
     {}
   );
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
+  const [summary, setSummary] = useState<SummaryState | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryAutoTried, setSummaryAutoTried] = useState<
+    Record<string, boolean>
+  >({});
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -229,15 +249,11 @@ export default function CrmApp() {
     return threads;
   }, [emails, emailReadById]);
 
-  const emailSummary = useMemo(() => {
+  const summaryMeta = useMemo(() => {
     if (!emails.length) return null;
     const sorted = [...emails].sort(
       (a, b) => getTimestamp(b.received_at) - getTimestamp(a.received_at)
     );
-    const latestInbound =
-      sorted.find((email) => email.direction === "inbound") || null;
-    const latestOutbound =
-      sorted.find((email) => email.direction === "outbound") || null;
     const lastActivity = sorted[0]?.received_at ?? null;
     const unreadCount = sorted.reduce((acc, email) => {
       if (
@@ -249,61 +265,10 @@ export default function CrmApp() {
       return acc;
     }, 0);
 
-    const inboundTexts = sorted
-      .filter((email) => email.direction === "inbound")
-      .slice(0, 5)
-      .flatMap((email) => splitSentences(email.text_body));
-
-    const questions = inboundTexts
-      .filter((sentence) => sentence.includes("?"))
-      .slice(0, 2)
-      .map((sentence) => truncateText(sentence, 140));
-
-    const actionPatterns = [
-      /per favore/i,
-      /puoi/i,
-      /mi confermi/i,
-      /fammi sapere/i,
-      /da fare/i,
-      /serve/i,
-      /ti chiedo/i,
-      /potresti/i,
-    ];
-    const actions = inboundTexts
-      .filter((sentence) =>
-        actionPatterns.some((pattern) => pattern.test(sentence))
-      )
-      .slice(0, 2)
-      .map((sentence) => truncateText(sentence, 140));
-
-    const latestInboundSnippet = latestInbound
-      ? truncateText(
-          splitSentences(latestInbound.text_body)[0] ||
-            latestInbound.subject ||
-            "Senza oggetto",
-          160
-        )
-      : null;
-
-    const latestOutboundSnippet = latestOutbound
-      ? truncateText(
-          splitSentences(latestOutbound.text_body)[0] ||
-            latestOutbound.subject ||
-            "Senza oggetto",
-          160
-        )
-      : null;
-
     return {
-      latestInbound,
-      latestOutbound,
-      latestInboundSnippet,
-      latestOutboundSnippet,
       lastActivity,
       unreadCount,
       threadCount: emailThreads.length,
-      questions,
-      actions,
     };
   }, [emails, emailReadById, emailThreads.length]);
 
@@ -342,11 +307,15 @@ export default function CrmApp() {
       setEmails([]);
       setSelectedEmailId(null);
       setEmailReadById({});
+      setSummary(null);
+      setSummaryError(null);
       return;
     }
 
     setEmailsLoading(true);
     setEmailsError(null);
+    setSummary(null);
+    setSummaryError(null);
     const query = supabase
       .from("emails")
       .select(
@@ -400,7 +369,99 @@ export default function CrmApp() {
 
     setEmails(emailRows);
     setEmailReadById(readMap);
+    const latestAt = emailRows[0]?.received_at ?? null;
+    await loadSummary(contactId, latestAt);
     setEmailsLoading(false);
+  };
+
+  const refreshSummary = async (contactId: string) => {
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const response = await fetch("/api/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId, force: true }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        setSummaryError(
+          errorPayload?.error ||
+            "Impossibile generare il riassunto. Riprova."
+        );
+        setSummaryLoading(false);
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        summary?: string;
+        updated_at?: string | null;
+        last_email_at?: string | null;
+        model?: string | null;
+      };
+
+      const raw = payload.summary ?? "";
+      setSummary({
+        raw,
+        parsed: parseSummary(raw),
+        updatedAt: payload.updated_at ?? null,
+        lastEmailAt: payload.last_email_at ?? null,
+        model: payload.model ?? null,
+      });
+      setSummaryLoading(false);
+    } catch (error) {
+      console.error(error);
+      setSummaryError("Impossibile generare il riassunto. Riprova.");
+      setSummaryLoading(false);
+    }
+  };
+
+  const loadSummary = async (contactId: string, latestAt?: string | null) => {
+    setSummaryError(null);
+    const { data, error: summaryFetchError } = await supabase
+      .from("conversation_summaries")
+      .select("summary, updated_at, last_email_at, model")
+      .eq("contact_id", contactId)
+      .eq("thread_key", SUMMARY_THREAD_KEY)
+      .maybeSingle();
+
+    if (summaryFetchError) {
+      const errorCode = (summaryFetchError as { code?: string }).code;
+      if (errorCode === "42P01") {
+        setSummary(null);
+        if (!summaryAutoTried[contactId] && latestAt) {
+          setSummaryAutoTried((prev) => ({ ...prev, [contactId]: true }));
+          await refreshSummary(contactId);
+        }
+        return;
+      }
+      setSummaryError("Impossibile caricare il riassunto.");
+      setSummaryLoading(false);
+      return;
+    }
+
+    if (data?.summary) {
+      setSummary({
+        raw: data.summary,
+        parsed: parseSummary(data.summary),
+        updatedAt: data.updated_at ?? null,
+        lastEmailAt: data.last_email_at ?? null,
+        model: data.model ?? null,
+      });
+    } else {
+      setSummary(null);
+    }
+
+    const isStale =
+      latestAt && data?.last_email_at
+        ? getTimestamp(data.last_email_at) < getTimestamp(latestAt)
+        : Boolean(latestAt && !data?.summary);
+
+    if (!summaryAutoTried[contactId] && isStale) {
+      setSummaryAutoTried((prev) => ({ ...prev, [contactId]: true }));
+      await refreshSummary(contactId);
+    }
   };
 
   const handleSelectContact = (contact: Contact) => {
@@ -996,74 +1057,126 @@ export default function CrmApp() {
                   </div>
                 )}
 
-                {!emailsLoading && emailSummary && (
+                {!emailsLoading && summaryMeta && (
                   <div className="rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                          Riassunto rapido
+                          Riassunto conversazione (AI locale)
                         </div>
                         <div className="text-sm font-semibold text-[var(--ink)]">
-                          Ultima attivita {formatDateTime(emailSummary.lastActivity)}
+                          Ultima attivita{" "}
+                          {formatDateTime(summaryMeta.lastActivity)}
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 font-semibold text-[var(--muted)]">
-                          {emailSummary.threadCount} thread
+                          {summaryMeta.threadCount} thread
                         </span>
-                        {emailSummary.unreadCount > 0 && (
+                        {summaryMeta.unreadCount > 0 && (
                           <span className="rounded-full border border-[var(--accent)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--accent)]">
-                            {emailSummary.unreadCount} non letti
+                            {summaryMeta.unreadCount} non letti
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => selected && refreshSummary(selected.id)}
+                          disabled={summaryLoading || !selected}
+                          className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] disabled:opacity-60"
+                        >
+                          {summaryLoading ? "Riassumo..." : "Aggiorna riassunto"}
+                        </button>
                       </div>
                     </div>
-                    <div className="mt-3 grid gap-2 text-sm text-[var(--ink)]">
-                      {emailSummary.latestInbound && (
-                        <div>
-                          <span className="font-semibold text-emerald-700">
-                            Ultima ricevuta
-                          </span>{" "}
-                          ·{" "}
-                          <span className="text-[var(--muted)]">
-                            {formatDateTime(emailSummary.latestInbound.received_at)}
-                          </span>
-                          <div className="mt-1 text-[var(--muted)]">
-                            {emailSummary.latestInboundSnippet}
+
+                    {summaryError && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {summaryError}
+                      </div>
+                    )}
+
+                    {!summary && !summaryLoading && (
+                      <div className="mt-3 text-sm text-[var(--muted)]">
+                        Nessun riassunto disponibile. Premi “Aggiorna
+                        riassunto”.
+                      </div>
+                    )}
+
+                    {summary && (
+                      <div className="mt-3 grid gap-3 text-sm text-[var(--ink)]">
+                        {summary.parsed?.one_liner && (
+                          <div className="text-[var(--ink)]">
+                            {summary.parsed.one_liner}
                           </div>
-                        </div>
-                      )}
-                      {emailSummary.latestOutbound && (
-                        <div>
-                          <span className="font-semibold text-amber-700">
-                            Ultima inviata
-                          </span>{" "}
-                          ·{" "}
-                          <span className="text-[var(--muted)]">
-                            {formatDateTime(emailSummary.latestOutbound.received_at)}
-                          </span>
-                          <div className="mt-1 text-[var(--muted)]">
-                            {emailSummary.latestOutboundSnippet}
+                        )}
+                        {summary.parsed?.highlights?.length ? (
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                              Punti chiave
+                            </div>
+                            <div className="mt-1 grid gap-1">
+                              {summary.parsed.highlights.map((item, index) => (
+                                <div key={`${item}-${index}`}>• {item}</div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      {emailSummary.questions.length > 0 && (
-                        <div className="text-[var(--muted)]">
-                          <span className="font-semibold text-[var(--ink)]">
-                            Domande
-                          </span>{" "}
-                          · {emailSummary.questions.join(" · ")}
-                        </div>
-                      )}
-                      {emailSummary.actions.length > 0 && (
-                        <div className="text-[var(--muted)]">
-                          <span className="font-semibold text-[var(--ink)]">
-                            Da fare
-                          </span>{" "}
-                          · {emailSummary.actions.join(" · ")}
-                        </div>
-                      )}
-                    </div>
+                        ) : null}
+                        {summary.parsed?.open_questions?.length ? (
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                              Domande aperte
+                            </div>
+                            <div className="mt-1 grid gap-1">
+                              {summary.parsed.open_questions.map(
+                                (item, index) => (
+                                  <div key={`${item}-${index}`}>• {item}</div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
+                        {summary.parsed?.next_actions?.length ? (
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                              Prossime azioni
+                            </div>
+                            <div className="mt-1 grid gap-1">
+                              {summary.parsed.next_actions.map(
+                                (item, index) => (
+                                  <div key={`${item}-${index}`}>• {item}</div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        ) : null}
+                        {summary.parsed?.last_inbound && (
+                          <div className="text-[var(--muted)]">
+                            <span className="font-semibold text-emerald-700">
+                              Ultima ricevuta
+                            </span>{" "}
+                            · {summary.parsed.last_inbound}
+                          </div>
+                        )}
+                        {summary.parsed?.last_outbound && (
+                          <div className="text-[var(--muted)]">
+                            <span className="font-semibold text-amber-700">
+                              Ultima inviata
+                            </span>{" "}
+                            · {summary.parsed.last_outbound}
+                          </div>
+                        )}
+                        {!summary.parsed && summary.raw && (
+                          <div className="whitespace-pre-wrap text-[var(--muted)]">
+                            {summary.raw}
+                          </div>
+                        )}
+                        {summary.model && (
+                          <div className="text-xs text-[var(--muted)]">
+                            Modello: {summary.model}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
