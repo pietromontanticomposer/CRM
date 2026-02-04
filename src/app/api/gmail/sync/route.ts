@@ -225,7 +225,7 @@ const insertNotification = async (payload: {
   await supabase.from("notifications").insert(payload);
 };
 
-const runSync = async (request: Request) => {
+export const runSync = async (request: Request) => {
   const cronSecret = request.headers.get("x-cron-secret");
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });

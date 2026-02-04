@@ -86,6 +86,7 @@ const formatDateTime = (value?: string | null) => {
   return date.toLocaleString("it-IT", {
     day: "2-digit",
     month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -123,6 +124,9 @@ export default function CrmApp() {
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [emailsLoading, setEmailsLoading] = useState(false);
   const [emailsError, setEmailsError] = useState<string | null>(null);
+  const [emailReadById, setEmailReadById] = useState<Record<string, boolean>>(
+    {}
+  );
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -130,21 +134,6 @@ export default function CrmApp() {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
-
-  const getStoredSyncKey = () => {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem("crm_sync_key");
-  };
-
-  const storeSyncKey = (key: string) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem("crm_sync_key", key);
-  };
-
-  const clearSyncKey = () => {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem("crm_sync_key");
-  };
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
   const selectedEmail =
@@ -183,6 +172,7 @@ export default function CrmApp() {
     if (!contactId) {
       setEmails([]);
       setSelectedEmailId(null);
+      setEmailReadById({});
       return;
     }
 
@@ -207,7 +197,40 @@ export default function CrmApp() {
       return;
     }
 
-    setEmails((data as EmailRow[]) || []);
+    const emailRows = (data as EmailRow[]) || [];
+    const readMap: Record<string, boolean> = {};
+    emailRows.forEach((row) => {
+      readMap[row.id] = true;
+    });
+
+    const inboundIds = emailRows
+      .filter((row) => row.direction === "inbound")
+      .map((row) => row.id);
+
+    if (inboundIds.length) {
+      const { data: notifications, error: notificationsError } =
+        await supabase
+          .from("notifications")
+          .select("email_id, is_read")
+          .in("email_id", inboundIds)
+          .eq("type", "email_received");
+
+      if (!notificationsError && notifications) {
+        notifications.forEach((notification) => {
+          if (!notification.email_id) return;
+          const isRead = Boolean(notification.is_read);
+          if (readMap[notification.email_id] === undefined) {
+            readMap[notification.email_id] = isRead;
+          } else {
+            readMap[notification.email_id] =
+              readMap[notification.email_id] && isRead;
+          }
+        });
+      }
+    }
+
+    setEmails(emailRows);
+    setEmailReadById(readMap);
     setEmailsLoading(false);
   };
 
@@ -216,6 +239,18 @@ export default function CrmApp() {
     setDraft(buildDraft(contact));
     setSelectedEmailId(null);
     loadEmails(contact.id, contact.email);
+  };
+
+  const handleSelectEmail = async (emailId: string) => {
+    setSelectedEmailId(emailId);
+    setEmailReadById((prev) => ({ ...prev, [emailId]: true }));
+    const selectedRow = emails.find((email) => email.id === emailId);
+    if (selectedRow?.direction !== "inbound") return;
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("email_id", emailId)
+      .eq("type", "email_received");
   };
 
   const getReplyTarget = () => {
@@ -257,7 +292,7 @@ export default function CrmApp() {
 
     setEmailSubject("");
     setEmailBody("");
-    await loadEmails(selected.id);
+    await loadEmails(selected.id, selected.email);
     setSendingEmail(false);
   };
 
@@ -266,28 +301,10 @@ export default function CrmApp() {
     setSyncing(true);
     setSyncMessage(null);
 
-    let key = getStoredSyncKey();
-    if (!key) {
-      key = window.prompt("Inserisci CRON_SECRET per la sync Gmail")?.trim() ?? "";
-      if (!key) {
-        setSyncing(false);
-        setSyncMessage("Sync annullata: serve il CRON_SECRET.");
-        return;
-      }
-      storeSyncKey(key);
-    }
-
-    const response = await fetch("/api/gmail/sync", {
-      headers: { "x-cron-secret": key },
-    });
+    const response = await fetch("/api/gmail/sync-now", { method: "POST" });
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        clearSyncKey();
-        setSyncMessage("CRON_SECRET errato. Riprova.");
-      } else {
-        setSyncMessage("Sync fallita. Riprova.");
-      }
+      setSyncMessage("Sync fallita. Riprova.");
       setSyncing(false);
       return;
     }
@@ -305,8 +322,6 @@ export default function CrmApp() {
   }, []);
 
   useEffect(() => {
-    const key = getStoredSyncKey();
-    if (!key) return;
     handleSyncNow();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -821,25 +836,50 @@ export default function CrmApp() {
                       email.subject ||
                       email.text_body?.replace(/\s+/g, " ").trim() ||
                       "Senza oggetto";
+                    const isRead = emailReadById[email.id] ?? true;
+                    const directionLabel =
+                      email.direction === "inbound" ? "Ricevuta" : "Inviata";
+                    const directionStyle =
+                      email.direction === "inbound"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-amber-200 bg-amber-50 text-amber-700";
                     return (
                       <button
                         key={email.id}
                         type="button"
-                        onClick={() => setSelectedEmailId(email.id)}
+                        onClick={() => handleSelectEmail(email.id)}
                         className={`rounded-xl border px-3 py-2 text-left transition ${
                           email.id === selectedEmailId
                             ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                            : "border-[var(--line)] bg-white"
+                            : isRead
+                              ? "border-[var(--line)] bg-white"
+                              : "border-[var(--accent)] bg-[var(--panel-strong)]"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                          <span>
-                            {email.direction === "inbound" ? "Da" : "A"}{" "}
-                            {address || "—"}
+                          <span className="flex items-center gap-2">
+                            {!isRead && (
+                              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                            )}
+                            <span>
+                              {email.direction === "inbound" ? "Da" : "A"}{" "}
+                              {address || "—"}
+                            </span>
                           </span>
-                          <span>{formatDateTime(email.received_at)}</span>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
+                            >
+                              {directionLabel}
+                            </span>
+                            <span>{formatDateTime(email.received_at)}</span>
+                          </span>
                         </div>
-                        <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                        <div
+                          className={`mt-1 text-sm text-[var(--ink)] ${
+                            isRead ? "font-semibold" : "font-bold"
+                          }`}
+                        >
                           {preview.length > 120
                             ? `${preview.slice(0, 120)}…`
                             : preview}
@@ -857,13 +897,26 @@ export default function CrmApp() {
                     <div className="mt-2 text-sm font-semibold">
                       {selectedEmail.subject || "Senza oggetto"}
                     </div>
-                    <div className="mt-1 text-xs text-[var(--muted)]">
-                      {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
-                      {selectedEmail.direction === "inbound"
-                        ? selectedEmail.from_email
-                        : selectedEmail.to_email}
-                      {" · "}
-                      {formatDateTime(selectedEmail.received_at)}
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          selectedEmail.direction === "inbound"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-amber-200 bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {selectedEmail.direction === "inbound"
+                          ? "Ricevuta"
+                          : "Inviata"}
+                      </span>
+                      <span>
+                        {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
+                        {selectedEmail.direction === "inbound"
+                          ? selectedEmail.from_email
+                          : selectedEmail.to_email}
+                      </span>
+                      <span>·</span>
+                      <span>{formatDateTime(selectedEmail.received_at)}</span>
                     </div>
                     <div className="mt-3 whitespace-pre-wrap text-sm text-[var(--ink)]">
                       {selectedEmail.text_body ||
@@ -880,13 +933,13 @@ export default function CrmApp() {
                     A: {selected.email || "—"}
                   </div>
                   <input
-                    className="mt-3"
+                    className="mt-3 w-full"
                     placeholder="Oggetto"
                     value={emailSubject}
                     onChange={(event) => setEmailSubject(event.target.value)}
                   />
                   <textarea
-                    className="mt-3"
+                    className="mt-3 w-full"
                     rows={4}
                     placeholder="Scrivi il messaggio..."
                     value={emailBody}
