@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f2ec;
+  --bg-soft: #f0e9e1;
+  --panel: #fffaf4;
+  --panel-strong: #fdf3e9;
+  --ink: #1f1b16;
+  --muted: #6c645c;
+  --accent: #2f6f67;
+  --accent-strong: #265a54;
+  --line: #e6dbcf;
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --font-sans: var(--font-space);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 20% -10%, #fffaf2 0%, transparent 60%),
+    radial-gradient(900px 400px at 90% 10%, #f7efe6 0%, transparent 55%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input,
+select,
+textarea {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  font-size: 0.95rem;
+  outline: none;
+  padding: 0.55rem 0.75rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: color-mix(in oklab, var(--accent) 70%, white 30%);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 25%, white 75%);
+}
