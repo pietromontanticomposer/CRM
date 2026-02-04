@@ -37,6 +37,24 @@ type NewContact = {
   role: string;
 };
 
+type EmailDirection = "inbound" | "outbound";
+
+type EmailRow = {
+  id: string;
+  contact_id: string | null;
+  direction: EmailDirection;
+  gmail_uid: number | null;
+  message_id_header: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  to_email: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  received_at: string | null;
+  created_at: string | null;
+};
+
 const emptyNewContact: NewContact = {
   name: "",
   email: "",
@@ -61,10 +79,36 @@ const formatDate = (value?: string | null) => {
   });
 };
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const getInitials = (name: string) => {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => part[0]?.toUpperCase()).join("");
 };
+
+const buildDraft = (contact: Contact): DraftContact => ({
+  id: contact.id,
+  name: contact.name,
+  email: contact.email,
+  company: contact.company,
+  role: contact.role,
+  status: contact.status,
+  last_action_at: contact.last_action_at,
+  last_action_note: contact.last_action_note,
+  next_action_at: contact.next_action_at,
+  next_action_note: contact.next_action_note,
+  notes: contact.notes,
+});
 
 export default function CrmApp() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -76,8 +120,35 @@ export default function CrmApp() {
   const [deleting, setDeleting] = useState(false);
   const [newContact, setNewContact] = useState<NewContact>(emptyNewContact);
   const [draft, setDraft] = useState<DraftContact | null>(null);
+  const [emails, setEmails] = useState<EmailRow[]>([]);
+  const [emailsLoading, setEmailsLoading] = useState(false);
+  const [emailsError, setEmailsError] = useState<string | null>(null);
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+
+  const getStoredSyncKey = () => {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem("crm_sync_key");
+  };
+
+  const storeSyncKey = (key: string) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("crm_sync_key", key);
+  };
+
+  const clearSyncKey = () => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem("crm_sync_key");
+  };
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
+  const selectedEmail =
+    emails.find((email) => email.id === selectedEmailId) || null;
 
   const counts = useMemo(() => {
     return STATUS_OPTIONS.reduce(
@@ -108,18 +179,137 @@ export default function CrmApp() {
     setLoading(false);
   };
 
+  const loadEmails = async (contactId: string | null, email?: string | null) => {
+    if (!contactId) {
+      setEmails([]);
+      setSelectedEmailId(null);
+      return;
+    }
+
+    setEmailsLoading(true);
+    setEmailsError(null);
+    const query = supabase
+      .from("emails")
+      .select(
+        "id, contact_id, direction, gmail_uid, message_id_header, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at"
+      )
+      .order("received_at", { ascending: false });
+
+    const { data, error: fetchError } = email
+      ? await query.or(
+          `contact_id.eq.${contactId},from_email.ilike.%${email}%,to_email.ilike.%${email}%`
+        )
+      : await query.eq("contact_id", contactId);
+
+    if (fetchError) {
+      setEmailsError("Impossibile caricare le email.");
+      setEmailsLoading(false);
+      return;
+    }
+
+    setEmails((data as EmailRow[]) || []);
+    setEmailsLoading(false);
+  };
+
+  const handleSelectContact = (contact: Contact) => {
+    setSelectedId(contact.id);
+    setDraft(buildDraft(contact));
+    setSelectedEmailId(null);
+    loadEmails(contact.id, contact.email);
+  };
+
+  const getReplyTarget = () => {
+    if (selectedEmail?.direction === "inbound") return selectedEmail;
+    return emails.find((email) => email.direction === "inbound") || null;
+  };
+
+  const handleSendEmail = async () => {
+    if (!selected?.email?.trim()) {
+      setEmailsError("Aggiungi un'email al contatto per poter rispondere.");
+      return;
+    }
+
+    if (!emailSubject.trim() && !emailBody.trim()) {
+      setEmailsError("Scrivi almeno un oggetto o un messaggio.");
+      return;
+    }
+
+    setSendingEmail(true);
+    setEmailsError(null);
+    const replyTarget = getReplyTarget();
+
+    const response = await fetch("/api/gmail/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: selected.email.trim(),
+        subject: emailSubject.trim() || undefined,
+        text: emailBody.trim() || undefined,
+        replyToEmailId: replyTarget?.id ?? undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      setEmailsError("Invio email fallito. Riprova.");
+      setSendingEmail(false);
+      return;
+    }
+
+    setEmailSubject("");
+    setEmailBody("");
+    await loadEmails(selected.id);
+    setSendingEmail(false);
+  };
+
+  const handleSyncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncMessage(null);
+
+    let key = getStoredSyncKey();
+    if (!key) {
+      key = window.prompt("Inserisci CRON_SECRET per la sync Gmail")?.trim() ?? "";
+      if (!key) {
+        setSyncing(false);
+        setSyncMessage("Sync annullata: serve il CRON_SECRET.");
+        return;
+      }
+      storeSyncKey(key);
+    }
+
+    const response = await fetch("/api/gmail/sync", {
+      headers: { "x-cron-secret": key },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearSyncKey();
+        setSyncMessage("CRON_SECRET errato. Riprova.");
+      } else {
+        setSyncMessage("Sync fallita. Riprova.");
+      }
+      setSyncing(false);
+      return;
+    }
+
+    setLastSyncAt(new Date());
+    setSyncMessage("Sync completata.");
+    if (selected) {
+      await loadEmails(selected.id, selected.email);
+    }
+    setSyncing(false);
+  };
+
   useEffect(() => {
     loadContacts();
   }, []);
 
   useEffect(() => {
-    if (selected) {
-      const { created_at, updated_at, ...rest } = selected;
-      setDraft({ ...rest });
-    } else {
-      setDraft(null);
-    }
-  }, [selectedId, selected?.updated_at]);
+    const key = getStoredSyncKey();
+    if (!key) return;
+    handleSyncNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
@@ -127,6 +317,7 @@ export default function CrmApp() {
 
     setAdding(true);
     setError(null);
+    const today = new Date().toISOString().slice(0, 10);
 
     const { data, error: insertError } = await supabase
       .from("contacts")
@@ -136,6 +327,7 @@ export default function CrmApp() {
         company: newContact.company.trim() || null,
         role: newContact.role.trim() || null,
         status: "Da contattare",
+        last_action_at: today,
       })
       .select("*")
       .single();
@@ -146,8 +338,11 @@ export default function CrmApp() {
       return;
     }
 
-    setContacts((prev) => [data as Contact, ...prev]);
-    setSelectedId((data as Contact).id);
+    const created = data as Contact;
+    setContacts((prev) => [created, ...prev]);
+    setSelectedId(created.id);
+    setDraft(buildDraft(created));
+    loadEmails(created.id, created.email);
     setNewContact(emptyNewContact);
     setAdding(false);
   };
@@ -182,9 +377,11 @@ export default function CrmApp() {
       return;
     }
 
+    const updated = data as Contact;
     setContacts((prev) =>
-      prev.map((contact) => (contact.id === id ? (data as Contact) : contact))
+      prev.map((contact) => (contact.id === id ? updated : contact))
     );
+    setDraft(buildDraft(updated));
     setSaving(false);
   };
 
@@ -206,6 +403,9 @@ export default function CrmApp() {
 
     setContacts((prev) => prev.filter((contact) => contact.id !== selected.id));
     setSelectedId(null);
+    setDraft(null);
+    setEmails([]);
+    setSelectedEmailId(null);
     setDeleting(false);
   };
 
@@ -221,10 +421,31 @@ export default function CrmApp() {
               Contatti registi e produzioni
             </h1>
           </div>
-          <div className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-4 py-2 text-sm text-[var(--muted)]">
-            Ultimo sync: manuale
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-4 py-2 text-sm text-[var(--muted)]">
+              Ultimo sync:{" "}
+              {lastSyncAt
+                ? lastSyncAt.toLocaleTimeString("it-IT", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "mai"}
+            </div>
+            <button
+              type="button"
+              onClick={handleSyncNow}
+              disabled={syncing}
+              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
+            >
+              {syncing ? "Sync..." : "Sync ora"}
+            </button>
           </div>
         </div>
+        {syncMessage && (
+          <div className="rounded-2xl border border-[var(--line)] bg-white/70 px-4 py-2 text-xs text-[var(--muted)]">
+            {syncMessage}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map((status) => (
             <div
@@ -307,7 +528,7 @@ export default function CrmApp() {
             {contacts.map((contact) => (
               <button
                 key={contact.id}
-                onClick={() => setSelectedId(contact.id)}
+                onClick={() => handleSelectContact(contact)}
                 className={`flex w-full flex-col gap-3 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
                   contact.id === selectedId
                     ? "border-[var(--accent)] bg-[var(--panel-strong)]"
@@ -557,6 +778,141 @@ export default function CrmApp() {
                 >
                   {deleting ? "Elimino..." : "Elimina contatto"}
                 </button>
+              </div>
+
+              <div className="mt-8 grid gap-4 rounded-2xl border border-[var(--line)] bg-white/70 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Email
+                    </div>
+                    <div className="text-sm font-semibold">
+                      Storico conversazioni
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadEmails(selected.id, selected.email)}
+                    className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)]"
+                  >
+                    Aggiorna
+                  </button>
+                </div>
+
+                {emailsLoading && (
+                  <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-sm text-[var(--muted)]">
+                    Caricamento email...
+                  </div>
+                )}
+
+                {!emailsLoading && emails.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-sm text-[var(--muted)]">
+                    Nessuna email per questo contatto.
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  {emails.map((email) => {
+                    const address =
+                      email.direction === "inbound"
+                        ? email.from_email
+                        : email.to_email;
+                    const preview =
+                      email.subject ||
+                      email.text_body?.replace(/\s+/g, " ").trim() ||
+                      "Senza oggetto";
+                    return (
+                      <button
+                        key={email.id}
+                        type="button"
+                        onClick={() => setSelectedEmailId(email.id)}
+                        className={`rounded-xl border px-3 py-2 text-left transition ${
+                          email.id === selectedEmailId
+                            ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                            : "border-[var(--line)] bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                          <span>
+                            {email.direction === "inbound" ? "Da" : "A"}{" "}
+                            {address || "—"}
+                          </span>
+                          <span>{formatDateTime(email.received_at)}</span>
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-[var(--ink)]">
+                          {preview.length > 120
+                            ? `${preview.slice(0, 120)}…`
+                            : preview}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {selectedEmail && (
+                  <div className="rounded-xl border border-[var(--line)] bg-white p-3">
+                    <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Dettaglio email
+                    </div>
+                    <div className="mt-2 text-sm font-semibold">
+                      {selectedEmail.subject || "Senza oggetto"}
+                    </div>
+                    <div className="mt-1 text-xs text-[var(--muted)]">
+                      {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
+                      {selectedEmail.direction === "inbound"
+                        ? selectedEmail.from_email
+                        : selectedEmail.to_email}
+                      {" · "}
+                      {formatDateTime(selectedEmail.received_at)}
+                    </div>
+                    <div className="mt-3 whitespace-pre-wrap text-sm text-[var(--ink)]">
+                      {selectedEmail.text_body ||
+                        "Nessun testo disponibile per questa email."}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-[var(--line)] bg-white p-3">
+                  <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                    Rispondi
+                  </div>
+                  <div className="mt-2 text-xs text-[var(--muted)]">
+                    A: {selected.email || "—"}
+                  </div>
+                  <input
+                    className="mt-3"
+                    placeholder="Oggetto"
+                    value={emailSubject}
+                    onChange={(event) => setEmailSubject(event.target.value)}
+                  />
+                  <textarea
+                    className="mt-3"
+                    rows={4}
+                    placeholder="Scrivi il messaggio..."
+                    value={emailBody}
+                    onChange={(event) => setEmailBody(event.target.value)}
+                  />
+                  {emailsError && (
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                      {emailsError}
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleSendEmail}
+                      disabled={sendingEmail}
+                      className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
+                    >
+                      {sendingEmail ? "Invio..." : "Invia email"}
+                    </button>
+                    {getReplyTarget() && (
+                      <span className="text-xs text-[var(--muted)]">
+                        Risposta collegata al thread esistente.
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
