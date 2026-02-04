@@ -98,6 +98,21 @@ const getTimestamp = (value?: string | null) => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
+const truncateText = (value: string, max = 160) => {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}…`;
+};
+
+const splitSentences = (value?: string | null) => {
+  if (!value) return [];
+  const cleaned = value.replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+  return (
+    cleaned.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((entry) => entry.trim()) ||
+    []
+  );
+};
+
 const normalizeThreadSubject = (subject?: string | null) => {
   const fallback = "Senza oggetto";
   if (!subject) return fallback;
@@ -213,6 +228,84 @@ export default function CrmApp() {
 
     return threads;
   }, [emails, emailReadById]);
+
+  const emailSummary = useMemo(() => {
+    if (!emails.length) return null;
+    const sorted = [...emails].sort(
+      (a, b) => getTimestamp(b.received_at) - getTimestamp(a.received_at)
+    );
+    const latestInbound =
+      sorted.find((email) => email.direction === "inbound") || null;
+    const latestOutbound =
+      sorted.find((email) => email.direction === "outbound") || null;
+    const lastActivity = sorted[0]?.received_at ?? null;
+    const unreadCount = sorted.reduce((acc, email) => {
+      if (
+        email.direction === "inbound" &&
+        !(emailReadById[email.id] ?? true)
+      ) {
+        return acc + 1;
+      }
+      return acc;
+    }, 0);
+
+    const inboundTexts = sorted
+      .filter((email) => email.direction === "inbound")
+      .slice(0, 5)
+      .flatMap((email) => splitSentences(email.text_body));
+
+    const questions = inboundTexts
+      .filter((sentence) => sentence.includes("?"))
+      .slice(0, 2)
+      .map((sentence) => truncateText(sentence, 140));
+
+    const actionPatterns = [
+      /per favore/i,
+      /puoi/i,
+      /mi confermi/i,
+      /fammi sapere/i,
+      /da fare/i,
+      /serve/i,
+      /ti chiedo/i,
+      /potresti/i,
+    ];
+    const actions = inboundTexts
+      .filter((sentence) =>
+        actionPatterns.some((pattern) => pattern.test(sentence))
+      )
+      .slice(0, 2)
+      .map((sentence) => truncateText(sentence, 140));
+
+    const latestInboundSnippet = latestInbound
+      ? truncateText(
+          splitSentences(latestInbound.text_body)[0] ||
+            latestInbound.subject ||
+            "Senza oggetto",
+          160
+        )
+      : null;
+
+    const latestOutboundSnippet = latestOutbound
+      ? truncateText(
+          splitSentences(latestOutbound.text_body)[0] ||
+            latestOutbound.subject ||
+            "Senza oggetto",
+          160
+        )
+      : null;
+
+    return {
+      latestInbound,
+      latestOutbound,
+      latestInboundSnippet,
+      latestOutboundSnippet,
+      lastActivity,
+      unreadCount,
+      threadCount: emailThreads.length,
+      questions,
+      actions,
+    };
+  }, [emails, emailReadById, emailThreads.length]);
 
   useEffect(() => {
     if (!emailThreads.length) {
@@ -900,6 +993,77 @@ export default function CrmApp() {
                 {!emailsLoading && emails.length === 0 && (
                   <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-sm text-[var(--muted)]">
                     Nessuna email per questo contatto.
+                  </div>
+                )}
+
+                {!emailsLoading && emailSummary && (
+                  <div className="rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                          Riassunto rapido
+                        </div>
+                        <div className="text-sm font-semibold text-[var(--ink)]">
+                          Ultima attivita {formatDateTime(emailSummary.lastActivity)}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full border border-[var(--line)] bg-white px-2 py-0.5 font-semibold text-[var(--muted)]">
+                          {emailSummary.threadCount} thread
+                        </span>
+                        {emailSummary.unreadCount > 0 && (
+                          <span className="rounded-full border border-[var(--accent)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--accent)]">
+                            {emailSummary.unreadCount} non letti
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-sm text-[var(--ink)]">
+                      {emailSummary.latestInbound && (
+                        <div>
+                          <span className="font-semibold text-emerald-700">
+                            Ultima ricevuta
+                          </span>{" "}
+                          ·{" "}
+                          <span className="text-[var(--muted)]">
+                            {formatDateTime(emailSummary.latestInbound.received_at)}
+                          </span>
+                          <div className="mt-1 text-[var(--muted)]">
+                            {emailSummary.latestInboundSnippet}
+                          </div>
+                        </div>
+                      )}
+                      {emailSummary.latestOutbound && (
+                        <div>
+                          <span className="font-semibold text-amber-700">
+                            Ultima inviata
+                          </span>{" "}
+                          ·{" "}
+                          <span className="text-[var(--muted)]">
+                            {formatDateTime(emailSummary.latestOutbound.received_at)}
+                          </span>
+                          <div className="mt-1 text-[var(--muted)]">
+                            {emailSummary.latestOutboundSnippet}
+                          </div>
+                        </div>
+                      )}
+                      {emailSummary.questions.length > 0 && (
+                        <div className="text-[var(--muted)]">
+                          <span className="font-semibold text-[var(--ink)]">
+                            Domande
+                          </span>{" "}
+                          · {emailSummary.questions.join(" · ")}
+                        </div>
+                      )}
+                      {emailSummary.actions.length > 0 && (
+                        <div className="text-[var(--muted)]">
+                          <span className="font-semibold text-[var(--ink)]">
+                            Da fare
+                          </span>{" "}
+                          · {emailSummary.actions.join(" · ")}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
