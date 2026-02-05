@@ -1,15 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f7f2ec;
-  --bg-soft: #f0e9e1;
-  --panel: #fffaf4;
-  --panel-strong: #fdf3e9;
-  --ink: #1f1b16;
-  --muted: #6c645c;
-  --accent: #2f6f67;
-  --accent-strong: #265a54;
-  --line: #e6dbcf;
+  --bg: #0b0f17;
+  --bg-soft: #121826;
+  --panel: #0f1724;
+  --panel-strong: #162033;
+  --ink: #e6edf6;
+  --muted: #9aa6b2;
+  --accent: #4f8cff;
+  --accent-strong: #3b6fd1;
+  --line: #243246;
+  --accent-soft: #1c2b46;
+}
+
+/* Performance helpers */
+.perf-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 120px;
+}
+
+.perf-block {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 260px;
 }
 
 @theme inline {
@@ -21,9 +33,9 @@
 
 body {
   background:
-    radial-gradient(1200px 500px at 20% -10%, #fffaf2 0%, transparent 60%),
-    radial-gradient(900px 400px at 90% 10%, #f7efe6 0%, transparent 55%),
-    var(--bg);
+    radial-gradient(1200px 600px at 10% -10%, #1f2a44 0%, transparent 60%),
+    radial-gradient(900px 400px at 90% 10%, #1a3a33 0%, transparent 55%),
+    linear-gradient(180deg, #0b0f17 0%, #0f1420 100%);
   color: var(--ink);
   font-family: var(--font-sans);
 }
@@ -47,7 +59,11 @@ textarea {
   font-size: 0.95rem;
   outline: none;
   padding: 0.55rem 0.75rem;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.5);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
 }
 
 input:focus,
@@ -55,6 +71,7 @@ select:focus,
 textarea:focus {
   border-color: color-mix(in oklab, var(--accent) 70%, white 30%);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent);
+  transform: translateY(-1px);
 }
 
 summary {
@@ -67,4 +84,23 @@ summary::-webkit-details-marker {
 
 ::selection {
   background: color-mix(in oklab, var(--accent) 25%, white 75%);
+}
+
+.email-html {
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.email-html img {
+  max-width: 100%;
+  height: auto;
+}
+
+.email-html table {
+  max-width: 100%;
+}
+
+.email-html a {
+  color: var(--accent);
+  text-decoration: underline;
 }

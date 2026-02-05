@@ -4,44 +4,17 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SUMMARY_THREAD_KEY = "__contact__";
+const CATEGORY_THREAD_KEY = "__ai_category__";
 const DEFAULT_LIMIT = 40;
 const DEFAULT_RECENT_COUNT = 8;
 const DEFAULT_GROQ_TIMEOUT_MS = 30000;
 
-type SummaryPayload = {
-  one_liner: string;
-  highlights: string[];
-  open_questions: string[];
-  next_actions: string[];
-  last_inbound: string;
-  last_outbound: string;
-};
+type AiCategory = "chiuso" | "interessato" | "non_interessato";
 
-const normalizeString = (value: unknown, maxLen = 0) => {
-  if (typeof value !== "string") return "";
-  const trimmed = value.trim();
-  if (!maxLen || trimmed.length <= maxLen) return trimmed;
-  return `${trimmed.slice(0, maxLen).trimEnd()}…`;
-};
-
-const normalizeSummary = (value: unknown): SummaryPayload | null => {
-  if (!value || typeof value !== "object") return null;
-  const source = value as Partial<SummaryPayload>;
-  const normalized = {
-    one_liner: normalizeString(source.one_liner, 380),
-    highlights: [],
-    open_questions: [],
-    next_actions: [],
-    last_inbound: normalizeString(source.last_inbound, 160),
-    last_outbound: normalizeString(source.last_outbound, 160),
-  };
-  const hasContent = Boolean(
-    normalized.one_liner ||
-      normalized.last_inbound ||
-      normalized.last_outbound
-  );
-  return hasContent ? normalized : null;
+type CategoryPayload = {
+  category?: string;
+  confidence?: number;
+  reason?: string;
 };
 
 const getTimestamp = (value?: string | null) => {
@@ -49,18 +22,6 @@ const getTimestamp = (value?: string | null) => {
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
-
-const extractEmails = (value?: string | null) => {
-  if (!value) return [];
-  const matches = value.match(
-    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-  );
-  if (!matches) return [];
-  const unique = new Set(matches.map((item) => item.toLowerCase()));
-  return Array.from(unique);
-};
-
-const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const getEnv = (key: string) => {
   const value = process.env[key];
@@ -84,38 +45,6 @@ const sanitizeBody = (value?: string | null) => {
   return stripped;
 };
 
-const buildPrompt = ({
-  contactName,
-  contactEmail,
-  messages,
-}: {
-  contactName: string | null;
-  contactEmail: string | null;
-  messages: string;
-}) => {
-  return [
-    "Sei un assistente che riassume conversazioni email.",
-    "Scrivi in italiano, molto conciso e discorsivo (tono naturale).",
-    "Restituisci SOLO JSON valido con queste chiavi:",
-    `one_liner, highlights (array), open_questions (array), next_actions (array), last_inbound, last_outbound.`,
-    "Linee guida:",
-    "- one_liner: breve riassunto discorsivo in 2-3 frasi (max 380 caratteri).",
-    "- highlights: lascia sempre un array vuoto [].",
-    "- open_questions: lascia sempre un array vuoto [].",
-    "- next_actions: lascia sempre un array vuoto [].",
-    "- last_inbound: 1 frase breve sull'ultima email ricevuta.",
-    "- last_outbound: 1 frase breve sull'ultima email inviata.",
-    "Usa il nome del contatto se presente.",
-    "Usa SOLO le email fornite (ultimi messaggi).",
-    "Evita ripetizioni e dettagli non essenziali. Non dare consigli o suggerimenti.",
-    "",
-    `Contatto: ${contactName ?? "Sconosciuto"} (${contactEmail ?? "—"})`,
-    "",
-    "Email (piu recenti in alto):",
-    messages,
-  ].join("\n");
-};
-
 const stripJsonWrapper = (value: string) => {
   const trimmed = value.trim();
   if (trimmed.startsWith("```")) {
@@ -133,9 +62,88 @@ const stripJsonWrapper = (value: string) => {
   return trimmed;
 };
 
-const parseSummary = (value: string) => {
+const normalizeCategory = (value?: string | null): AiCategory | null => {
+  if (!value) return null;
+  const cleaned = value
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z_]/g, "");
+  if (cleaned === "chiuso" || cleaned === "chiusi") return "chiuso";
+  if (cleaned === "interessato" || cleaned === "interessati")
+    return "interessato";
+  if (
+    cleaned === "non_interessato" ||
+    cleaned === "noninteressato" ||
+    cleaned === "non_interessati"
+  ) {
+    return "non_interessato";
+  }
+  return null;
+};
+
+const normalizeConfidence = (value?: number | null) => {
+  if (typeof value !== "number" || Number.isNaN(value)) return 0.5;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+};
+
+const mapCategoryToStatus = (category: AiCategory) => {
+  switch (category) {
+    case "chiuso":
+      return "Chiuso";
+    case "interessato":
+      return "Interessato";
+    case "non_interessato":
+      return "Non interessato";
+    default:
+      return "Interessato";
+  }
+};
+
+const buildPrompt = ({
+  contactName,
+  contactEmail,
+  messages,
+}: {
+  contactName: string | null;
+  contactEmail: string | null;
+  messages: string;
+}) => {
+  return [
+    "Sei un assistente che classifica i contatti in base alle email piu recenti.",
+    "Restituisci SOLO JSON valido con queste chiavi:",
+    "category, confidence, reason.",
+    "category deve essere solo una di: chiuso, interessato, non_interessato.",
+    "Se non sei sicuro, usa interessato.",
+    "confidence e un numero tra 0 e 1.",
+    "reason e una frase breve (max 120 caratteri).",
+    "Non basarti su parole chiave: valuta il contesto e il significato.",
+    "Esempi:",
+    "- interessato: chiede info, conferma disponibilita, prosegue il dialogo.",
+    "- non_interessato: rifiuta, declina, dice che non serve/ non e il momento.",
+    "- chiuso: collaborazione conclusa o progetto terminato.",
+    "",
+    `Contatto: ${contactName ?? "Sconosciuto"} (${contactEmail ?? "—"})`,
+    "",
+    "Email (piu recenti in alto):",
+    messages,
+  ].join("\n");
+};
+
+const parseCategory = (value: string) => {
   try {
-    return normalizeSummary(JSON.parse(stripJsonWrapper(value)));
+    const parsed = JSON.parse(stripJsonWrapper(value)) as CategoryPayload;
+    const category = normalizeCategory(parsed.category);
+    if (!category) return null;
+    return {
+      category,
+      confidence: normalizeConfidence(parsed.confidence ?? 0.5),
+      reason:
+        typeof parsed.reason === "string"
+          ? parsed.reason.trim().slice(0, 160)
+          : "",
+    };
   } catch {
     return null;
   }
@@ -143,7 +151,8 @@ const parseSummary = (value: string) => {
 
 const callGroq = async (prompt: string) => {
   const apiKey = getEnv("GROQ_API_KEY");
-  const baseUrl = getOptionalEnv("GROQ_BASE_URL") ?? "https://api.groq.com/openai/v1";
+  const baseUrl =
+    getOptionalEnv("GROQ_BASE_URL") ?? "https://api.groq.com/openai/v1";
   const model = getOptionalEnv("GROQ_MODEL") ?? "llama-3.3-70b-versatile";
   const timeoutMs = Number(
     getOptionalEnv("GROQ_TIMEOUT_MS") ?? DEFAULT_GROQ_TIMEOUT_MS
@@ -163,12 +172,7 @@ const callGroq = async (prompt: string) => {
       signal: controller.signal,
       body: JSON.stringify({
         model,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
+        messages: [{ role: "user", content: prompt }],
         temperature: 0.2,
       }),
     });
@@ -199,7 +203,7 @@ const callGroq = async (prompt: string) => {
 };
 
 export async function POST(request: Request) {
-  let payload: { contactId?: string; force?: boolean; debug?: boolean };
+  let payload: { contactId?: string; force?: boolean };
   try {
     payload = (await request.json()) as { contactId?: string; force?: boolean };
   } catch {
@@ -216,7 +220,7 @@ export async function POST(request: Request) {
   const supabase = getSupabase();
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id, name, email")
+    .select("id, name, email, status")
     .eq("id", payload.contactId)
     .maybeSingle();
 
@@ -228,12 +232,19 @@ export async function POST(request: Request) {
   }
 
   const emailFilters = [`contact_id.eq.${contact.id}`];
-  const emailList = extractEmails(contact.email?.trim() || null);
-  emailList.forEach((address) => {
-    const safeEmail = escapeIlike(address);
-    emailFilters.push(`from_email.ilike.%${safeEmail}%`);
-    emailFilters.push(`to_email.ilike.%${safeEmail}%`);
-  });
+  const emailText = contact.email?.trim() || null;
+  if (emailText) {
+    const matches = emailText.match(
+      /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
+    );
+    if (matches) {
+      matches.forEach((address: string) => {
+        const safeEmail = address.replace(/[\\%_]/g, "\\$&");
+        emailFilters.push(`from_email.ilike.%${safeEmail}%`);
+        emailFilters.push(`to_email.ilike.%${safeEmail}%`);
+      });
+    }
+  }
 
   const emailLimit = Number(process.env.SUMMARY_EMAIL_LIMIT ?? DEFAULT_LIMIT);
   const recentCountRaw = Number(
@@ -241,13 +252,16 @@ export async function POST(request: Request) {
   );
   const recentCount = Math.max(
     1,
-    Math.min(Number.isFinite(recentCountRaw) ? recentCountRaw : DEFAULT_RECENT_COUNT, emailLimit)
+    Math.min(
+      Number.isFinite(recentCountRaw) ? recentCountRaw : DEFAULT_RECENT_COUNT,
+      emailLimit
+    )
   );
 
   const { data: emails, error: emailsError } = await supabase
     .from("emails")
     .select(
-      "id, direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
+      "direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
     )
     .or(emailFilters.join(","))
     .order("received_at", { ascending: false })
@@ -262,7 +276,7 @@ export async function POST(request: Request) {
 
   if (!emails || emails.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "No emails to summarize" },
+      { ok: false, error: "No emails to classify" },
       { status: 404 }
     );
   }
@@ -279,7 +293,7 @@ export async function POST(request: Request) {
     .from("conversation_summaries")
     .select("summary, updated_at, last_email_at, model")
     .eq("contact_id", contact.id)
-    .eq("thread_key", SUMMARY_THREAD_KEY)
+    .eq("thread_key", CATEGORY_THREAD_KEY)
     .maybeSingle();
 
   if (
@@ -290,23 +304,42 @@ export async function POST(request: Request) {
     new Date(existing.last_email_at).getTime() >=
       new Date(lastEmailAt).getTime()
   ) {
-    return NextResponse.json({
-      ok: true,
-      summary: existing.summary,
-      updated_at: existing.updated_at,
-      last_email_at: existing.last_email_at,
-      model: existing.model,
-      cached: true,
-    });
+    const parsedExisting = parseCategory(existing.summary);
+    if (parsedExisting) {
+      const mappedStatus = mapCategoryToStatus(parsedExisting.category);
+      if (contact.status !== mappedStatus) {
+        const updatePayload: Record<string, string | null> = {
+          status: mappedStatus,
+        };
+        if (mappedStatus === "Chiuso" || mappedStatus === "Non interessato") {
+          updatePayload.next_action_at = null;
+          updatePayload.next_action_note = null;
+        }
+        await supabase
+          .from("contacts")
+          .update(updatePayload)
+          .eq("id", contact.id);
+      }
+      return NextResponse.json({
+        ok: true,
+        category: parsedExisting.category,
+        confidence: parsedExisting.confidence,
+        reason: parsedExisting.reason,
+        updated_at: existing.updated_at,
+        last_email_at: existing.last_email_at,
+        model: existing.model,
+        cached: true,
+        applied_status: mapCategoryToStatus(parsedExisting.category),
+      });
+    }
   }
 
   const recentEmails = sortedEmails.slice(0, recentCount);
-
   const messages = recentEmails
     .map((email, index) => {
       const direction = email.direction === "inbound" ? "Ricevuta" : "Inviata";
       const body = sanitizeBody(email.text_body || email.html_body || "");
-      const clippedBody = body.length > 800 ? `${body.slice(0, 800)}…` : body;
+      const clippedBody = body.length > 600 ? `${body.slice(0, 600)}…` : body;
       const subject = email.subject?.trim() || "Senza oggetto";
       const from = email.from_email ?? "—";
       const to = email.to_email ?? "—";
@@ -330,34 +363,46 @@ export async function POST(request: Request) {
   });
 
   let generated;
-  const debug =
-    payload?.debug === true || process.env.SUMMARY_DEBUG === "1";
   try {
     generated = await callGroq(prompt);
   } catch (error) {
-    console.error("Summary generation error", error);
+    console.error("Category generation error", error);
     const message = (error as Error)?.message || "Unknown error";
     const safeMessage = message.slice(0, 200);
     return NextResponse.json(
-      {
-        ok: false,
-        error: debug
-          ? `AI non configurata: ${safeMessage}`
-          : `AI non configurata. ${safeMessage}`,
-      },
+      { ok: false, error: `AI non configurata. ${safeMessage}` },
       { status: 503 }
     );
   }
 
-  const parsed = parseSummary(generated.raw);
-  const summaryText = parsed ? JSON.stringify(parsed) : generated.raw;
+  const parsed = parseCategory(generated.raw);
+  if (!parsed) {
+    return NextResponse.json(
+      { ok: false, error: "AI response invalid" },
+      { status: 500 }
+    );
+  }
+
+  const summaryText = JSON.stringify(parsed);
+
+  const mappedStatus = mapCategoryToStatus(parsed.category);
+  if (contact.status !== mappedStatus) {
+    const updatePayload: Record<string, string | null> = {
+      status: mappedStatus,
+    };
+    if (mappedStatus === "Chiuso" || mappedStatus === "Non interessato") {
+      updatePayload.next_action_at = null;
+      updatePayload.next_action_note = null;
+    }
+    await supabase.from("contacts").update(updatePayload).eq("id", contact.id);
+  }
 
   const { data: stored, error: storeError } = await supabase
     .from("conversation_summaries")
     .upsert(
       {
         contact_id: contact.id,
-        thread_key: SUMMARY_THREAD_KEY,
+        thread_key: CATEGORY_THREAD_KEY,
         summary: summaryText,
         last_email_at: lastEmailAt,
         model: generated.model,
@@ -373,32 +418,33 @@ export async function POST(request: Request) {
     if (errorCode === "42P01" || errorCode === "PGRST205") {
       return NextResponse.json({
         ok: true,
-        summary: summaryText,
+        category: parsed.category,
+        confidence: parsed.confidence,
+        reason: parsed.reason,
         updated_at: new Date().toISOString(),
         last_email_at: lastEmailAt,
         model: generated.model,
         cached: false,
         stored: false,
+        applied_status: mappedStatus,
       });
     }
     return NextResponse.json(
-      {
-        ok: false,
-        error: debug
-          ? `Summary store failed: ${storeError.message} (${errorCode ?? "n/a"})`
-          : "Summary store failed",
-      },
+      { ok: false, error: "Category store failed" },
       { status: 500 }
     );
   }
 
   return NextResponse.json({
     ok: true,
-    summary: stored.summary,
+    category: parsed.category,
+    confidence: parsed.confidence,
+    reason: parsed.reason,
     updated_at: stored.updated_at,
     last_email_at: stored.last_email_at,
     model: stored.model,
     cached: false,
     stored: true,
+    applied_status: mappedStatus,
   });
 }

@@ -6,6 +6,9 @@ import { createClient } from "@supabase/supabase-js";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const DEFAULT_LIMIT = 200;
+const MAX_LIMIT = 400;
+
 type ParsedAddress = {
   address?: string;
   name?: string;
@@ -13,7 +16,6 @@ type ParsedAddress = {
 
 type ParsedEmail = {
   from: ParsedAddress | null;
-  to: string | null;
   toList: string[];
   ccList: string[];
   bccList: string[];
@@ -41,41 +43,24 @@ const getEnv = (key: string) => {
   return value;
 };
 
-const formatError = (error: unknown) => {
-  if (!error) return "Unknown error";
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
-
 const getSupabase = () =>
   createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-const normalizeText = (value?: string | null, max = 140) => {
+const normalizeEmail = (value?: string | null) => {
   if (!value) return null;
-  const trimmed = value.replace(/\s+/g, " ").trim();
-  if (!trimmed) return null;
-  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length ? trimmed : null;
 };
 
-const parseReferences = (value?: string | string[] | null) => {
-  if (!value) return null;
-  if (Array.isArray(value)) return value.join(" ");
-  return value;
-};
-
-const parseAddressList = (list?: AddressObject | AddressObject[]) => {
-  if (!list) return null;
-  const addressObjects = Array.isArray(list) ? list : [list];
-  const addresses = addressObjects.flatMap((entry) => entry.value ?? []);
-  if (!addresses.length) return null;
-  return addresses.map((entry) => entry.address).filter(Boolean).join(", ");
+const uniqueEmails = (values: string[]) => {
+  const unique = new Set<string>();
+  values.forEach((value) => {
+    const normalized = normalizeEmail(value);
+    if (normalized) unique.add(normalized);
+  });
+  return Array.from(unique);
 };
 
 const parseAddressArray = (list?: AddressObject | AddressObject[]) => {
@@ -87,13 +72,16 @@ const parseAddressArray = (list?: AddressObject | AddressObject[]) => {
     .filter(Boolean) as string[];
 };
 
+const parseReferences = (value?: string | string[] | null) => {
+  if (!value) return null;
+  if (Array.isArray(value)) return value.join(" ");
+  return value;
+};
+
 const parseEmail = async (source: Buffer | Uint8Array): Promise<ParsedEmail> => {
   const buffer = Buffer.isBuffer(source) ? source : Buffer.from(source);
   const parsed = await simpleParser(buffer);
   const from = parsed.from?.value?.[0] ?? null;
-  const toList = parseAddressArray(parsed.to);
-  const ccList = parseAddressArray(parsed.cc);
-  const bccList = parseAddressArray(parsed.bcc);
   const attachments =
     parsed.attachments?.map((attachment) => {
       const content =
@@ -121,10 +109,9 @@ const parseEmail = async (source: Buffer | Uint8Array): Promise<ParsedEmail> => 
 
   return {
     from: from ? { address: from.address, name: from.name } : null,
-    to: parseAddressList(parsed.to),
-    toList,
-    ccList,
-    bccList,
+    toList: parseAddressArray(parsed.to),
+    ccList: parseAddressArray(parsed.cc),
+    bccList: parseAddressArray(parsed.bcc),
     subject: parsed.subject?.trim() || null,
     text: parsed.text || null,
     html: parsed.html || null,
@@ -211,52 +198,6 @@ const uploadAttachments = async (
   return results;
 };
 
-const getLastUid = async () => {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("gmail_state")
-    .select("last_uid")
-    .eq("id", 1)
-    .maybeSingle();
-
-  if (error) throw error;
-
-  if (!data) {
-    await supabase.from("gmail_state").insert({ id: 1, last_uid: 0 });
-    return 0;
-  }
-
-  const lastUid = Number(data.last_uid ?? 0);
-  return Number.isFinite(lastUid) ? lastUid : 0;
-};
-
-const setLastUid = async (uid: number) => {
-  if (!Number.isFinite(uid) || uid <= 0) return;
-  const supabase = getSupabase();
-  await supabase.from("gmail_state").upsert({
-    id: 1,
-    last_uid: uid,
-    updated_at: new Date().toISOString(),
-  });
-};
-
-const normalizeEmail = (value?: string | null) => {
-  if (!value) return null;
-  const trimmed = value.trim().toLowerCase();
-  return trimmed.length ? trimmed : null;
-};
-
-const uniqueEmails = (values: Array<string | null | undefined>) => {
-  const unique = new Set<string>();
-  for (const value of values) {
-    const normalized = normalizeEmail(value);
-    if (normalized) unique.add(normalized);
-  }
-  return Array.from(unique);
-};
-
-const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
-
 const buildRecipientList = (
   toList: string[],
   ccList: string[],
@@ -276,77 +217,34 @@ const buildRecipientList = (
   return recipients;
 };
 
-const findContactIdFromAddresses = async (
-  addresses: Array<string | null | undefined>
-) => {
-  const candidates = uniqueEmails(addresses);
-  if (!candidates.length) return null;
-  const supabase = getSupabase();
-  const filter = candidates
-    .map((email) => `email.ilike.%${escapeIlike(email)}%`)
-    .join(",");
-  const { data } = await supabase
-    .from("contacts")
-    .select("id")
-    .or(filter)
-    .limit(1)
-    .maybeSingle();
-  return data?.id ?? null;
+const parsePayload = async (request: Request) => {
+  try {
+    const body = (await request.json()) as {
+      emails?: string[];
+      limit?: number;
+      contactId?: string;
+    };
+    const emails = Array.isArray(body?.emails) ? body.emails : [];
+    const limit = Number(body?.limit ?? DEFAULT_LIMIT);
+    return {
+      emails,
+      limit: Math.max(1, Math.min(MAX_LIMIT, Number.isFinite(limit) ? limit : DEFAULT_LIMIT)),
+      contactId: body?.contactId ?? null,
+    };
+  } catch {
+    return { emails: [], limit: DEFAULT_LIMIT, contactId: null };
+  }
 };
 
-const insertEmail = async (payload: {
-  contact_id: string | null;
-  direction: "inbound" | "outbound";
-  gmail_uid: number;
-  message_id_header: string | null;
-  in_reply_to: string | null;
-  references: string | null;
-  from_email: string | null;
-  from_name: string | null;
-  to_email: string | null;
-  subject: string | null;
-  text_body: string | null;
-  html_body: string | null;
-  received_at: string | null;
-  raw: Record<string, unknown>;
-}) => {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("emails")
-    .insert(payload)
-    .select("id, contact_id")
-    .single();
-
-  if (error) return { data: null, error };
-  return { data, error: null };
-};
-
-const insertNotification = async (payload: {
-  type: "email_received" | "email_sent";
-  contact_id: string | null;
-  email_id: string;
-  title: string;
-  body: string | null;
-}) => {
-  const supabase = getSupabase();
-  await supabase.from("notifications").insert(payload);
-};
-
-export const runSync = async (request: Request) => {
-  const cronSecret = request.headers.get("x-cron-secret");
-  if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ ok: false }, { status: 401 });
+export async function POST(request: Request) {
+  const { emails, limit, contactId } = await parsePayload(request);
+  const cleaned = uniqueEmails(emails);
+  if (!cleaned.length) {
+    return NextResponse.json({ ok: false, error: "Missing emails" }, { status: 400 });
   }
 
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  if (!user || !pass) {
-    return NextResponse.json(
-      { ok: false, error: "Missing GMAIL_USER or GMAIL_APP_PASSWORD" },
-      { status: 500 }
-    );
-  }
-
+  const user = getEnv("GMAIL_USER");
+  const pass = getEnv("GMAIL_APP_PASSWORD");
   const client = new ImapFlow({
     host: "imap.gmail.com",
     port: 993,
@@ -355,13 +253,11 @@ export const runSync = async (request: Request) => {
   });
 
   let processed = 0;
-  let maxUid = 0;
-
-  let step = "connect";
+  let inserted = 0;
+  let updated = 0;
 
   try {
     await client.connect();
-    step = "list mailboxes";
     const mailboxes = await client.list();
     const allMail =
       mailboxes.find((box) => box.specialUse === "\\All") ||
@@ -371,49 +267,37 @@ export const runSync = async (request: Request) => {
       mailboxes.find((box) => box.specialUse === "\\Inbox");
     const mailboxPath = allMail?.path || "INBOX";
 
-    step = "get mailbox lock";
     const lock = await client.getMailboxLock(mailboxPath);
-
     try {
-      step = "get last uid";
-      const lastUid = await getLastUid();
-      maxUid = lastUid;
-      const maxPerRun = Math.max(
-        1,
-        Number(process.env.GMAIL_SYNC_LIMIT ?? 50)
-      );
-      step = "search uids";
-      const uids = await client.search(
-        { uid: `${lastUid + 1}:*` },
-        { uid: true }
-      );
+      const orQueries = cleaned.flatMap((address) => [
+        { from: address },
+        { to: address },
+        { cc: address },
+        { bcc: address },
+      ]);
+      const query =
+        orQueries.length === 1 ? orQueries[0] : { or: orQueries };
 
-      if (!uids || uids.length === 0) {
-        return NextResponse.json({
-          ok: true,
-          processed: 0,
-          last_uid: maxUid,
-          range: null,
-        });
+      const allUids = await client.search(query, { uid: true });
+      const uidList = Array.isArray(allUids) ? allUids : [];
+      if (!uidList.length) {
+        return NextResponse.json({ ok: true, processed: 0, inserted: 0, updated: 0 });
       }
 
-      const batch = uids.slice(0, maxPerRun);
-      const startUid = batch[0];
-      const endUid = batch[batch.length - 1];
+      const slice = uidList.slice(-limit);
 
-      step = "fetch messages";
       for await (const message of client.fetch(
-        batch,
+        slice,
         { uid: true, source: true },
         { uid: true }
       )) {
         if (!message.uid || !message.source) continue;
-        if (message.uid > maxUid) maxUid = message.uid;
+        processed += 1;
 
         const supabase = getSupabase();
         const { data: existing } = await supabase
           .from("emails")
-          .select("id, contact_id, from_email, to_email")
+          .select("id, contact_id, raw")
           .eq("gmail_uid", message.uid)
           .maybeSingle();
 
@@ -435,42 +319,36 @@ export const runSync = async (request: Request) => {
 
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
-        const contactId = isOutbound
-          ? await findContactIdFromAddresses(
-              recipients.filter(
-                (address) => normalizeEmail(address) !== normalizeEmail(user)
-              )
-            )
-          : await findContactIdFromAddresses([fromEmail]);
         const direction = isOutbound ? "outbound" : "inbound";
 
         if (existing) {
           const shouldUpdateContact =
             !existing.contact_id && Boolean(contactId);
-          const shouldUpdateFrom = !existing.from_email && Boolean(fromEmail);
-          const shouldUpdateTo =
-            Boolean(recipientsDisplay) &&
-            existing.to_email !== recipientsDisplay;
-          const shouldUpdateAttachments = attachmentsMeta.length > 0;
+          const existingRaw =
+            existing.raw && typeof existing.raw === "object"
+              ? (existing.raw as Record<string, unknown>)
+              : {};
+          const existingAttachments = Array.isArray(
+            (existingRaw as { attachments?: unknown }).attachments
+          )
+            ? ((existingRaw as { attachments?: unknown[] })
+                .attachments as unknown[])
+            : [];
+          const hasUrls =
+            existingAttachments.length > 0 &&
+            existingAttachments.every((item) =>
+              Boolean((item as { url?: string | null })?.url)
+            );
+          const shouldUpdateAttachments =
+            attachmentsMeta.length > 0 && !hasUrls;
 
-          if (
-            shouldUpdateContact ||
-            shouldUpdateFrom ||
-            shouldUpdateTo ||
-            shouldUpdateAttachments
-          ) {
+          if (shouldUpdateContact || shouldUpdateAttachments) {
             await supabase
               .from("emails")
               .update({
                 contact_id: shouldUpdateContact
                   ? contactId
                   : existing.contact_id,
-                from_email: shouldUpdateFrom
-                  ? fromEmail
-                  : existing.from_email,
-                to_email: shouldUpdateTo
-                  ? recipientsDisplay
-                  : existing.to_email,
                 ...(shouldUpdateAttachments
                   ? {
                       raw: {
@@ -484,11 +362,12 @@ export const runSync = async (request: Request) => {
                   : {}),
               })
               .eq("id", existing.id);
+            updated += 1;
           }
           continue;
         }
 
-        const { data: insertedEmail, error } = await insertEmail({
+        const { error } = await supabase.from("emails").insert({
           contact_id: contactId,
           direction,
           gmail_uid: message.uid,
@@ -512,60 +391,21 @@ export const runSync = async (request: Request) => {
         });
 
         if (error) {
-          if (error.code === "23505") {
-            continue;
-          }
-          console.error("Gmail sync insert error", error);
+          if (error.code === "23505") continue;
+          console.error("Backfill insert error", error);
           continue;
         }
-
-        if (insertedEmail) {
-          const titleBase = fromName || fromEmail || "Mittente sconosciuto";
-          await insertNotification({
-            type: "email_received",
-            contact_id: contactId,
-            email_id: insertedEmail.id,
-            title: `Nuova email da ${titleBase}`,
-            body: parsed.subject || normalizeText(parsed.text),
-          });
-        }
-
-        processed += 1;
+        inserted += 1;
       }
-
-      if (maxUid > lastUid) {
-        await setLastUid(maxUid);
-      }
-
-      return NextResponse.json({
-        ok: true,
-        processed,
-        last_uid: maxUid,
-        range: { start: startUid, end: endUid },
-      });
     } finally {
       lock.release();
     }
   } catch (error) {
-    console.error("Gmail sync error", error);
-    const code = (error as { code?: string | number })?.code;
-    const message = formatError(error);
-    const suffix = code ? ` (${code})` : "";
-    return NextResponse.json(
-      { ok: false, error: `Sync failed at ${step}: ${message}${suffix}` },
-      { status: 500 }
-    );
+    console.error("Backfill contact error", error);
+    return NextResponse.json({ ok: false }, { status: 500 });
   } finally {
     await client.logout().catch(() => undefined);
   }
 
-  return NextResponse.json({ ok: true, processed, last_uid: maxUid });
-};
-
-export async function GET(request: Request) {
-  return runSync(request);
-}
-
-export async function POST(request: Request) {
-  return runSync(request);
+  return NextResponse.json({ ok: true, processed, inserted, updated });
 }

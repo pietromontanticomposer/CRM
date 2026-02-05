@@ -71,6 +71,109 @@ const parseReceivedAt = (value?: string) => {
   return parsed.toISOString();
 };
 
+const sanitizeFilename = (value?: string | null) => {
+  if (!value) return "allegato";
+  return value.replace(/[^\w.\-]+/g, "_");
+};
+
+const parseNumber = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const uploadPostmarkAttachments = async (
+  attachments: Array<Record<string, unknown>>,
+  messageId: string
+) => {
+  if (!attachments.length) return [];
+  const bucket =
+    process.env.EMAIL_ATTACHMENTS_BUCKET?.trim() || "email-attachments";
+  const supabase = getSupabase();
+
+  const results = await Promise.all(
+    attachments.map(async (attachment, index) => {
+      const filename = sanitizeFilename(
+        (attachment.Name as string) ||
+          (attachment.FileName as string) ||
+          (attachment.Filename as string) ||
+          (attachment.name as string) ||
+          null
+      );
+      const contentType =
+        (attachment.ContentType as string) ||
+        (attachment.MimeType as string) ||
+        (attachment.contentType as string) ||
+        null;
+      const size = parseNumber(
+        attachment.ContentLength ?? attachment.Length ?? attachment.Size
+      );
+      const cid =
+        (attachment.ContentID as string) ||
+        (attachment.ContentId as string) ||
+        (attachment.contentId as string) ||
+        null;
+      const contentDisposition =
+        (attachment.ContentDisposition as string) ||
+        (attachment.contentDisposition as string) ||
+        null;
+      const inline = contentDisposition === "inline" || Boolean(cid);
+      const contentBase64 =
+        (attachment.Content as string) ||
+        (attachment.content as string) ||
+        null;
+
+      if (!contentBase64) {
+        return {
+          filename,
+          contentType,
+          size,
+          cid,
+          inline,
+          url: null,
+        };
+      }
+
+      const buffer = Buffer.from(contentBase64, "base64");
+      const path = `postmark/${messageId}/${index}-${Date.now()}-${filename}`;
+
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, buffer, {
+          contentType: contentType ?? undefined,
+          upsert: true,
+        });
+
+      if (error) {
+        console.error("Postmark attachment upload error", error);
+        return {
+          filename,
+          contentType,
+          size,
+          cid,
+          inline,
+          url: null,
+        };
+      }
+
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      return {
+        filename,
+        contentType,
+        size,
+        cid,
+        inline,
+        url: data.publicUrl,
+      };
+    })
+  );
+
+  return results;
+};
+
 export async function POST(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ ok: true });
@@ -105,6 +208,15 @@ export async function POST(request: Request) {
       contactId = contactData?.id ?? null;
     }
 
+    const attachmentsMeta = payload.Attachments?.length
+      ? await uploadPostmarkAttachments(payload.Attachments, messageId)
+      : [];
+
+    const rawPayload = {
+      ...payload,
+      Attachments: attachmentsMeta,
+    };
+
     const emailRow = {
       contact_id: contactId,
       message_id: messageId,
@@ -115,7 +227,7 @@ export async function POST(request: Request) {
       html_body: payload.HtmlBody ?? null,
       stripped_text_reply: payload.StrippedTextReply ?? null,
       received_at: receivedAt,
-      raw: payload,
+      raw: rawPayload,
     };
 
     const { data: insertedEmail, error: emailError } = await supabase

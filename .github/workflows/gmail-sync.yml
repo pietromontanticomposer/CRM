@@ -11,8 +11,8 @@ jobs:
     steps:
       - name: Ping sync endpoint
         run: |
-          curl -sS -f -X GET "$SYNC_URL" \
+          curl -sS -f -X POST "$SYNC_URL" \
             -H "x-cron-secret: $CRON_SECRET"
         env:
-          SYNC_URL: https://crm-smoky-eight.vercel.app/api/gmail/sync
+          SYNC_URL: https://crm-smoky-eight.vercel.app/api/gmail/sync-now
           CRON_SECRET: ${{ secrets.CRON_SECRET }}

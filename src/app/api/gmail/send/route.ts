@@ -47,6 +47,12 @@ const buildReferencesHeader = (references?: string | null, messageId?: string) =
   return unique.join(" ");
 };
 
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
 const getSmtpConfig = () => {
   const host =
     getOptionalEnv("MAILDEV_HOST") ||
@@ -166,6 +172,20 @@ export async function POST(request: Request) {
       title: `Email inviata a ${payload.to}`,
       body: subject || null,
     });
+  }
+
+  if (contactId) {
+    const followUpDate = addDays(new Date(), 10);
+    const followUpIso = followUpDate.toISOString().slice(0, 10);
+    await supabase
+      .from("contacts")
+      .update({
+        last_action_at: new Date().toISOString().slice(0, 10),
+        last_action_note: "Email inviata dal CRM",
+        next_action_at: followUpIso,
+        next_action_note: "Follow-up automatico (10 giorni)",
+      })
+      .eq("id", contactId);
   }
 
   return NextResponse.json({ ok: true, messageId: info.messageId });

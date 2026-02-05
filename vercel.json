@@ -3,6 +3,14 @@
     {
       "path": "/api/gmail/sync-now",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/reminders/run",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/ai/classify-all",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
