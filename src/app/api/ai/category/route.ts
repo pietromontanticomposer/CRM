@@ -158,48 +158,91 @@ const callGroq = async (prompt: string) => {
     getOptionalEnv("GROQ_TIMEOUT_MS") ?? DEFAULT_GROQ_TIMEOUT_MS
   );
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  let response: Response;
+  const isGoogle = baseUrl.includes("generativelanguage.googleapis.com");
 
-  try {
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
+  const requestOnce = async (
+    modelName: string,
+    headerMode: "bearer" | "google"
+  ) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-      }),
-    });
-  } catch (error) {
-    if ((error as { name?: string }).name === "AbortError") {
-      throw new Error("Groq timeout");
+      };
+      if (headerMode === "google") {
+        headers["x-goog-api-key"] = apiKey;
+      } else {
+        headers.Authorization = `Bearer ${apiKey}`;
+      }
+      response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.2,
+        }),
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === "AbortError") {
+        throw new Error("AI timeout");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+    const text = await response.text();
+    return { response, text };
+  };
+
+  let activeModel = model;
+  let attempt = await requestOnce(activeModel, "bearer");
+
+  if (!attempt.response.ok && isGoogle) {
+    const message = attempt.text.toLowerCase();
+    const canTryPrefix =
+      !activeModel.startsWith("models/") &&
+      (attempt.response.status === 404 ||
+        (message.includes("model") &&
+          (message.includes("not found") ||
+            message.includes("does not exist") ||
+            message.includes("unknown"))));
+    if (canTryPrefix) {
+      activeModel = `models/${activeModel}`;
+      attempt = await requestOnce(activeModel, "bearer");
+    }
+    if (
+      !attempt.response.ok &&
+      (attempt.response.status === 401 || attempt.response.status === 403)
+    ) {
+      attempt = await requestOnce(activeModel, "google");
+    }
   }
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    const snippet = errorText?.slice(0, 400) || "Groq error";
-    throw new Error(`Groq ${response.status}: ${snippet}`);
+  if (!attempt.response.ok) {
+    let message = attempt.text?.slice(0, 400) || "AI error";
+    try {
+      const parsed = JSON.parse(attempt.text) as { error?: { message?: string } };
+      if (parsed?.error?.message) {
+        message = parsed.error.message.slice(0, 400);
+      }
+    } catch {
+      // ignore JSON parse
+    }
+    const err = new Error(`AI ${attempt.response.status}: ${message}`);
+    (err as { status?: number }).status = attempt.response.status;
+    throw err;
   }
 
-  const payload = (await response.json()) as {
+  const payload = JSON.parse(attempt.text) as {
     choices?: Array<{ message?: { content?: string | null } }>;
     model?: string;
   };
   const content = payload.choices?.[0]?.message?.content ?? "";
-  return {
-    raw: content,
-    model: payload.model ?? model,
-  };
+  return { raw: content, model: payload.model ?? activeModel };
 };
 
 export async function POST(request: Request) {
@@ -367,11 +410,20 @@ export async function POST(request: Request) {
     generated = await callGroq(prompt);
   } catch (error) {
     console.error("Category generation error", error);
+    const status = (error as { status?: number }).status;
     const message = (error as Error)?.message || "Unknown error";
     const safeMessage = message.slice(0, 200);
+    const human =
+      status === 429
+        ? "Quota AI esaurita. Riprova piu tardi."
+        : status === 401 || status === 403
+          ? "Chiave API non valida o non autorizzata."
+          : status === 400 || status === 404
+            ? "Configurazione AI errata (modello/base URL)."
+            : "AI non disponibile.";
     return NextResponse.json(
-      { ok: false, error: `AI non configurata. ${safeMessage}` },
-      { status: 503 }
+      { ok: false, error: `${human} ${safeMessage}`.trim() },
+      { status: status === 429 ? 429 : 503 }
     );
   }
 

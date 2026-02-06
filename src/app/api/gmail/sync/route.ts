@@ -246,6 +246,67 @@ const normalizeEmail = (value?: string | null) => {
   return trimmed.length ? trimmed : null;
 };
 
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
+
+const parseDateValue = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getFollowUpDays = () => {
+  const raw = Number(process.env.FOLLOWUP_DAYS ?? 10);
+  if (!Number.isFinite(raw)) return 10;
+  return Math.max(1, Math.floor(raw));
+};
+
+const shouldSkipFollowUp = (status?: string | null) =>
+  status === "Chiuso" || status === "Non interessato";
+
+const updateContactAfterOutbound = async (
+  contactId: string,
+  sentAt?: string | null
+) => {
+  const supabase = getSupabase();
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id, status, last_action_at")
+    .eq("id", contactId)
+    .maybeSingle();
+
+  if (!contact || shouldSkipFollowUp(contact.status)) return;
+
+  const sentDate = parseDateValue(sentAt) ?? new Date();
+  const sentDateOnly = toDateOnly(sentDate);
+
+  if (contact.last_action_at) {
+    const lastActionDate = parseDateValue(contact.last_action_at);
+    if (lastActionDate && lastActionDate >= new Date(sentDateOnly)) {
+      return;
+    }
+  }
+
+  const followUpDays = getFollowUpDays();
+  const followUpDate = addDays(sentDate, followUpDays);
+  const followUpDateOnly = toDateOnly(followUpDate);
+
+  await supabase
+    .from("contacts")
+    .update({
+      last_action_at: sentDateOnly,
+      last_action_note: "Email inviata (sync Gmail)",
+      next_action_at: followUpDateOnly,
+      next_action_note: `Follow-up automatico (${followUpDays} giorni)`,
+    })
+    .eq("id", contactId);
+};
+
 const uniqueEmails = (values: Array<string | null | undefined>) => {
   const unique = new Set<string>();
   for (const value of values) {
@@ -485,6 +546,9 @@ export const runSync = async (request: Request) => {
               })
               .eq("id", existing.id);
           }
+          if (shouldUpdateContact && direction === "outbound" && contactId) {
+            await updateContactAfterOutbound(contactId, parsed.date);
+          }
           continue;
         }
 
@@ -528,6 +592,10 @@ export const runSync = async (request: Request) => {
             title: `Nuova email da ${titleBase}`,
             body: parsed.subject || normalizeText(parsed.text),
           });
+        }
+
+        if (direction === "outbound" && contactId) {
+          await updateContactAfterOutbound(contactId, parsed.date);
         }
 
         processed += 1;

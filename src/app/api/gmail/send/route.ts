@@ -53,6 +53,14 @@ const addDays = (date: Date, days: number) => {
   return next;
 };
 
+const getFollowUpDays = () => {
+  const raw = Number(process.env.FOLLOWUP_DAYS ?? 10);
+  if (!Number.isFinite(raw)) return 10;
+  return Math.max(1, Math.floor(raw));
+};
+
+const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
+
 const getSmtpConfig = () => {
   const host =
     getOptionalEnv("MAILDEV_HOST") ||
@@ -175,15 +183,17 @@ export async function POST(request: Request) {
   }
 
   if (contactId) {
-    const followUpDate = addDays(new Date(), 10);
-    const followUpIso = followUpDate.toISOString().slice(0, 10);
+    const followUpDays = getFollowUpDays();
+    const today = new Date();
+    const followUpDate = addDays(today, followUpDays);
+    const followUpIso = toDateOnly(followUpDate);
     await supabase
       .from("contacts")
       .update({
-        last_action_at: new Date().toISOString().slice(0, 10),
+        last_action_at: toDateOnly(today),
         last_action_note: "Email inviata dal CRM",
         next_action_at: followUpIso,
-        next_action_note: "Follow-up automatico (10 giorni)",
+        next_action_note: `Follow-up automatico (${followUpDays} giorni)`,
       })
       .eq("id", contactId);
   }

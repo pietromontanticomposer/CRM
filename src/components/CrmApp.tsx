@@ -6,8 +6,6 @@ import { supabase } from "@/lib/supabaseClient";
 const STATUS_OPTIONS = [
   "Da contattare",
   "Interessato",
-  "In corso",
-  "In attesa",
   "Non interessato",
   "Chiuso",
 ] as const;
@@ -73,6 +71,7 @@ type SummaryState = {
   updatedAt?: string | null;
   lastEmailAt?: string | null;
   model?: string | null;
+  rateLimited?: boolean;
 };
 
 const emptyNewContact: NewContact = {
@@ -85,8 +84,6 @@ const emptyNewContact: NewContact = {
 const statusStyles: Record<Status, string> = {
   "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
   "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
-  "In corso": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
-  "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
   "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
   "Chiuso": "bg-zinc-500/20 text-zinc-200 border-zinc-400/30",
 };
@@ -770,6 +767,7 @@ export default function CrmApp() {
         updated_at?: string | null;
         last_email_at?: string | null;
         model?: string | null;
+        rate_limited?: boolean;
       };
 
       const raw = payload.summary ?? "";
@@ -779,6 +777,7 @@ export default function CrmApp() {
         updatedAt: payload.updated_at ?? null,
         lastEmailAt: payload.last_email_at ?? null,
         model: payload.model ?? null,
+        rateLimited: payload.rate_limited ?? false,
       });
       setSummaryLoading(false);
     } catch (error) {
@@ -1350,7 +1349,7 @@ export default function CrmApp() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Riassunto conversazione (Groq)
+                  Riassunto conversazione (AI)
                 </div>
                 <div className="text-sm font-semibold text-[var(--ink)]">
                   Ultima attivita {formatDateTime(summaryMeta.lastActivity)}
@@ -1395,6 +1394,11 @@ export default function CrmApp() {
                     {summary.parsed.one_liner && (
                       <div className="text-base font-semibold text-[var(--ink)]">
                         {summary.parsed.one_liner}
+                      </div>
+                    )}
+                    {summary.rateLimited && (
+                      <div className="rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                        Quota AI esaurita · mostrato ultimo riassunto disponibile
                       </div>
                     )}
                   </div>
@@ -1885,7 +1889,6 @@ export default function CrmApp() {
                                 )}
                               </div>
                             </button>
-                            {isSelected && renderContactDetails(contact.id)}
                           </div>
                         );
                       })}
@@ -1900,24 +1903,31 @@ export default function CrmApp() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-                Conversazioni
+                {selected ? "Dettagli" : "Seleziona"}
               </p>
-              <h2 className="text-2xl font-semibold">Email e riassunti</h2>
+              <h2 className="text-2xl font-semibold">
+                {selected ? getDisplayName(selected) : "Contatto"}
+              </h2>
             </div>
             {selected && (
-              <div className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs text-[var(--muted)]">
-                {getDisplayName(selected)}
+              <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}`}>
+                {selected.status}
               </div>
             )}
           </div>
 
           {!selected && (
             <div className="mt-10 rounded-2xl border border-dashed border-[var(--line)] p-6 text-sm text-[var(--muted)]">
-              Seleziona un contatto per vedere le conversazioni.
+              Seleziona un contatto per vedere i dettagli.
             </div>
           )}
 
-          {selected && <div className="mt-6">{renderConversation()}</div>}
+          {selected && (
+            <div className="mt-6 grid gap-6">
+              {renderContactDetails(selected.id)}
+              {renderConversation()}
+            </div>
+          )}
         </section>
       </main>
     </div>
