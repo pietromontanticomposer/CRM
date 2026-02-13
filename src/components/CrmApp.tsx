@@ -1487,16 +1487,16 @@ export default function CrmApp() {
               }}
             >
               <summary className="cursor-pointer list-none">
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <div className="text-sm font-semibold text-[var(--ink)]">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="break-words text-sm font-semibold text-[var(--ink)]">
                       {thread.subject}
                     </div>
                     <div className="mt-1 text-xs text-[var(--muted)]">
                       Ultima attivita {formatDateTime(thread.latestAt)}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
+                  <div className="flex shrink-0 items-center gap-2 text-xs">
                     <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--muted)]">
                       {thread.total} messaggi
                     </span>
@@ -1539,17 +1539,17 @@ export default function CrmApp() {
                               : "border-[var(--accent)] bg-[var(--panel-strong)]"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                          <span className="flex items-center gap-2">
+                        <div className="flex min-w-0 items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                          <span className="flex min-w-0 items-center gap-2">
                             {!isRead && (
                               <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
                             )}
-                            <span>
+                            <span className="min-w-0 break-all">
                               {email.direction === "inbound" ? "Da" : "A"}{" "}
                               {address || "—"}
                             </span>
                           </span>
-                          <span className="flex items-center gap-2">
+                          <span className="flex shrink-0 items-center gap-2">
                             <span
                               className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
                             >
@@ -1563,7 +1563,7 @@ export default function CrmApp() {
                           </span>
                         </div>
                         <div
-                          className={`mt-1 text-sm text-[var(--ink)] ${
+                          className={`mt-1 break-words text-sm text-[var(--ink)] ${
                             isRead ? "font-semibold" : "font-bold"
                           }`}
                         >
@@ -1601,7 +1601,7 @@ export default function CrmApp() {
                 >
                   {selectedEmail.direction === "inbound" ? "Ricevuta" : "Inviata"}
                 </span>
-                <span>
+                <span className="break-all">
                   {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
                   {selectedEmail.direction === "inbound"
                     ? selectedEmail.from_email
@@ -1653,8 +1653,8 @@ export default function CrmApp() {
                           key={`${attachment.filename}-${index}`}
                           className="rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
                         >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-[var(--ink)]">
+                          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0 break-all text-sm font-semibold text-[var(--ink)]">
                               {attachment.filename}
                             </div>
                             {downloadUrl ? (
@@ -1663,7 +1663,7 @@ export default function CrmApp() {
                                 download
                                 target="_blank"
                                 rel="noreferrer"
-                                className="rounded-full border border-[var(--accent)] bg-[var(--accent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-[var(--accent-strong)]"
+                                className="shrink-0 rounded-full border border-[var(--accent)] bg-[var(--accent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-[var(--accent-strong)]"
                               >
                                 Scarica
                               </a>
@@ -1785,7 +1785,7 @@ export default function CrmApp() {
       </header>
 
       <main className="relative mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[340px_1fr]">
-        <section className="rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg">
+        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
           </h2>
@@ -1907,7 +1907,7 @@ export default function CrmApp() {
                           <div key={contact.id} className="grid gap-3">
                             <button
                               onClick={() => handleSelectContact(contact)}
-                              className={`perf-card flex w-full flex-col gap-3 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-1 hover:shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] ${
+                              className={`perf-card flex w-full flex-col gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-1 hover:shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] ${
                                 isSelected
                                   ? "border-[var(--accent)] bg-[var(--panel-strong)]"
                                   : "border-[var(--line)] bg-[var(--panel)]"
@@ -1917,16 +1917,16 @@ export default function CrmApp() {
                                   : ""
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-3">
+                              <div className="flex min-w-0 items-center justify-between gap-2">
+                                <div className="flex min-w-0 flex-1 items-center gap-3">
                                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-semibold text-[var(--accent)]">
                                     {getInitials(getDisplayName(contact))}
                                   </div>
-                                  <div>
-                                    <div className="text-sm font-semibold">
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold">
                                       {getDisplayName(contact)}
                                     </div>
-                                    <div className="text-xs text-[var(--muted)]">
+                                    <div className="truncate text-xs text-[var(--muted)]">
                                       {[contact.role, contact.company]
                                         .filter(Boolean)
                                         .join(" · ") || "—"}
@@ -1934,12 +1934,12 @@ export default function CrmApp() {
                                   </div>
                                 </div>
                                 <span
-                                  className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
+                                  className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
                                 >
                                   {contact.status}
                                 </span>
                               </div>
-                              <div className="text-xs text-[var(--muted)]">
+                              <div className="break-words text-xs text-[var(--muted)]">
                                 {contact.status === "Chiuso" ? (
                                   <>Chiuso · contattare via telefono</>
                                 ) : contact.status === "Non interessato" ? (
@@ -1967,18 +1967,18 @@ export default function CrmApp() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg">
+          <div className="flex min-w-0 items-start justify-between gap-4">
+            <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
                 {selected ? "Dettagli" : "Seleziona"}
               </p>
-              <h2 className="text-2xl font-semibold">
+              <h2 className="break-words text-2xl font-semibold">
                 {selected ? getDisplayName(selected) : "Contatto"}
               </h2>
             </div>
             {selected && (
-              <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}`}>
+              <div className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}`}>
                 {selected.status}
               </div>
             )}
