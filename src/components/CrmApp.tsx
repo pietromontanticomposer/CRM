@@ -1159,6 +1159,7 @@ export default function CrmApp() {
                 <option value="">Ruolo</option>
                 <option value="Regista">Regista</option>
                 <option value="Produzione">Produzione</option>
+                <option value="Regista con agente">Regista con agente</option>
                 <option value="Regista e Produzione">
                   Regista e Produzione
                 </option>
@@ -1781,6 +1782,7 @@ export default function CrmApp() {
               <option value="">Ruolo</option>
               <option value="Regista">Regista</option>
               <option value="Produzione">Produzione</option>
+              <option value="Regista con agente">Regista con agente</option>
               <option value="Regista e Produzione">Regista e Produzione</option>
             </select>
             <select
