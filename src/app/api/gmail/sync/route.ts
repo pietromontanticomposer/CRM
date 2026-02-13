@@ -348,22 +348,31 @@ const buildRecipientList = (
   return recipients;
 };
 
-const findContactIdFromAddresses = async (
+const findContactIdsFromAddresses = async (
   addresses: Array<string | null | undefined>
 ) => {
   const candidates = uniqueEmails(addresses);
-  if (!candidates.length) return null;
+  if (!candidates.length) return [];
   const supabase = getSupabase();
-  const filter = candidates
-    .map((email) => `email.ilike.%${escapeIlike(email)}%`)
-    .join(",");
-  const { data } = await supabase
-    .from("contacts")
-    .select("id")
-    .or(filter)
-    .limit(1)
-    .maybeSingle();
-  return data?.id ?? null;
+  const found = new Set<string>();
+  const chunkSize = 25;
+
+  for (let index = 0; index < candidates.length; index += chunkSize) {
+    const chunk = candidates.slice(index, index + chunkSize);
+    const filter = chunk
+      .map((email) => `email.ilike.%${escapeIlike(email)}%`)
+      .join(",");
+    const { data } = await supabase
+      .from("contacts")
+      .select("id")
+      .or(filter)
+      .limit(2000);
+    data?.forEach((row) => {
+      if (row.id) found.add(row.id);
+    });
+  }
+
+  return Array.from(found);
 };
 
 const insertEmail = async (payload: {
@@ -507,13 +516,14 @@ export const runSync = async (request: Request) => {
 
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
-        const contactId = isOutbound
-          ? await findContactIdFromAddresses(
+        const matchedContactIds = isOutbound
+          ? await findContactIdsFromAddresses(
               recipients.filter(
                 (address) => normalizeEmail(address) !== normalizeEmail(user)
               )
             )
-          : await findContactIdFromAddresses([fromEmail]);
+          : await findContactIdsFromAddresses([fromEmail]);
+        const contactId = matchedContactIds[0] ?? null;
         const direction = isOutbound ? "outbound" : "inbound";
 
         if (existing) {
@@ -558,8 +568,12 @@ export const runSync = async (request: Request) => {
               .eq("id", existing.id);
           }
           if (direction === "outbound") {
-            const outboundContactId = contactId || existing.contact_id;
-            if (outboundContactId) {
+            const outboundContactIds = new Set<string>();
+            matchedContactIds.forEach((id) => outboundContactIds.add(id));
+            if (existing.contact_id) {
+              outboundContactIds.add(existing.contact_id);
+            }
+            for (const outboundContactId of outboundContactIds) {
               await updateContactAfterOutbound(outboundContactId, parsed.date);
             }
           }
@@ -608,8 +622,15 @@ export const runSync = async (request: Request) => {
           });
         }
 
-        if (direction === "outbound" && contactId) {
-          await updateContactAfterOutbound(contactId, parsed.date);
+        if (direction === "outbound") {
+          const outboundContactIds = new Set<string>();
+          matchedContactIds.forEach((id) => outboundContactIds.add(id));
+          if (contactId) {
+            outboundContactIds.add(contactId);
+          }
+          for (const outboundContactId of outboundContactIds) {
+            await updateContactAfterOutbound(outboundContactId, parsed.date);
+          }
         }
 
         processed += 1;

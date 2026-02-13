@@ -29,15 +29,57 @@ const getSupabase = () =>
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-const findContactId = async (email?: string | null) => {
-  if (!email) return null;
+const normalizeEmail = (value?: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length ? trimmed : null;
+};
+
+const extractEmails = (value?: string | null) => {
+  if (!value) return [];
+  const matches = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi);
+  if (!matches) return [];
+  const unique = new Set(matches.map((item) => item.toLowerCase()));
+  return Array.from(unique);
+};
+
+const uniqueEmails = (values: Array<string | null | undefined>) => {
+  const unique = new Set<string>();
+  values.forEach((value) => {
+    const normalized = normalizeEmail(value);
+    if (normalized) unique.add(normalized);
+  });
+  return Array.from(unique);
+};
+
+const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+const findContactIdsFromAddresses = async (
+  addresses: Array<string | null | undefined>
+) => {
+  const candidates = uniqueEmails(addresses);
+  if (!candidates.length) return [];
+
   const supabase = getSupabase();
-  const { data } = await supabase
-    .from("contacts")
-    .select("id")
-    .ilike("email", email)
-    .maybeSingle();
-  return data?.id ?? null;
+  const found = new Set<string>();
+  const chunkSize = 25;
+
+  for (let index = 0; index < candidates.length; index += chunkSize) {
+    const chunk = candidates.slice(index, index + chunkSize);
+    const filter = chunk
+      .map((email) => `email.ilike.%${escapeIlike(email)}%`)
+      .join(",");
+    const { data } = await supabase
+      .from("contacts")
+      .select("id")
+      .or(filter)
+      .limit(2000);
+    data?.forEach((row) => {
+      if (row.id) found.add(row.id);
+    });
+  }
+
+  return Array.from(found);
 };
 
 const buildReferencesHeader = (references?: string | null, messageId?: string) => {
@@ -205,7 +247,11 @@ export async function POST(request: Request) {
     headers,
   });
 
-  const contactId = await findContactId(payload.to);
+  const recipientAddresses = extractEmails(payload.to);
+  const matchedContactIds = await findContactIdsFromAddresses(
+    recipientAddresses.length ? recipientAddresses : [payload.to]
+  );
+  const contactId = matchedContactIds[0] ?? null;
   const now = new Date().toISOString();
 
   const { data: insertedEmail } = await supabase
@@ -239,8 +285,10 @@ export async function POST(request: Request) {
     });
   }
 
-  if (contactId) {
-    await updateContactAfterOutbound(contactId, now);
+  if (matchedContactIds.length) {
+    for (const matchedId of matchedContactIds) {
+      await updateContactAfterOutbound(matchedId, now);
+    }
   }
 
   return NextResponse.json({ ok: true, messageId: info.messageId });
