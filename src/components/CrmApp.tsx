@@ -5,12 +5,15 @@ import { supabase } from "@/lib/supabaseClient";
 
 const STATUS_OPTIONS = [
   "Da contattare",
+  "Già contattato",
   "Interessato",
   "Non interessato",
   "Chiuso",
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
+const NEW_CONTACT_STATUS_OPTIONS = ["Da contattare", "Già contattato"] as const;
+type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
   id: string;
@@ -35,6 +38,7 @@ type NewContact = {
   email: string;
   company: string;
   role: string;
+  status: NewContactStatus;
 };
 
 type EmailDirection = "inbound" | "outbound";
@@ -79,10 +83,12 @@ const emptyNewContact: NewContact = {
   email: "",
   company: "",
   role: "",
+  status: "Da contattare",
 };
 
 const statusStyles: Record<Status, string> = {
   "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
+  "Già contattato": "bg-sky-500/15 text-sky-200 border-sky-400/30",
   "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
   "Chiuso": "bg-zinc-500/20 text-zinc-200 border-zinc-400/30",
@@ -977,6 +983,7 @@ export default function CrmApp() {
     setError(null);
     setAddError(null);
     const today = getTodayDateInputValue();
+    const selectedStatus = newContact.status;
 
     const { data, error: insertError } = await supabase
       .from("contacts")
@@ -985,8 +992,8 @@ export default function CrmApp() {
         email: newContact.email.trim() || null,
         company: company || null,
         role: newContact.role.trim() || null,
-        status: "Da contattare",
-        last_action_at: today,
+        status: selectedStatus,
+        last_action_at: selectedStatus === "Già contattato" ? today : null,
       })
       .select("*")
       .single();
@@ -1775,6 +1782,21 @@ export default function CrmApp() {
               <option value="Regista">Regista</option>
               <option value="Produzione">Produzione</option>
               <option value="Regista e Produzione">Regista e Produzione</option>
+            </select>
+            <select
+              value={newContact.status}
+              onChange={(event) =>
+                setNewContact((prev) => ({
+                  ...prev,
+                  status: event.target.value as NewContactStatus,
+                }))
+              }
+            >
+              {NEW_CONTACT_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
             </select>
             <button
               type="submit"
