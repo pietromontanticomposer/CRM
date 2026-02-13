@@ -284,26 +284,37 @@ const updateContactAfterOutbound = async (
 
   const sentDate = parseDateValue(sentAt) ?? new Date();
   const sentDateOnly = toDateOnly(sentDate);
-
+  const promotedStatus =
+    contact.status === "Da contattare" ? "Già contattato" : contact.status;
+  const shouldPromoteStatus = promotedStatus !== contact.status;
+  let shouldRefreshFollowUp = true;
   if (contact.last_action_at) {
     const lastActionDate = parseDateValue(contact.last_action_at);
     if (lastActionDate && lastActionDate >= new Date(sentDateOnly)) {
-      return;
+      shouldRefreshFollowUp = false;
     }
   }
+
+  if (!shouldPromoteStatus && !shouldRefreshFollowUp) return;
 
   const followUpDays = getFollowUpDays();
   const followUpDate = addDays(sentDate, followUpDays);
   const followUpDateOnly = toDateOnly(followUpDate);
 
+  const updatePayload: Record<string, unknown> = {};
+  if (shouldPromoteStatus) {
+    updatePayload.status = promotedStatus;
+  }
+  if (shouldRefreshFollowUp) {
+    updatePayload.last_action_at = sentDateOnly;
+    updatePayload.last_action_note = "Email inviata (sync Gmail)";
+    updatePayload.next_action_at = followUpDateOnly;
+    updatePayload.next_action_note = `Follow-up automatico (${followUpDays} giorni)`;
+  }
+
   await supabase
     .from("contacts")
-    .update({
-      last_action_at: sentDateOnly,
-      last_action_note: "Email inviata (sync Gmail)",
-      next_action_at: followUpDateOnly,
-      next_action_note: `Follow-up automatico (${followUpDays} giorni)`,
-    })
+    .update(updatePayload)
     .eq("id", contactId);
 };
 
@@ -546,8 +557,11 @@ export const runSync = async (request: Request) => {
               })
               .eq("id", existing.id);
           }
-          if (shouldUpdateContact && direction === "outbound" && contactId) {
-            await updateContactAfterOutbound(contactId, parsed.date);
+          if (direction === "outbound") {
+            const outboundContactId = contactId || existing.contact_id;
+            if (outboundContactId) {
+              await updateContactAfterOutbound(outboundContactId, parsed.date);
+            }
           }
           continue;
         }

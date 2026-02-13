@@ -1900,6 +1900,8 @@ export default function CrmApp() {
                                   <>Chiuso · contattare via telefono</>
                                 ) : contact.status === "Non interessato" ? (
                                   <>Non interessato · non ricontattare</>
+                                ) : !contact.last_action_at ? (
+                                  <>Prossima azione: Da contattare</>
                                 ) : (
                                   <>
                                     Prossima azione:{" "}

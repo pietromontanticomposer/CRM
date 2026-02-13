@@ -61,6 +61,63 @@ const getFollowUpDays = () => {
 
 const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
 
+const parseDateValue = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const shouldSkipFollowUp = (status?: string | null) =>
+  status === "Chiuso" || status === "Non interessato";
+
+const updateContactAfterOutbound = async (
+  contactId: string,
+  sentAt: string
+) => {
+  const supabase = getSupabase();
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id, status, last_action_at")
+    .eq("id", contactId)
+    .maybeSingle();
+
+  if (!contact || shouldSkipFollowUp(contact.status)) return;
+
+  const sentDate = parseDateValue(sentAt) ?? new Date();
+  const sentDateOnly = toDateOnly(sentDate);
+  const promotedStatus =
+    contact.status === "Da contattare" ? "Già contattato" : contact.status;
+  const shouldPromoteStatus = promotedStatus !== contact.status;
+  let shouldRefreshFollowUp = true;
+  if (contact.last_action_at) {
+    const lastActionDate = parseDateValue(contact.last_action_at);
+    if (lastActionDate && lastActionDate >= new Date(sentDateOnly)) {
+      shouldRefreshFollowUp = false;
+    }
+  }
+
+  if (!shouldPromoteStatus && !shouldRefreshFollowUp) return;
+
+  const followUpDays = getFollowUpDays();
+  const followUpDate = addDays(sentDate, followUpDays);
+  const followUpIso = toDateOnly(followUpDate);
+  const updatePayload: Record<string, unknown> = {};
+  if (shouldPromoteStatus) {
+    updatePayload.status = promotedStatus;
+  }
+  if (shouldRefreshFollowUp) {
+    updatePayload.last_action_at = sentDateOnly;
+    updatePayload.last_action_note = "Email inviata dal CRM";
+    updatePayload.next_action_at = followUpIso;
+    updatePayload.next_action_note = `Follow-up automatico (${followUpDays} giorni)`;
+  }
+
+  await supabase
+    .from("contacts")
+    .update(updatePayload)
+    .eq("id", contactId);
+};
+
 const getSmtpConfig = () => {
   const host =
     getOptionalEnv("MAILDEV_HOST") ||
@@ -183,19 +240,7 @@ export async function POST(request: Request) {
   }
 
   if (contactId) {
-    const followUpDays = getFollowUpDays();
-    const today = new Date();
-    const followUpDate = addDays(today, followUpDays);
-    const followUpIso = toDateOnly(followUpDate);
-    await supabase
-      .from("contacts")
-      .update({
-        last_action_at: toDateOnly(today),
-        last_action_note: "Email inviata dal CRM",
-        next_action_at: followUpIso,
-        next_action_note: `Follow-up automatico (${followUpDays} giorni)`,
-      })
-      .eq("id", contactId);
+    await updateContactAfterOutbound(contactId, now);
   }
 
   return NextResponse.json({ ok: true, messageId: info.messageId });

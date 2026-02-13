@@ -236,6 +236,76 @@ const parsePayload = async (request: Request) => {
   }
 };
 
+const addDays = (date: Date, days: number) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
+
+const parseDateValue = (value?: string | null) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getFollowUpDays = () => {
+  const raw = Number(process.env.FOLLOWUP_DAYS ?? 10);
+  if (!Number.isFinite(raw)) return 10;
+  return Math.max(1, Math.floor(raw));
+};
+
+const shouldSkipFollowUp = (status?: string | null) =>
+  status === "Chiuso" || status === "Non interessato";
+
+const updateContactAfterOutbound = async (
+  contactId: string,
+  sentAt?: string | null
+) => {
+  const supabase = getSupabase();
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("id, status, last_action_at")
+    .eq("id", contactId)
+    .maybeSingle();
+
+  if (!contact || shouldSkipFollowUp(contact.status)) return;
+
+  const sentDate = parseDateValue(sentAt) ?? new Date();
+  const sentDateOnly = toDateOnly(sentDate);
+  const promotedStatus =
+    contact.status === "Da contattare" ? "Già contattato" : contact.status;
+  const shouldPromoteStatus = promotedStatus !== contact.status;
+  let shouldRefreshFollowUp = true;
+  if (contact.last_action_at) {
+    const lastActionDate = parseDateValue(contact.last_action_at);
+    if (lastActionDate && lastActionDate >= new Date(sentDateOnly)) {
+      shouldRefreshFollowUp = false;
+    }
+  }
+
+  if (!shouldPromoteStatus && !shouldRefreshFollowUp) return;
+
+  const followUpDays = getFollowUpDays();
+  const followUpDateOnly = toDateOnly(addDays(sentDate, followUpDays));
+  const updatePayload: Record<string, unknown> = {};
+  if (shouldPromoteStatus) {
+    updatePayload.status = promotedStatus;
+  }
+  if (shouldRefreshFollowUp) {
+    updatePayload.last_action_at = sentDateOnly;
+    updatePayload.last_action_note = "Email inviata (backfill Gmail)";
+    updatePayload.next_action_at = followUpDateOnly;
+    updatePayload.next_action_note = `Follow-up automatico (${followUpDays} giorni)`;
+  }
+
+  await supabase
+    .from("contacts")
+    .update(updatePayload)
+    .eq("id", contactId);
+};
+
 export async function POST(request: Request) {
   const { emails, limit, contactId } = await parsePayload(request);
   const cleaned = uniqueEmails(emails);
@@ -364,6 +434,12 @@ export async function POST(request: Request) {
               .eq("id", existing.id);
             updated += 1;
           }
+          if (direction === "outbound") {
+            const outboundContactId = contactId || existing.contact_id;
+            if (outboundContactId) {
+              await updateContactAfterOutbound(outboundContactId, parsed.date);
+            }
+          }
           continue;
         }
 
@@ -394,6 +470,9 @@ export async function POST(request: Request) {
           if (error.code === "23505") continue;
           console.error("Backfill insert error", error);
           continue;
+        }
+        if (direction === "outbound" && contactId) {
+          await updateContactAfterOutbound(contactId, parsed.date);
         }
         inserted += 1;
       }
