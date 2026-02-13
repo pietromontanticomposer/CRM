@@ -652,8 +652,11 @@ export default function CrmApp() {
     }
   }, [emailThreads, openThreads]);
 
-  const loadContacts = async () => {
-    setLoading(true);
+  const loadContacts = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
     const { data, error: fetchError } = await supabase
       .from("contacts")
@@ -662,12 +665,18 @@ export default function CrmApp() {
 
     if (fetchError) {
       setError("Impossibile caricare i contatti. Controlla il database.");
-      setLoading(false);
-      return;
+      if (!silent) {
+        setLoading(false);
+      }
+      return [];
     }
 
-    setContacts((data as Contact[]) || []);
-    setLoading(false);
+    const nextContacts = (data as Contact[]) || [];
+    setContacts(nextContacts);
+    if (!silent) {
+      setLoading(false);
+    }
+    return nextContacts;
   };
 
   const loadEmails = async (contactId: string | null, email?: string | null) => {
@@ -854,6 +863,17 @@ export default function CrmApp() {
     setEmailSubject("");
     setEmailBody("");
     await loadEmails(selected.id, selected.email);
+    const refreshedContacts = await loadContacts({ silent: true });
+    const refreshedSelected = refreshedContacts.find(
+      (contact) => contact.id === selected.id
+    );
+    if (refreshedSelected) {
+      setDraft(buildDraft(refreshedSelected));
+      setOpenContactGroups((prev) => ({
+        ...prev,
+        [refreshedSelected.status]: true,
+      }));
+    }
     setSendingEmail(false);
   };
 
@@ -881,8 +901,19 @@ export default function CrmApp() {
     } else {
       setSyncMessage("Sync completata.");
     }
+    const refreshedContacts = await loadContacts({ silent: true });
+    const refreshedSelected = selected
+      ? refreshedContacts.find((contact) => contact.id === selected.id)
+      : null;
+    if (refreshedSelected) {
+      setDraft(buildDraft(refreshedSelected));
+      setOpenContactGroups((prev) => ({
+        ...prev,
+        [refreshedSelected.status]: true,
+      }));
+    }
     if (selected) {
-      await loadEmails(selected.id, selected.email);
+      await loadEmails(selected.id, refreshedSelected?.email ?? selected.email);
     }
     setSyncing(false);
   };
@@ -959,6 +990,17 @@ export default function CrmApp() {
         });
         if (!response.ok) return;
         await loadEmails(selected.id, selected.email);
+        const refreshedContacts = await loadContacts({ silent: true });
+        const refreshedSelected = refreshedContacts.find(
+          (contact) => contact.id === selected.id
+        );
+        if (refreshedSelected) {
+          setDraft(buildDraft(refreshedSelected));
+          setOpenContactGroups((prev) => ({
+            ...prev,
+            [refreshedSelected.status]: true,
+          }));
+        }
       } catch (error) {
         console.error(error);
       } finally {
