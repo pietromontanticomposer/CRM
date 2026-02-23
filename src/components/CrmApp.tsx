@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import TodoBoard from "@/components/TodoBoard";
 
 const STATUS_OPTIONS = [
   "Da contattare",
@@ -133,6 +134,14 @@ const getTodayDateInputValue = () => {
   const month = `${now.getMonth() + 1}`.padStart(2, "0");
   const day = `${now.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+const toDateKey = (value?: string | null) => {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
 };
 
 const extractEmails = (value?: string | null) => {
@@ -574,6 +583,42 @@ export default function CrmApp() {
     }, {} as Record<Status, Contact[]>);
   }, [contacts]);
 
+  const followUpSummary = useMemo(() => {
+    const today = getTodayDateInputValue();
+    const overdue: Contact[] = [];
+    const dueToday: Contact[] = [];
+    const sortByNextActionDate = (a: Contact, b: Contact) => {
+      const aDate = toDateKey(a.next_action_at) ?? "9999-12-31";
+      const bDate = toDateKey(b.next_action_at) ?? "9999-12-31";
+      if (aDate !== bDate) return aDate.localeCompare(bDate);
+      return getDisplayName(a).localeCompare(getDisplayName(b), "it");
+    };
+
+    contacts.forEach((contact) => {
+      if (contact.status === "Chiuso" || contact.status === "Non interessato") {
+        return;
+      }
+      const nextActionDate = toDateKey(contact.next_action_at);
+      if (!nextActionDate) return;
+      if (nextActionDate < today) {
+        overdue.push(contact);
+        return;
+      }
+      if (nextActionDate === today) {
+        dueToday.push(contact);
+      }
+    });
+
+    overdue.sort(sortByNextActionDate);
+    dueToday.sort(sortByNextActionDate);
+
+    return {
+      overdue,
+      dueToday,
+      totalOpen: overdue.length + dueToday.length,
+    };
+  }, [contacts]);
+
   const emailThreads = useMemo(() => {
     if (!emails.length) return [];
     const grouped = new Map<
@@ -809,6 +854,12 @@ export default function CrmApp() {
     setOpenThreads({});
     setOpenContactGroups((prev) => ({ ...prev, [contact.status]: true }));
     loadEmails(contact.id, contact.email);
+  };
+
+  const handleSelectContactById = (contactId: string) => {
+    const target = contacts.find((contact) => contact.id === contactId);
+    if (!target) return;
+    handleSelectContact(target);
   };
 
   const handleSelectEmail = async (emailId: string) => {
@@ -1856,6 +1907,78 @@ export default function CrmApp() {
             </div>
           )}
 
+          <div className="mt-6 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                Follow-up
+              </h3>
+              <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[11px] font-semibold text-[var(--muted)]">
+                {followUpSummary.totalOpen}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-2 py-0.5 font-semibold text-rose-200">
+                In ritardo: {followUpSummary.overdue.length}
+              </span>
+              <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-200">
+                Oggi: {followUpSummary.dueToday.length}
+              </span>
+            </div>
+            <p className="mt-3 text-xs text-[var(--muted)]">
+              Data aggiornata automaticamente (di default 10 giorni dopo la prima
+              email inviata).
+            </p>
+            {followUpSummary.totalOpen === 0 ? (
+              <div className="mt-3 rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
+                Nessun follow-up urgente.
+              </div>
+            ) : (
+              <div className="mt-3 grid gap-2">
+                {[
+                  ...followUpSummary.overdue.map((contact) => ({
+                    contact,
+                    label: "In ritardo",
+                    tone:
+                      "border-rose-400/40 bg-rose-500/10 text-rose-200" as const,
+                  })),
+                  ...followUpSummary.dueToday.map((contact) => ({
+                    contact,
+                    label: "Oggi",
+                    tone:
+                      "border-amber-400/40 bg-amber-500/10 text-amber-200" as const,
+                  })),
+                ]
+                  .slice(0, 8)
+                  .map(({ contact, label, tone }) => (
+                    <button
+                      key={`${label}-${contact.id}`}
+                      type="button"
+                      onClick={() => handleSelectContact(contact)}
+                      className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition hover:-translate-y-0.5 ${
+                        selectedId === contact.id
+                          ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                          : "border-[var(--line)] bg-[var(--panel)]"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-[var(--ink)]">
+                          {getDisplayName(contact)}
+                        </div>
+                        <div className="text-xs text-[var(--muted)]">
+                          {formatDate(contact.next_action_at)}
+                        </div>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}
+                      >
+                        {label}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+
           <div className="mt-8 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <span>Contatti</span>
             <span>{contacts.length}</span>
@@ -1997,6 +2120,14 @@ export default function CrmApp() {
             </div>
           )}
         </section>
+
+        <div className="min-w-0 lg:col-span-2">
+          <TodoBoard
+            contacts={contacts}
+            selectedContactId={selectedId}
+            onOpenContact={handleSelectContactById}
+          />
+        </div>
       </main>
     </div>
   );
