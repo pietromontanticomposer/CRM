@@ -382,10 +382,10 @@ export default function TodoBoard() {
                   }))
                 }
               >
-                <option value="alta">Priorita alta</option>
-                <option value="media">Priorita media</option>
-                <option value="continuativo">Priorita continuativo</option>
-                <option value="bassa">Priorita bassa</option>
+                <option value="alta">Priorità alta</option>
+                <option value="media">Priorità media</option>
+                <option value="continuativo">Priorità continuativo</option>
+                <option value="bassa">Priorità bassa</option>
               </select>
               <button
                 type="submit"
@@ -494,12 +494,12 @@ export default function TodoBoard() {
                                   }))
                                 }
                               >
-                                <option value="alta">Priorita alta</option>
-                                <option value="media">Priorita media</option>
+                                <option value="alta">Priorità alta</option>
+                                <option value="media">Priorità media</option>
                                 <option value="continuativo">
-                                  Priorita continuativo
+                                  Priorità continuativo
                                 </option>
-                                <option value="bassa">Priorita bassa</option>
+                                <option value="bassa">Priorità bassa</option>
                               </select>
                               <textarea
                                 rows={2}
@@ -656,12 +656,12 @@ export default function TodoBoard() {
                           }))
                         }
                       >
-                        <option value="alta">Priorita alta</option>
-                        <option value="media">Priorita media</option>
+                        <option value="alta">Priorità alta</option>
+                        <option value="media">Priorità media</option>
                         <option value="continuativo">
-                          Priorita continuativo
+                          Priorità continuativo
                         </option>
-                        <option value="bassa">Priorita bassa</option>
+                        <option value="bassa">Priorità bassa</option>
                       </select>
                       <textarea
                         rows={2}
