@@ -34,13 +34,13 @@ type TaskMeta = {
   bucket?: "continuativo";
 };
 
-const PRIORITIES: TodoPriority[] = ["alta", "media", "continuativo", "bassa"];
+const PRIORITIES: TodoPriority[] = ["continuativo", "alta", "media", "bassa"];
 const TASK_META_PREFIX = "__todo_meta_v1__:";
 
 const priorityRank: Record<TodoPriority, number> = {
-  alta: 0,
-  media: 1,
-  continuativo: 2,
+  continuativo: 0,
+  alta: 1,
+  media: 2,
   bassa: 3,
 };
 
