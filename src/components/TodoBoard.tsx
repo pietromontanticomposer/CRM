@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type TodoPriority = "alta" | "media" | "bassa";
+type TodoPriority = "alta" | "media" | "continuativo" | "bassa";
 
 type TodoTask = {
   id: string;
@@ -20,22 +20,38 @@ type TodoTask = {
 type TodoDraft = {
   title: string;
   priority: TodoPriority;
-  notes: string;
-  due_date: string;
+  meanwhile: string;
+  learning: string;
 };
 
-const PRIORITIES: TodoPriority[] = ["alta", "media", "bassa"];
+type TaskMeta = {
+  meanwhile: string;
+  learning: string;
+  bucket?: "continuativo";
+};
+
+const PRIORITIES: TodoPriority[] = ["alta", "media", "continuativo", "bassa"];
+const TASK_META_PREFIX = "__todo_meta_v1__:";
 
 const priorityRank: Record<TodoPriority, number> = {
   alta: 0,
   media: 1,
-  bassa: 2,
+  continuativo: 2,
+  bassa: 3,
 };
 
 const priorityStyles: Record<TodoPriority, string> = {
   alta: "border-rose-400/40 bg-rose-500/10 text-rose-200",
   media: "border-amber-400/40 bg-amber-500/10 text-amber-200",
+  continuativo: "border-cyan-400/40 bg-cyan-500/10 text-cyan-200",
   bassa: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
+};
+
+const emptyDraft: TodoDraft = {
+  title: "",
+  priority: "media",
+  meanwhile: "",
+  learning: "",
 };
 
 const fetchTasks = async () => {
@@ -45,10 +61,57 @@ const fetchTasks = async () => {
 };
 
 const sortTasks = (a: TodoTask, b: TodoTask) => {
+  const aBucket = getTaskBucket(a);
+  const bBucket = getTaskBucket(b);
   if (a.is_done !== b.is_done) return Number(a.is_done) - Number(b.is_done);
-  const priorityDelta = priorityRank[a.priority] - priorityRank[b.priority];
+  const priorityDelta = priorityRank[aBucket] - priorityRank[bBucket];
   if (priorityDelta !== 0) return priorityDelta;
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+};
+
+const buildTaskMeta = (
+  meanwhile: string,
+  learning: string,
+  selectedPriority: TodoPriority
+) => {
+  const payload: TaskMeta = {
+    meanwhile: meanwhile.trim(),
+    learning: learning.trim(),
+    ...(selectedPriority === "continuativo"
+      ? { bucket: "continuativo" as const }
+      : {}),
+  };
+  if (!payload.meanwhile && !payload.learning && !payload.bucket) return null;
+  return `${TASK_META_PREFIX}${JSON.stringify(payload)}`;
+};
+
+const parseTaskMeta = (value?: string | null): TaskMeta => {
+  if (!value) return { meanwhile: "", learning: "" };
+
+  if (!value.startsWith(TASK_META_PREFIX)) {
+    return { meanwhile: value, learning: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(
+      value.slice(TASK_META_PREFIX.length)
+    ) as Partial<TaskMeta>;
+    return {
+      meanwhile:
+        typeof parsed.meanwhile === "string" ? parsed.meanwhile : "",
+      learning: typeof parsed.learning === "string" ? parsed.learning : "",
+      bucket: parsed.bucket === "continuativo" ? "continuativo" : undefined,
+    };
+  } catch {
+    return { meanwhile: value, learning: "" };
+  }
+};
+
+const getTaskBucket = (task: TodoTask): TodoPriority => {
+  if (task.priority === "continuativo") return "continuativo";
+  const meta = parseTaskMeta(task.notes);
+  if (meta.bucket === "continuativo") return "continuativo";
+  return task.priority;
 };
 
 export default function TodoBoard() {
@@ -57,12 +120,7 @@ export default function TodoBoard() {
   const [refreshing, setRefreshing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<TodoDraft>({
-    title: "",
-    priority: "media",
-    notes: "",
-    due_date: "",
-  });
+  const [draft, setDraft] = useState<TodoDraft>(emptyDraft);
   const [updatingById, setUpdatingById] = useState<Record<string, boolean>>(
     {}
   );
@@ -111,14 +169,16 @@ export default function TodoBoard() {
 
     setAdding(true);
     setError(null);
+    const dbPriority =
+      draft.priority === "continuativo" ? "bassa" : draft.priority;
     const { data, error: insertError } = await supabase
       .from("todo_tasks")
       .insert({
         title: cleanTitle,
-        priority: draft.priority,
+        priority: dbPriority,
         is_done: false,
-        notes: draft.notes.trim() || null,
-        due_date: draft.due_date || null,
+        notes: buildTaskMeta(draft.meanwhile, draft.learning, draft.priority),
+        due_date: null,
         contact_id: null,
       })
       .select("*")
@@ -132,12 +192,7 @@ export default function TodoBoard() {
 
     const created = data as TodoTask;
     setTasks((prev) => [created, ...prev].sort(sortTasks));
-    setDraft({
-      title: "",
-      priority: "media",
-      notes: "",
-      due_date: "",
-    });
+    setDraft(emptyDraft);
     setAdding(false);
   };
 
@@ -179,10 +234,11 @@ export default function TodoBoard() {
     const groups: Record<TodoPriority, TodoTask[]> = {
       alta: [],
       media: [],
+      continuativo: [],
       bassa: [],
     };
     openTasks.forEach((task) => {
-      groups[task.priority].push(task);
+      groups[getTaskBucket(task)].push(task);
     });
     return groups;
   }, [openTasks]);
@@ -199,7 +255,7 @@ export default function TodoBoard() {
               Task Prioritari
             </h1>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Clicca una card per segnare completato.
+              Card minimali: solo titolo. Apri la card per i dettagli.
             </p>
           </div>
           <button
@@ -213,56 +269,57 @@ export default function TodoBoard() {
         </div>
 
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg">
-          <form onSubmit={handleAddTask} className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
-            <input
-              value={draft.title}
-              onChange={(event) =>
-                setDraft((prev) => ({ ...prev, title: event.target.value }))
-              }
-              placeholder="Nuovo task"
-            />
-            <select
-              value={draft.priority}
-              onChange={(event) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  priority: event.target.value as TodoPriority,
-                }))
-              }
-            >
-              <option value="alta">Priorita alta</option>
-              <option value="media">Priorita media</option>
-              <option value="bassa">Priorita bassa</option>
-            </select>
-            <button
-              type="submit"
-              disabled={adding}
-              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
-            >
-              {adding ? "Aggiungo..." : "+ Aggiungi"}
-            </button>
-          </form>
-          <details className="mt-3">
-            <summary className="cursor-pointer text-[11px] uppercase tracking-[0.18em] text-[var(--muted)]">
-              Dettagli (opzionale)
-            </summary>
-            <div className="mt-2 grid gap-2 sm:grid-cols-[180px_1fr]">
+          <form onSubmit={handleAddTask} className="grid gap-2">
+            <div className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
               <input
-                type="date"
-                value={draft.due_date}
+                value={draft.title}
                 onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, due_date: event.target.value }))
+                  setDraft((prev) => ({ ...prev, title: event.target.value }))
                 }
+                placeholder="Nuovo task"
               />
-              <input
-                value={draft.notes}
+              <select
+                value={draft.priority}
                 onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, notes: event.target.value }))
+                  setDraft((prev) => ({
+                    ...prev,
+                    priority: event.target.value as TodoPriority,
+                  }))
                 }
-                placeholder="Note task"
+              >
+                <option value="alta">Priorita alta</option>
+                <option value="media">Priorita media</option>
+                <option value="continuativo">Priorita continuativo</option>
+                <option value="bassa">Priorita bassa</option>
+              </select>
+              <button
+                type="submit"
+                disabled={adding}
+                className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
+              >
+                {adding ? "Aggiungo..." : "+ Aggiungi"}
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <textarea
+                rows={2}
+                value={draft.meanwhile}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, meanwhile: event.target.value }))
+                }
+                placeholder="Cosa fare nel mentre"
+              />
+              <textarea
+                rows={2}
+                value={draft.learning}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, learning: event.target.value }))
+                }
+                placeholder="Cosa imparare per le prossime volte"
               />
             </div>
-          </details>
+          </form>
         </section>
 
         {error && (
@@ -272,22 +329,23 @@ export default function TodoBoard() {
         )}
       </header>
 
-      <main className="relative mx-auto grid w-full max-w-6xl gap-4 md:grid-cols-3">
-        {PRIORITIES.map((item) => {
-          const column = groupedOpenTasks[item];
+      <main className="relative mx-auto grid w-full max-w-6xl gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {PRIORITIES.map((priority) => {
+          const column = groupedOpenTasks[priority];
           return (
             <section
-              key={item}
+              key={priority}
               className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg"
             >
               <div className="mb-3 flex items-center justify-between">
                 <span
-                  className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${priorityStyles[item]}`}
+                  className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${priorityStyles[priority]}`}
                 >
-                  {item}
+                  {priority}
                 </span>
                 <span className="text-xs text-[var(--muted)]">{column.length}</span>
               </div>
+
               <div className="grid gap-2">
                 {loading && (
                   <div className="rounded-xl border border-dashed border-[var(--line)] p-2 text-xs text-[var(--muted)]">
@@ -300,17 +358,47 @@ export default function TodoBoard() {
                   </div>
                 )}
                 {!loading &&
-                  column.map((task) => (
-                    <button
-                      key={task.id}
-                      type="button"
-                      onClick={() => handleToggleDone(task)}
-                      disabled={Boolean(updatingById[task.id])}
-                      className="w-full rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-left text-sm font-semibold text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-[var(--accent)] disabled:opacity-60"
-                    >
-                      {task.title}
-                    </button>
-                  ))}
+                  column.map((task) => {
+                    const meta = parseTaskMeta(task.notes);
+                    return (
+                      <details
+                        key={task.id}
+                        className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
+                      >
+                        <summary className="cursor-pointer text-left text-sm font-semibold text-[var(--ink)]">
+                          {task.title}
+                        </summary>
+                        <div className="mt-2 grid gap-2 text-xs text-[var(--muted)]">
+                          <div>
+                            <p className="uppercase tracking-[0.14em] text-[10px]">
+                              Cosa fare nel mentre
+                            </p>
+                            <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                              {meta.meanwhile || "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="uppercase tracking-[0.14em] text-[10px]">
+                              Cosa imparare per le prossime volte
+                            </p>
+                            <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                              {meta.learning || "—"}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDone(task)}
+                            disabled={Boolean(updatingById[task.id])}
+                            className="mt-1 rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                          >
+                            {updatingById[task.id]
+                              ? "Aggiorno..."
+                              : "Segna completato"}
+                          </button>
+                        </div>
+                      </details>
+                    );
+                  })}
               </div>
             </section>
           );
