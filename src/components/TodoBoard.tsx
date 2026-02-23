@@ -643,7 +643,7 @@ export default function TodoBoard() {
               {draft.links.map((link, index) => (
                 <div
                   key={`new-link-${index}`}
-                  className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                  className="grid gap-2 lg:grid-cols-[1fr_1fr_auto]"
                 >
                   <input
                     value={link.url}
@@ -687,13 +687,13 @@ export default function TodoBoard() {
         )}
       </header>
 
-      <main className="relative mx-auto grid w-full max-w-6xl gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <main className="relative mx-auto grid w-full max-w-6xl items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
         {PRIORITIES.map((priority) => {
           const column = groupedOpenTasks[priority];
           return (
             <section
               key={priority}
-              className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg"
+              className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg"
             >
               <div className="mb-3 flex items-center justify-between">
                 <span
@@ -724,7 +724,7 @@ export default function TodoBoard() {
                     return (
                       <details
                         key={task.id}
-                        className="relative rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
+                        className="relative min-w-0 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
                         open={isEditing || Boolean(openTaskDetailsById[task.id])}
                         onToggle={(event) => {
                           const isOpen = (event.currentTarget as HTMLDetailsElement)
@@ -735,7 +735,7 @@ export default function TodoBoard() {
                           }));
                         }}
                       >
-                        <summary className="cursor-pointer pr-6 text-left text-sm font-semibold text-[var(--ink)]">
+                        <summary className="cursor-pointer break-words pr-6 text-left text-sm font-semibold text-[var(--ink)]">
                           {task.title}
                         </summary>
                         {!isEditing && (
@@ -861,7 +861,7 @@ export default function TodoBoard() {
                                 {editDraft.links.map((link, index) => (
                                   <div
                                     key={`${task.id}-link-${index}`}
-                                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                                    className="grid gap-2"
                                   >
                                     <input
                                       value={link.url}
@@ -1020,7 +1020,7 @@ export default function TodoBoard() {
               return (
                 <div
                   key={task.id}
-                  className="relative rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
+                  className="relative min-w-0 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
                 >
                   {isEditing && editDraft ? (
                     <div className="grid gap-2 text-xs text-[var(--muted)]">
@@ -1105,7 +1105,7 @@ export default function TodoBoard() {
                         {editDraft.links.map((link, index) => (
                           <div
                             key={`${task.id}-done-link-${index}`}
-                            className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                            className="grid gap-2"
                           >
                             <input
                               value={link.url}
@@ -1205,7 +1205,7 @@ export default function TodoBoard() {
                           </div>
                         )}
                       </div>
-                      <p className="text-sm text-[var(--muted)] line-through">
+                      <p className="break-words text-sm text-[var(--muted)] line-through">
                         {task.title}
                       </p>
                       {(meta.meanwhile ||
