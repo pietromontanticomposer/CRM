@@ -59,7 +59,6 @@ type TodoDraft = {
   learning: string;
   note: string;
   links: TaskLink[];
-  calendarEnabled: boolean;
   scheduleDay: CalendarDayKey | "";
   scheduleStart: string;
   scheduleEnd: string;
@@ -102,7 +101,6 @@ const emptyDraft: TodoDraft = {
   learning: "",
   note: "",
   links: [{ ...emptyLink }],
-  calendarEnabled: false,
   scheduleDay: "",
   scheduleStart: "",
   scheduleEnd: "",
@@ -128,7 +126,6 @@ const buildTaskMeta = (
   learning: string,
   note: string,
   links: TaskLink[],
-  calendarEnabled: boolean,
   scheduleDay: CalendarDayKey | "",
   scheduleStart: string,
   scheduleEnd: string,
@@ -145,7 +142,6 @@ const buildTaskMeta = (
   const normalizedEnd = scheduleEnd.trim();
   const normalizedSchedule =
     selectedPriority === "continuativo" &&
-    calendarEnabled &&
     scheduleDay &&
     normalizedStart &&
     normalizedEnd
@@ -596,7 +592,6 @@ export default function TodoBoard() {
           draft.learning,
           draft.note,
           draft.links,
-          draft.calendarEnabled,
           draft.scheduleDay,
           draft.scheduleStart,
           draft.scheduleEnd,
@@ -658,7 +653,6 @@ export default function TodoBoard() {
         learning: meta.learning,
         note: meta.note,
         links: meta.links.length > 0 ? meta.links : [{ ...emptyLink }],
-        calendarEnabled: Boolean(meta.schedule),
         scheduleDay: meta.schedule?.day ?? "",
         scheduleStart: meta.schedule?.start ?? "",
         scheduleEnd: meta.schedule?.end ?? "",
@@ -702,7 +696,6 @@ export default function TodoBoard() {
           editDraft.learning,
           editDraft.note,
           editDraft.links,
-          editDraft.calendarEnabled,
           editDraft.scheduleDay,
           editDraft.scheduleStart,
           editDraft.scheduleEnd,
@@ -815,7 +808,6 @@ export default function TodoBoard() {
                     ...(event.target.value === "continuativo"
                       ? {}
                       : {
-                          calendarEnabled: false,
                           scheduleDay: "",
                           scheduleStart: "",
                           scheduleEnd: "",
@@ -837,7 +829,7 @@ export default function TodoBoard() {
               </button>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 lg:grid-cols-3">
               <textarea
                 rows={2}
                 value={draft.meanwhile}
@@ -866,90 +858,62 @@ export default function TodoBoard() {
             {draft.priority === "continuativo" && (
               <div className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-3">
                 <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                  Collegamento Calendario (Modulo 03)
+                  Calendario (Modulo 03)
                 </p>
-                <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
-                  <input
-                    type="checkbox"
-                    checked={draft.calendarEnabled}
-                    onChange={(event) =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        calendarEnabled: event.target.checked,
-                        ...(event.target.checked
-                          ? {}
-                          : {
-                              scheduleDay: "",
-                              scheduleStart: "",
-                              scheduleEnd: "",
-                            }),
-                      }))
-                    }
-                    className="h-4 w-4 accent-[var(--accent)]"
-                  />
-                  Attiva collegamento al Calendario
-                </label>
-                {draft.calendarEnabled ? (
-                  <>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Giorno
-                        <select
-                          value={draft.scheduleDay}
-                          onChange={(event) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              scheduleDay: event.target.value as CalendarDayKey | "",
-                            }))
-                          }
-                        >
-                          <option value="">Seleziona giorno</option>
-                          {WEEK_DAY_OPTIONS.map((day) => (
-                            <option key={day.key} value={day.key}>
-                              {day.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                        Da
-                        <input
-                          type="time"
-                          value={draft.scheduleStart}
-                          onChange={(event) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              scheduleStart: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                        A
-                        <input
-                          type="time"
-                          value={draft.scheduleEnd}
-                          onChange={(event) =>
-                            setDraft((prev) => ({
-                              ...prev,
-                              scheduleEnd: event.target.value,
-                            }))
-                          }
-                        />
-                      </label>
-                    </div>
-                    {(!draft.scheduleDay ||
-                      !draft.scheduleStart ||
-                      !draft.scheduleEnd) && (
-                      <p className="text-[10px] text-amber-200">
-                        Completa Giorno, Da e A per collegare il task al
-                        Calendario.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-[10px] text-[var(--muted)]">
-                    Se disattivo, il task resta solo nel TODO.
+                <p className="text-[10px] text-[var(--muted)]">
+                  Il collegamento e implicito: se compili giorno e fascia oraria,
+                  il task continuativo appare anche nel Calendario.
+                </p>
+                <div className="grid gap-2 lg:grid-cols-3">
+                  <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Giorno
+                    <select
+                      value={draft.scheduleDay}
+                      onChange={(event) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          scheduleDay: event.target.value as CalendarDayKey | "",
+                        }))
+                      }
+                    >
+                      <option value="">Seleziona giorno</option>
+                      {WEEK_DAY_OPTIONS.map((day) => (
+                        <option key={day.key} value={day.key}>
+                          {day.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    Da
+                    <input
+                      type="time"
+                      value={draft.scheduleStart}
+                      onChange={(event) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          scheduleStart: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                    A
+                    <input
+                      type="time"
+                      value={draft.scheduleEnd}
+                      onChange={(event) =>
+                        setDraft((prev) => ({
+                          ...prev,
+                          scheduleEnd: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                {(!draft.scheduleDay || !draft.scheduleStart || !draft.scheduleEnd) && (
+                  <p className="text-[10px] text-amber-200">
+                    Completa Giorno, Da e A per mostrare il task nel Calendario.
                   </p>
                 )}
               </div>
@@ -1122,7 +1086,6 @@ export default function TodoBoard() {
                                       ...(event.target.value === "continuativo"
                                         ? {}
                                         : {
-                                            calendarEnabled: false,
                                             scheduleDay: "",
                                             scheduleStart: "",
                                             scheduleEnd: "",
@@ -1141,103 +1104,75 @@ export default function TodoBoard() {
                               {editDraft.priority === "continuativo" && (
                                 <div className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-2">
                                   <p className="text-[10px] uppercase tracking-[0.14em]">
-                                    Collegamento Calendario (Modulo 03)
+                                    Calendario (Modulo 03)
                                   </p>
-                                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
-                                    <input
-                                      type="checkbox"
-                                      checked={editDraft.calendarEnabled}
-                                      onChange={(event) =>
-                                        setEditDraftById((prev) => ({
-                                          ...prev,
-                                          [task.id]: {
-                                            ...editDraft,
-                                            calendarEnabled: event.target.checked,
-                                            ...(event.target.checked
-                                              ? {}
-                                              : {
-                                                  scheduleDay: "",
-                                                  scheduleStart: "",
-                                                  scheduleEnd: "",
-                                                }),
-                                          },
-                                        }))
-                                      }
-                                      className="h-4 w-4 accent-[var(--accent)]"
-                                    />
-                                    Attiva collegamento al Calendario
-                                  </label>
-                                  {editDraft.calendarEnabled ? (
-                                    <>
-                                      <div className="grid gap-2 sm:grid-cols-3">
-                                        <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                          Giorno
-                                          <select
-                                            value={editDraft.scheduleDay}
-                                            onChange={(event) =>
-                                              setEditDraftById((prev) => ({
-                                                ...prev,
-                                                [task.id]: {
-                                                  ...editDraft,
-                                                  scheduleDay: event.target
-                                                    .value as CalendarDayKey | "",
-                                                },
-                                              }))
-                                            }
-                                          >
-                                            <option value="">Seleziona giorno</option>
-                                            {WEEK_DAY_OPTIONS.map((day) => (
-                                              <option key={day.key} value={day.key}>
-                                                {day.label}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </label>
-                                        <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                          Da
-                                          <input
-                                            type="time"
-                                            value={editDraft.scheduleStart}
-                                            onChange={(event) =>
-                                              setEditDraftById((prev) => ({
-                                                ...prev,
-                                                [task.id]: {
-                                                  ...editDraft,
-                                                  scheduleStart: event.target.value,
-                                                },
-                                              }))
-                                            }
-                                          />
-                                        </label>
-                                        <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                          A
-                                          <input
-                                            type="time"
-                                            value={editDraft.scheduleEnd}
-                                            onChange={(event) =>
-                                              setEditDraftById((prev) => ({
-                                                ...prev,
-                                                [task.id]: {
-                                                  ...editDraft,
-                                                  scheduleEnd: event.target.value,
-                                                },
-                                              }))
-                                            }
-                                          />
-                                        </label>
-                                      </div>
-                                      {(!editDraft.scheduleDay ||
-                                        !editDraft.scheduleStart ||
-                                        !editDraft.scheduleEnd) && (
-                                        <p className="text-[10px] text-amber-200">
-                                          Completa Giorno, Da e A per collegare il
-                                          task al Calendario.
-                                        </p>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <p className="text-[10px] text-[var(--muted)]">
-                                      Se disattivo, il task resta solo nel TODO.
+                                  <p className="text-[10px] text-[var(--muted)]">
+                                    Collegamento implicito: se compili giorno e
+                                    fascia oraria, il task appare nel Calendario.
+                                  </p>
+                                  <div className="grid gap-2 lg:grid-cols-3">
+                                    <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                      Giorno
+                                      <select
+                                        value={editDraft.scheduleDay}
+                                        onChange={(event) =>
+                                          setEditDraftById((prev) => ({
+                                            ...prev,
+                                            [task.id]: {
+                                              ...editDraft,
+                                              scheduleDay: event.target
+                                                .value as CalendarDayKey | "",
+                                            },
+                                          }))
+                                        }
+                                      >
+                                        <option value="">Seleziona giorno</option>
+                                        {WEEK_DAY_OPTIONS.map((day) => (
+                                          <option key={day.key} value={day.key}>
+                                            {day.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                      Da
+                                      <input
+                                        type="time"
+                                        value={editDraft.scheduleStart}
+                                        onChange={(event) =>
+                                          setEditDraftById((prev) => ({
+                                            ...prev,
+                                            [task.id]: {
+                                              ...editDraft,
+                                              scheduleStart: event.target.value,
+                                            },
+                                          }))
+                                        }
+                                      />
+                                    </label>
+                                    <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                      A
+                                      <input
+                                        type="time"
+                                        value={editDraft.scheduleEnd}
+                                        onChange={(event) =>
+                                          setEditDraftById((prev) => ({
+                                            ...prev,
+                                            [task.id]: {
+                                              ...editDraft,
+                                              scheduleEnd: event.target.value,
+                                            },
+                                          }))
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+                                  {(!editDraft.scheduleDay ||
+                                    !editDraft.scheduleStart ||
+                                    !editDraft.scheduleEnd) && (
+                                    <p className="text-[10px] text-amber-200">
+                                      Completa Giorno, Da e A per mostrare il task
+                                      nel Calendario.
                                     </p>
                                   )}
                                 </div>
@@ -1491,7 +1426,6 @@ export default function TodoBoard() {
                               ...(event.target.value === "continuativo"
                                 ? {}
                                 : {
-                                    calendarEnabled: false,
                                     scheduleDay: "",
                                     scheduleStart: "",
                                     scheduleEnd: "",
@@ -1510,103 +1444,75 @@ export default function TodoBoard() {
                       {editDraft.priority === "continuativo" && (
                         <div className="grid gap-2 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-2">
                           <p className="text-[10px] uppercase tracking-[0.14em]">
-                            Collegamento Calendario (Modulo 03)
+                            Calendario (Modulo 03)
                           </p>
-                          <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
-                            <input
-                              type="checkbox"
-                              checked={editDraft.calendarEnabled}
-                              onChange={(event) =>
-                                setEditDraftById((prev) => ({
-                                  ...prev,
-                                  [task.id]: {
-                                    ...editDraft,
-                                    calendarEnabled: event.target.checked,
-                                    ...(event.target.checked
-                                      ? {}
-                                      : {
-                                          scheduleDay: "",
-                                          scheduleStart: "",
-                                          scheduleEnd: "",
-                                        }),
-                                  },
-                                }))
-                              }
-                              className="h-4 w-4 accent-[var(--accent)]"
-                            />
-                            Attiva collegamento al Calendario
-                          </label>
-                          {editDraft.calendarEnabled ? (
-                            <>
-                              <div className="grid gap-2 sm:grid-cols-3">
-                                <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                  Giorno
-                                  <select
-                                    value={editDraft.scheduleDay}
-                                    onChange={(event) =>
-                                      setEditDraftById((prev) => ({
-                                        ...prev,
-                                        [task.id]: {
-                                          ...editDraft,
-                                          scheduleDay: event.target
-                                            .value as CalendarDayKey | "",
-                                        },
-                                      }))
-                                    }
-                                  >
-                                    <option value="">Seleziona giorno</option>
-                                    {WEEK_DAY_OPTIONS.map((day) => (
-                                      <option key={day.key} value={day.key}>
-                                        {day.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                  Da
-                                  <input
-                                    type="time"
-                                    value={editDraft.scheduleStart}
-                                    onChange={(event) =>
-                                      setEditDraftById((prev) => ({
-                                        ...prev,
-                                        [task.id]: {
-                                          ...editDraft,
-                                          scheduleStart: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                </label>
-                                <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                  A
-                                  <input
-                                    type="time"
-                                    value={editDraft.scheduleEnd}
-                                    onChange={(event) =>
-                                      setEditDraftById((prev) => ({
-                                        ...prev,
-                                        [task.id]: {
-                                          ...editDraft,
-                                          scheduleEnd: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                </label>
-                              </div>
-                              {(!editDraft.scheduleDay ||
-                                !editDraft.scheduleStart ||
-                                !editDraft.scheduleEnd) && (
-                                <p className="text-[10px] text-amber-200">
-                                  Completa Giorno, Da e A per collegare il task
-                                  al Calendario.
-                                </p>
-                              )}
-                            </>
-                          ) : (
-                            <p className="text-[10px] text-[var(--muted)]">
-                              Se disattivo, il task resta solo nel TODO.
+                          <p className="text-[10px] text-[var(--muted)]">
+                            Collegamento implicito: se compili giorno e fascia
+                            oraria, il task appare nel Calendario.
+                          </p>
+                          <div className="grid gap-2 lg:grid-cols-3">
+                            <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                              Giorno
+                              <select
+                                value={editDraft.scheduleDay}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      scheduleDay: event.target
+                                        .value as CalendarDayKey | "",
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="">Seleziona giorno</option>
+                                {WEEK_DAY_OPTIONS.map((day) => (
+                                  <option key={day.key} value={day.key}>
+                                    {day.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                              Da
+                              <input
+                                type="time"
+                                value={editDraft.scheduleStart}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      scheduleStart: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                              A
+                              <input
+                                type="time"
+                                value={editDraft.scheduleEnd}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      scheduleEnd: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          {(!editDraft.scheduleDay ||
+                            !editDraft.scheduleStart ||
+                            !editDraft.scheduleEnd) && (
+                            <p className="text-[10px] text-amber-200">
+                              Completa Giorno, Da e A per mostrare il task nel
+                              Calendario.
                             </p>
                           )}
                         </div>
