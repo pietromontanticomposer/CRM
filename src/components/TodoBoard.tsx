@@ -590,7 +590,7 @@ export default function TodoBoard() {
                                         prev === task.id ? null : task.id
                                       )
                                     }
-                                    className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                                    className="px-1 py-0 text-base font-semibold leading-none text-[var(--muted)] transition hover:text-[var(--ink)]"
                                     aria-label="Azioni task"
                                   >
                                     ...
@@ -773,7 +773,7 @@ export default function TodoBoard() {
                                 prev === task.id ? null : task.id
                               )
                             }
-                            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                            className="px-1 py-0 text-base font-semibold leading-none text-[var(--muted)] transition hover:text-[var(--ink)]"
                             aria-label="Azioni task"
                           >
                             ...
