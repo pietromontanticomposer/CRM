@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 
 type TodoPriority = "alta" | "media" | "continuativo" | "bassa";
@@ -24,7 +23,8 @@ type TodoDraft = {
   meanwhile: string;
   learning: string;
   note: string;
-  link: string;
+  linkUrl: string;
+  linkLabel: string;
 };
 
 type TodoEditDraft = TodoDraft;
@@ -33,7 +33,8 @@ type TaskMeta = {
   meanwhile: string;
   learning: string;
   note: string;
-  link: string;
+  linkUrl: string;
+  linkLabel: string;
   bucket?: "continuativo";
 };
 
@@ -60,7 +61,8 @@ const emptyDraft: TodoDraft = {
   meanwhile: "",
   learning: "",
   note: "",
-  link: "",
+  linkUrl: "",
+  linkLabel: "",
 };
 
 const fetchTasks = async () => {
@@ -82,14 +84,16 @@ const buildTaskMeta = (
   meanwhile: string,
   learning: string,
   note: string,
-  link: string,
+  linkUrl: string,
+  linkLabel: string,
   selectedPriority: TodoPriority
 ) => {
   const payload: TaskMeta = {
     meanwhile: meanwhile.trim(),
     learning: learning.trim(),
     note: note.trim(),
-    link: link.trim(),
+    linkUrl: linkUrl.trim(),
+    linkLabel: linkLabel.trim(),
     ...(selectedPriority === "continuativo"
       ? { bucket: "continuativo" as const }
       : {}),
@@ -98,7 +102,8 @@ const buildTaskMeta = (
     !payload.meanwhile &&
     !payload.learning &&
     !payload.note &&
-    !payload.link &&
+    !payload.linkUrl &&
+    !payload.linkLabel &&
     !payload.bucket
   )
     return null;
@@ -106,26 +111,44 @@ const buildTaskMeta = (
 };
 
 const parseTaskMeta = (value?: string | null): TaskMeta => {
-  if (!value) return { meanwhile: "", learning: "", note: "", link: "" };
+  if (!value) {
+    return { meanwhile: "", learning: "", note: "", linkUrl: "", linkLabel: "" };
+  }
 
   if (!value.startsWith(TASK_META_PREFIX)) {
-    return { meanwhile: value, learning: "", note: "", link: "" };
+    return {
+      meanwhile: value,
+      learning: "",
+      note: "",
+      linkUrl: "",
+      linkLabel: "",
+    };
   }
 
   try {
     const parsed = JSON.parse(
       value.slice(TASK_META_PREFIX.length)
     ) as Partial<TaskMeta>;
+    const parsedWithLegacy = parsed as Partial<TaskMeta> & { link?: string };
+    const legacyLink =
+      typeof parsedWithLegacy.link === "string" ? parsedWithLegacy.link : "";
     return {
       meanwhile:
         typeof parsed.meanwhile === "string" ? parsed.meanwhile : "",
       learning: typeof parsed.learning === "string" ? parsed.learning : "",
       note: typeof parsed.note === "string" ? parsed.note : "",
-      link: typeof parsed.link === "string" ? parsed.link : "",
+      linkUrl: typeof parsed.linkUrl === "string" ? parsed.linkUrl : legacyLink,
+      linkLabel: typeof parsed.linkLabel === "string" ? parsed.linkLabel : "",
       bucket: parsed.bucket === "continuativo" ? "continuativo" : undefined,
     };
   } catch {
-    return { meanwhile: value, learning: "", note: "", link: "" };
+    return {
+      meanwhile: value,
+      learning: "",
+      note: "",
+      linkUrl: "",
+      linkLabel: "",
+    };
   }
 };
 
@@ -136,8 +159,8 @@ const getTaskBucket = (task: TodoTask): TodoPriority => {
   return task.priority;
 };
 
-const toTaskHref = (rawLink: string) => {
-  const link = rawLink.trim();
+const toTaskHref = (rawLinkUrl: string) => {
+  const link = rawLinkUrl.trim();
   if (!link) return null;
   const lowered = link.toLowerCase();
   if (lowered.startsWith("javascript:") || lowered.startsWith("data:")) {
@@ -159,7 +182,6 @@ const isExternalHref = (href: string) =>
   /^(https?:\/\/|mailto:|tel:)/i.test(href);
 
 export default function TodoBoard() {
-  const pathname = usePathname();
   const [tasks, setTasks] = useState<TodoTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -178,24 +200,6 @@ export default function TodoBoard() {
   const [openTaskDetailsById, setOpenTaskDetailsById] = useState<
     Record<string, boolean>
   >({});
-  const [currentPageLink, setCurrentPageLink] = useState("");
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const updateCurrentPageLink = () => {
-      const fullUrl = `${window.location.origin}${window.location.pathname}${window.location.search}${window.location.hash}`;
-      setCurrentPageLink(fullUrl);
-    };
-    updateCurrentPageLink();
-    window.addEventListener("hashchange", updateCurrentPageLink);
-    window.addEventListener("popstate", updateCurrentPageLink);
-    const intervalId = window.setInterval(updateCurrentPageLink, 500);
-    return () => {
-      window.removeEventListener("hashchange", updateCurrentPageLink);
-      window.removeEventListener("popstate", updateCurrentPageLink);
-      window.clearInterval(intervalId);
-    };
-  }, [pathname]);
 
   useEffect(() => {
     let active = true;
@@ -253,7 +257,8 @@ export default function TodoBoard() {
           draft.meanwhile,
           draft.learning,
           draft.note,
-          draft.link,
+          draft.linkUrl,
+          draft.linkLabel,
           draft.priority
         ),
         due_date: null,
@@ -311,7 +316,8 @@ export default function TodoBoard() {
         meanwhile: meta.meanwhile,
         learning: meta.learning,
         note: meta.note,
-        link: meta.link,
+        linkUrl: meta.linkUrl,
+        linkLabel: meta.linkLabel,
       },
     }));
     setOpenTaskDetailsById((prev) => ({ ...prev, [task.id]: true }));
@@ -351,7 +357,8 @@ export default function TodoBoard() {
           editDraft.meanwhile,
           editDraft.learning,
           editDraft.note,
-          editDraft.link,
+          editDraft.linkUrl,
+          editDraft.linkLabel,
           editDraft.priority
         ),
       })
@@ -501,27 +508,22 @@ export default function TodoBoard() {
                 placeholder="Note"
               />
             </div>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div className="grid gap-2 sm:grid-cols-2">
               <input
-                value={draft.link}
+                value={draft.linkUrl}
                 onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, link: event.target.value }))
+                  setDraft((prev) => ({ ...prev, linkUrl: event.target.value }))
                 }
-                placeholder="Link cliccabile (opzionale)"
+                placeholder="URL pulsante (opzionale)"
               />
-              <button
-                type="button"
-                onClick={() =>
-                  setDraft((prev) => ({ ...prev, link: currentPageLink }))
+              <input
+                value={draft.linkLabel}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, linkLabel: event.target.value }))
                 }
-                className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-              >
-                Usa pagina corrente
-              </button>
+                placeholder="Nome pulsante (es. Apri documento)"
+              />
             </div>
-            <p className="text-[10px] text-[var(--muted)]">
-              URL corrente: {currentPageLink || "—"}
-            </p>
           </form>
         </section>
 
@@ -563,7 +565,8 @@ export default function TodoBoard() {
                 {!loading &&
                   column.map((task) => {
                     const meta = parseTaskMeta(task.notes);
-                    const taskHref = toTaskHref(meta.link);
+                    const taskHref = toTaskHref(meta.linkUrl);
+                    const taskLinkLabel = meta.linkLabel.trim() || "Apri link";
                     const isEditing = Boolean(editingById[task.id]);
                     const editDraft = editDraftById[task.id];
                     return (
@@ -699,35 +702,33 @@ export default function TodoBoard() {
                                 }
                                 placeholder="Note"
                               />
-                              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                              <div className="grid gap-2 sm:grid-cols-2">
                                 <input
-                                  value={editDraft.link}
+                                  value={editDraft.linkUrl}
                                   onChange={(event) =>
                                     setEditDraftById((prev) => ({
                                       ...prev,
                                       [task.id]: {
                                         ...editDraft,
-                                        link: event.target.value,
+                                        linkUrl: event.target.value,
                                       },
                                     }))
                                   }
-                                  placeholder="Link cliccabile (opzionale)"
+                                  placeholder="URL pulsante (opzionale)"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() =>
+                                <input
+                                  value={editDraft.linkLabel}
+                                  onChange={(event) =>
                                     setEditDraftById((prev) => ({
                                       ...prev,
                                       [task.id]: {
                                         ...editDraft,
-                                        link: currentPageLink,
+                                        linkLabel: event.target.value,
                                       },
                                     }))
                                   }
-                                  className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-                                >
-                                  Usa pagina corrente
-                                </button>
+                                  placeholder="Nome pulsante (es. Apri documento)"
+                                />
                               </div>
                               <div className="mt-1 flex flex-wrap gap-2">
                                 <button
@@ -775,11 +776,8 @@ export default function TodoBoard() {
                                   {meta.note || "—"}
                                 </p>
                               </div>
-                              <div>
-                                <p className="uppercase tracking-[0.14em] text-[10px]">
-                                  Link
-                                </p>
-                                {taskHref ? (
+                              {taskHref && (
+                                <div className="mt-0.5">
                                   <a
                                     href={taskHref}
                                     target={
@@ -790,16 +788,12 @@ export default function TodoBoard() {
                                         ? "noreferrer noopener"
                                         : undefined
                                     }
-                                    className="mt-0.5 block break-all text-[var(--accent)] underline underline-offset-2"
+                                    className="inline-flex items-center rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
                                   >
-                                    {meta.link}
+                                    {taskLinkLabel}
                                   </a>
-                                ) : (
-                                  <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                                    {meta.link || "—"}
-                                  </p>
-                                )}
-                              </div>
+                                </div>
+                              )}
                               <div className="mt-1 flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
@@ -837,7 +831,8 @@ export default function TodoBoard() {
             )}
             {doneTasks.map((task) => {
               const meta = parseTaskMeta(task.notes);
-              const taskHref = toTaskHref(meta.link);
+              const taskHref = toTaskHref(meta.linkUrl);
+              const taskLinkLabel = meta.linkLabel.trim() || "Apri link";
               const isEditing = Boolean(editingById[task.id]);
               const editDraft = editDraftById[task.id];
 
@@ -922,35 +917,33 @@ export default function TodoBoard() {
                         }
                         placeholder="Note"
                       />
-                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <input
-                          value={editDraft.link}
+                          value={editDraft.linkUrl}
                           onChange={(event) =>
                             setEditDraftById((prev) => ({
                               ...prev,
                               [task.id]: {
                                 ...editDraft,
-                                link: event.target.value,
+                                linkUrl: event.target.value,
                               },
                             }))
                           }
-                          placeholder="Link cliccabile (opzionale)"
+                          placeholder="URL pulsante (opzionale)"
                         />
-                        <button
-                          type="button"
-                          onClick={() =>
+                        <input
+                          value={editDraft.linkLabel}
+                          onChange={(event) =>
                             setEditDraftById((prev) => ({
                               ...prev,
                               [task.id]: {
                                 ...editDraft,
-                                link: currentPageLink,
+                                linkLabel: event.target.value,
                               },
                             }))
                           }
-                          className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-                        >
-                          Usa pagina corrente
-                        </button>
+                          placeholder="Nome pulsante (es. Apri documento)"
+                        />
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -1011,7 +1004,10 @@ export default function TodoBoard() {
                       <p className="text-sm text-[var(--muted)] line-through">
                         {task.title}
                       </p>
-                      {(meta.meanwhile || meta.learning || meta.note || meta.link) && (
+                      {(meta.meanwhile ||
+                        meta.learning ||
+                        meta.note ||
+                        meta.linkUrl) && (
                         <div className="grid gap-1">
                           <p className="text-[10px] uppercase tracking-[0.14em]">
                             Dettagli
@@ -1031,7 +1027,7 @@ export default function TodoBoard() {
                               Note: {meta.note}
                             </p>
                           )}
-                          {meta.link && taskHref && (
+                          {taskHref && (
                             <a
                               href={taskHref}
                               target={isExternalHref(taskHref) ? "_blank" : undefined}
@@ -1040,13 +1036,10 @@ export default function TodoBoard() {
                                   ? "noreferrer noopener"
                                   : undefined
                               }
-                              className="break-all text-[var(--accent)] underline underline-offset-2"
+                              className="inline-flex w-fit items-center rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
                             >
-                              Link: {meta.link}
+                              {taskLinkLabel}
                             </a>
-                          )}
-                          {meta.link && !taskHref && (
-                            <p className="whitespace-pre-wrap">Link: {meta.link}</p>
                           )}
                         </div>
                       )}
