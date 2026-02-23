@@ -55,7 +55,7 @@ export default function Home() {
 
           <Link
             href="/calendario"
-            className="group rounded-3xl border-2 border-red-400/85 bg-[var(--panel)] p-7 shadow-lg shadow-red-900/25 transition hover:-translate-y-1 hover:border-red-300"
+            className="group rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-lg transition hover:-translate-y-1 hover:border-red-400/70"
           >
             <p className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
               Modulo 03
