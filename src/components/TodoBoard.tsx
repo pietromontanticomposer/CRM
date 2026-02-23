@@ -17,9 +17,39 @@ type TodoTask = {
   contact_id: string | null;
 };
 
+const CALENDAR_STORAGE_KEY = "fixed_schedule_week_v1";
+
+const WEEK_DAY_OPTIONS = [
+  { key: "lunedi", label: "Lunedi" },
+  { key: "martedi", label: "Martedi" },
+  { key: "mercoledi", label: "Mercoledi" },
+  { key: "giovedi", label: "Giovedi" },
+  { key: "venerdi", label: "Venerdi" },
+  { key: "sabato", label: "Sabato" },
+  { key: "domenica", label: "Domenica" },
+] as const;
+
+type CalendarDayKey = (typeof WEEK_DAY_OPTIONS)[number]["key"];
+
 type TaskLink = {
   url: string;
   label: string;
+};
+
+type TaskSchedule = {
+  day: CalendarDayKey;
+  start: string;
+  end: string;
+};
+
+type CalendarTask = {
+  id: string;
+  title: string;
+  isDone: boolean;
+  createdAt: string;
+  source?: "manual" | "todo";
+  todoTaskId?: string;
+  timeSlot?: string;
 };
 
 type TodoDraft = {
@@ -29,6 +59,9 @@ type TodoDraft = {
   learning: string;
   note: string;
   links: TaskLink[];
+  scheduleDay: CalendarDayKey | "";
+  scheduleStart: string;
+  scheduleEnd: string;
 };
 
 type TodoEditDraft = TodoDraft;
@@ -38,6 +71,7 @@ type TaskMeta = {
   learning: string;
   note: string;
   links: TaskLink[];
+  schedule?: TaskSchedule;
   bucket?: "continuativo";
 };
 
@@ -67,6 +101,9 @@ const emptyDraft: TodoDraft = {
   learning: "",
   note: "",
   links: [{ ...emptyLink }],
+  scheduleDay: "",
+  scheduleStart: "",
+  scheduleEnd: "",
 };
 
 const fetchTasks = async () => {
@@ -89,6 +126,9 @@ const buildTaskMeta = (
   learning: string,
   note: string,
   links: TaskLink[],
+  scheduleDay: CalendarDayKey | "",
+  scheduleStart: string,
+  scheduleEnd: string,
   selectedPriority: TodoPriority
 ) => {
   const normalizedLinks = links
@@ -98,11 +138,26 @@ const buildTaskMeta = (
     }))
     .filter((link) => Boolean(link.url));
 
+  const normalizedStart = scheduleStart.trim();
+  const normalizedEnd = scheduleEnd.trim();
+  const normalizedSchedule =
+    selectedPriority === "continuativo" &&
+    scheduleDay &&
+    normalizedStart &&
+    normalizedEnd
+      ? {
+          day: scheduleDay,
+          start: normalizedStart,
+          end: normalizedEnd,
+        }
+      : undefined;
+
   const payload: TaskMeta = {
     meanwhile: meanwhile.trim(),
     learning: learning.trim(),
     note: note.trim(),
     links: normalizedLinks,
+    ...(normalizedSchedule ? { schedule: normalizedSchedule } : {}),
     ...(selectedPriority === "continuativo"
       ? { bucket: "continuativo" as const }
       : {}),
@@ -112,6 +167,7 @@ const buildTaskMeta = (
     !payload.learning &&
     !payload.note &&
     payload.links.length === 0 &&
+    !payload.schedule &&
     !payload.bucket
   )
     return null;
@@ -158,6 +214,39 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
           .filter((item): item is TaskLink => Boolean(item))
       : [];
 
+    const parsedSchedule =
+      parsed && typeof parsed === "object" && "schedule" in parsed
+        ? (parsed as { schedule?: unknown }).schedule
+        : undefined;
+    const schedule =
+      parsedSchedule && typeof parsedSchedule === "object"
+        ? (() => {
+            const scheduleCandidate = parsedSchedule as Partial<TaskSchedule>;
+            const day =
+              typeof scheduleCandidate.day === "string"
+                ? scheduleCandidate.day
+                : "";
+            const start =
+              typeof scheduleCandidate.start === "string"
+                ? scheduleCandidate.start.trim()
+                : "";
+            const end =
+              typeof scheduleCandidate.end === "string"
+                ? scheduleCandidate.end.trim()
+                : "";
+            if (
+              (WEEK_DAY_OPTIONS as ReadonlyArray<{ key: string }>).some(
+                (option) => option.key === day
+              ) &&
+              start &&
+              end
+            ) {
+              return { day: day as CalendarDayKey, start, end };
+            }
+            return undefined;
+          })()
+        : undefined;
+
     const legacyLinkUrl =
       typeof parsedWithLegacy.linkUrl === "string"
         ? parsedWithLegacy.linkUrl.trim()
@@ -178,6 +267,7 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
       learning: typeof parsed.learning === "string" ? parsed.learning : "",
       note: typeof parsed.note === "string" ? parsed.note : "",
       links: parsedLinks.length > 0 ? parsedLinks : legacyLinks,
+      ...(schedule ? { schedule } : {}),
       bucket: parsed.bucket === "continuativo" ? "continuativo" : undefined,
     };
   } catch {
@@ -230,6 +320,114 @@ const toDisplayLinks = (links: TaskLink[]) =>
       };
     })
     .filter((item): item is { href: string; label: string } => Boolean(item));
+
+const calendarDayLabel: Record<CalendarDayKey, string> = WEEK_DAY_OPTIONS.reduce(
+  (acc, day) => {
+    acc[day.key] = day.label;
+    return acc;
+  },
+  {} as Record<CalendarDayKey, string>
+);
+
+type CalendarSchedule = Record<CalendarDayKey, CalendarTask[]>;
+
+const createEmptyCalendarSchedule = (): CalendarSchedule => ({
+  lunedi: [],
+  martedi: [],
+  mercoledi: [],
+  giovedi: [],
+  venerdi: [],
+  sabato: [],
+  domenica: [],
+});
+
+const normalizeCalendarTasks = (value: unknown): CalendarTask[] => {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<CalendarTask[]>((acc, entry) => {
+    if (!entry || typeof entry !== "object") return acc;
+    const task = entry as Partial<CalendarTask>;
+    const title = typeof task.title === "string" ? task.title.trim() : "";
+    if (!title) return acc;
+    acc.push({
+      id:
+        typeof task.id === "string"
+          ? task.id
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      title,
+      isDone: Boolean(task.isDone),
+      createdAt:
+        typeof task.createdAt === "string"
+          ? task.createdAt
+          : new Date().toISOString(),
+      source: (task.source === "todo" ? "todo" : "manual") as
+        | "manual"
+        | "todo",
+      ...(typeof task.todoTaskId === "string"
+        ? { todoTaskId: task.todoTaskId }
+        : {}),
+      ...(typeof task.timeSlot === "string" ? { timeSlot: task.timeSlot } : {}),
+    });
+    return acc;
+  }, []);
+};
+
+const loadCalendarSchedule = (): CalendarSchedule => {
+  if (typeof window === "undefined") return createEmptyCalendarSchedule();
+  const raw = window.localStorage.getItem(CALENDAR_STORAGE_KEY);
+  if (!raw) return createEmptyCalendarSchedule();
+  try {
+    const parsed = JSON.parse(raw) as Partial<Record<CalendarDayKey, unknown>>;
+    return {
+      lunedi: normalizeCalendarTasks(parsed.lunedi),
+      martedi: normalizeCalendarTasks(parsed.martedi),
+      mercoledi: normalizeCalendarTasks(parsed.mercoledi),
+      giovedi: normalizeCalendarTasks(parsed.giovedi),
+      venerdi: normalizeCalendarTasks(parsed.venerdi),
+      sabato: normalizeCalendarTasks(parsed.sabato),
+      domenica: normalizeCalendarTasks(parsed.domenica),
+    };
+  } catch {
+    return createEmptyCalendarSchedule();
+  }
+};
+
+const sortCalendarTasks = (a: CalendarTask, b: CalendarTask) => {
+  if (a.isDone !== b.isDone) return Number(a.isDone) - Number(b.isDone);
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+};
+
+const syncContinuativiToCalendario = (tasks: TodoTask[]) => {
+  if (typeof window === "undefined") return;
+
+  const existing = loadCalendarSchedule();
+  const todoByDay = createEmptyCalendarSchedule();
+
+  tasks.forEach((task) => {
+    const meta = parseTaskMeta(task.notes);
+    const bucket = getTaskBucket(task);
+    const schedule = meta.schedule;
+    if (bucket !== "continuativo" || !schedule) return;
+
+    const timeSlot = `${schedule.start}-${schedule.end}`;
+    todoByDay[schedule.day].push({
+      id: `todo-${task.id}`,
+      title: task.title,
+      isDone: task.is_done,
+      createdAt: task.created_at,
+      source: "todo",
+      todoTaskId: task.id,
+      timeSlot,
+    });
+  });
+
+  const next = createEmptyCalendarSchedule();
+  (Object.keys(next) as CalendarDayKey[]).forEach((day) => {
+    const manualTasks = existing[day].filter((task) => task.source !== "todo");
+    next[day] = [...todoByDay[day], ...manualTasks].sort(sortCalendarTasks);
+  });
+
+  window.localStorage.setItem(CALENDAR_STORAGE_KEY, JSON.stringify(next));
+};
 
 export default function TodoBoard() {
   const [tasks, setTasks] = useState<TodoTask[]>([]);
@@ -353,6 +551,11 @@ export default function TodoBoard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    syncContinuativiToCalendario(tasks);
+  }, [tasks, loading]);
+
   const loadTasks = async () => {
     setRefreshing(true);
     setError(null);
@@ -389,6 +592,9 @@ export default function TodoBoard() {
           draft.learning,
           draft.note,
           draft.links,
+          draft.scheduleDay,
+          draft.scheduleStart,
+          draft.scheduleEnd,
           draft.priority
         ),
         due_date: null,
@@ -447,6 +653,9 @@ export default function TodoBoard() {
         learning: meta.learning,
         note: meta.note,
         links: meta.links.length > 0 ? meta.links : [{ ...emptyLink }],
+        scheduleDay: meta.schedule?.day ?? "",
+        scheduleStart: meta.schedule?.start ?? "",
+        scheduleEnd: meta.schedule?.end ?? "",
       },
     }));
     setOpenTaskDetailsById((prev) => ({ ...prev, [task.id]: true }));
@@ -487,6 +696,9 @@ export default function TodoBoard() {
           editDraft.learning,
           editDraft.note,
           editDraft.links,
+          editDraft.scheduleDay,
+          editDraft.scheduleStart,
+          editDraft.scheduleEnd,
           editDraft.priority
         ),
       })
@@ -636,6 +848,55 @@ export default function TodoBoard() {
                 placeholder="Note"
               />
             </div>
+            {draft.priority === "continuativo" && (
+              <div className="grid gap-2">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                  Calendario (Modulo 03)
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <select
+                    value={draft.scheduleDay}
+                    onChange={(event) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        scheduleDay: event.target.value as CalendarDayKey | "",
+                      }))
+                    }
+                  >
+                    <option value="">Seleziona giorno</option>
+                    {WEEK_DAY_OPTIONS.map((day) => (
+                      <option key={day.key} value={day.key}>
+                        {day.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="time"
+                    value={draft.scheduleStart}
+                    onChange={(event) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        scheduleStart: event.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    type="time"
+                    value={draft.scheduleEnd}
+                    onChange={(event) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        scheduleEnd: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <p className="text-[10px] text-[var(--muted)]">
+                  Se completi giorno + fascia oraria, il task appare anche nel
+                  Calendario.
+                </p>
+              </div>
+            )}
             <div className="grid gap-2">
               <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                 Link (multipli)
@@ -812,6 +1073,61 @@ export default function TodoBoard() {
                                 </option>
                                 <option value="bassa">Priorità bassa</option>
                               </select>
+                              {editDraft.priority === "continuativo" && (
+                                <div className="grid gap-2">
+                                  <p className="text-[10px] uppercase tracking-[0.14em]">
+                                    Calendario (Modulo 03)
+                                  </p>
+                                  <div className="grid gap-2 sm:grid-cols-3">
+                                    <select
+                                      value={editDraft.scheduleDay}
+                                      onChange={(event) =>
+                                        setEditDraftById((prev) => ({
+                                          ...prev,
+                                          [task.id]: {
+                                            ...editDraft,
+                                            scheduleDay: event.target
+                                              .value as CalendarDayKey | "",
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <option value="">Seleziona giorno</option>
+                                      {WEEK_DAY_OPTIONS.map((day) => (
+                                        <option key={day.key} value={day.key}>
+                                          {day.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      type="time"
+                                      value={editDraft.scheduleStart}
+                                      onChange={(event) =>
+                                        setEditDraftById((prev) => ({
+                                          ...prev,
+                                          [task.id]: {
+                                            ...editDraft,
+                                            scheduleStart: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                    />
+                                    <input
+                                      type="time"
+                                      value={editDraft.scheduleEnd}
+                                      onChange={(event) =>
+                                        setEditDraftById((prev) => ({
+                                          ...prev,
+                                          [task.id]: {
+                                            ...editDraft,
+                                            scheduleEnd: event.target.value,
+                                          },
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </div>
+                              )}
                               <textarea
                                 rows={2}
                                 value={editDraft.meanwhile}
@@ -947,6 +1263,17 @@ export default function TodoBoard() {
                                   </p>
                                 </div>
                               )}
+                              {meta.schedule && (
+                                <div>
+                                  <p className="uppercase tracking-[0.14em] text-[10px]">
+                                    Calendario
+                                  </p>
+                                  <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                    {calendarDayLabel[meta.schedule.day]} ·{" "}
+                                    {meta.schedule.start}-{meta.schedule.end}
+                                  </p>
+                                </div>
+                              )}
                               {meta.note && (
                                 <div>
                                   <p className="uppercase tracking-[0.14em] text-[10px]">
@@ -1058,6 +1385,61 @@ export default function TodoBoard() {
                         </option>
                         <option value="bassa">Priorità bassa</option>
                       </select>
+                      {editDraft.priority === "continuativo" && (
+                        <div className="grid gap-2">
+                          <p className="text-[10px] uppercase tracking-[0.14em]">
+                            Calendario (Modulo 03)
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <select
+                              value={editDraft.scheduleDay}
+                              onChange={(event) =>
+                                setEditDraftById((prev) => ({
+                                  ...prev,
+                                  [task.id]: {
+                                    ...editDraft,
+                                    scheduleDay: event.target
+                                      .value as CalendarDayKey | "",
+                                  },
+                                }))
+                              }
+                            >
+                              <option value="">Seleziona giorno</option>
+                              {WEEK_DAY_OPTIONS.map((day) => (
+                                <option key={day.key} value={day.key}>
+                                  {day.label}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="time"
+                              value={editDraft.scheduleStart}
+                              onChange={(event) =>
+                                setEditDraftById((prev) => ({
+                                  ...prev,
+                                  [task.id]: {
+                                    ...editDraft,
+                                    scheduleStart: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                            <input
+                              type="time"
+                              value={editDraft.scheduleEnd}
+                              onChange={(event) =>
+                                setEditDraftById((prev) => ({
+                                  ...prev,
+                                  [task.id]: {
+                                    ...editDraft,
+                                    scheduleEnd: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
                       <textarea
                         rows={2}
                         value={editDraft.meanwhile}
@@ -1212,6 +1594,7 @@ export default function TodoBoard() {
                       </p>
                       {(meta.meanwhile ||
                         meta.learning ||
+                        meta.schedule ||
                         meta.note ||
                         meta.links.length > 0) && (
                         <div className="grid gap-1">
@@ -1226,6 +1609,12 @@ export default function TodoBoard() {
                           {meta.learning && (
                             <p className="whitespace-pre-wrap">
                               Imparare: {meta.learning}
+                            </p>
+                          )}
+                          {meta.schedule && (
+                            <p className="whitespace-pre-wrap">
+                              Calendario: {calendarDayLabel[meta.schedule.day]} ·{" "}
+                              {meta.schedule.start}-{meta.schedule.end}
                             </p>
                           )}
                           {meta.note && (
