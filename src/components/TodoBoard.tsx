@@ -17,14 +17,18 @@ type TodoTask = {
   contact_id: string | null;
 };
 
+type TaskLink = {
+  url: string;
+  label: string;
+};
+
 type TodoDraft = {
   title: string;
   priority: TodoPriority;
   meanwhile: string;
   learning: string;
   note: string;
-  linkUrl: string;
-  linkLabel: string;
+  links: TaskLink[];
 };
 
 type TodoEditDraft = TodoDraft;
@@ -33,8 +37,7 @@ type TaskMeta = {
   meanwhile: string;
   learning: string;
   note: string;
-  linkUrl: string;
-  linkLabel: string;
+  links: TaskLink[];
   bucket?: "continuativo";
 };
 
@@ -55,14 +58,15 @@ const priorityStyles: Record<TodoPriority, string> = {
   bassa: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
 };
 
+const emptyLink: TaskLink = { url: "", label: "" };
+
 const emptyDraft: TodoDraft = {
   title: "",
   priority: "media",
   meanwhile: "",
   learning: "",
   note: "",
-  linkUrl: "",
-  linkLabel: "",
+  links: [{ ...emptyLink }],
 };
 
 const fetchTasks = async () => {
@@ -84,16 +88,21 @@ const buildTaskMeta = (
   meanwhile: string,
   learning: string,
   note: string,
-  linkUrl: string,
-  linkLabel: string,
+  links: TaskLink[],
   selectedPriority: TodoPriority
 ) => {
+  const normalizedLinks = links
+    .map((link) => ({
+      url: link.url.trim(),
+      label: link.label.trim(),
+    }))
+    .filter((link) => Boolean(link.url));
+
   const payload: TaskMeta = {
     meanwhile: meanwhile.trim(),
     learning: learning.trim(),
     note: note.trim(),
-    linkUrl: linkUrl.trim(),
-    linkLabel: linkLabel.trim(),
+    links: normalizedLinks,
     ...(selectedPriority === "continuativo"
       ? { bucket: "continuativo" as const }
       : {}),
@@ -102,8 +111,7 @@ const buildTaskMeta = (
     !payload.meanwhile &&
     !payload.learning &&
     !payload.note &&
-    !payload.linkUrl &&
-    !payload.linkLabel &&
+    payload.links.length === 0 &&
     !payload.bucket
   )
     return null;
@@ -112,7 +120,7 @@ const buildTaskMeta = (
 
 const parseTaskMeta = (value?: string | null): TaskMeta => {
   if (!value) {
-    return { meanwhile: "", learning: "", note: "", linkUrl: "", linkLabel: "" };
+    return { meanwhile: "", learning: "", note: "", links: [] };
   }
 
   if (!value.startsWith(TASK_META_PREFIX)) {
@@ -120,8 +128,7 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
       meanwhile: value,
       learning: "",
       note: "",
-      linkUrl: "",
-      linkLabel: "",
+      links: [],
     };
   }
 
@@ -129,16 +136,48 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
     const parsed = JSON.parse(
       value.slice(TASK_META_PREFIX.length)
     ) as Partial<TaskMeta>;
-    const parsedWithLegacy = parsed as Partial<TaskMeta> & { link?: string };
-    const legacyLink =
-      typeof parsedWithLegacy.link === "string" ? parsedWithLegacy.link : "";
+    const parsedWithLegacy = parsed as Partial<TaskMeta> & {
+      link?: string;
+      linkUrl?: string;
+      linkLabel?: string;
+      links?: unknown;
+    };
+
+    const parsedLinks = Array.isArray(parsedWithLegacy.links)
+      ? parsedWithLegacy.links
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const asLink = item as Partial<TaskLink>;
+            const url =
+              typeof asLink.url === "string" ? asLink.url.trim() : "";
+            const label =
+              typeof asLink.label === "string" ? asLink.label.trim() : "";
+            if (!url) return null;
+            return { url, label };
+          })
+          .filter((item): item is TaskLink => Boolean(item))
+      : [];
+
+    const legacyLinkUrl =
+      typeof parsedWithLegacy.linkUrl === "string"
+        ? parsedWithLegacy.linkUrl.trim()
+        : typeof parsedWithLegacy.link === "string"
+          ? parsedWithLegacy.link.trim()
+          : "";
+    const legacyLinkLabel =
+      typeof parsedWithLegacy.linkLabel === "string"
+        ? parsedWithLegacy.linkLabel.trim()
+        : "";
+    const legacyLinks = legacyLinkUrl
+      ? [{ url: legacyLinkUrl, label: legacyLinkLabel }]
+      : [];
+
     return {
       meanwhile:
         typeof parsed.meanwhile === "string" ? parsed.meanwhile : "",
       learning: typeof parsed.learning === "string" ? parsed.learning : "",
       note: typeof parsed.note === "string" ? parsed.note : "",
-      linkUrl: typeof parsed.linkUrl === "string" ? parsed.linkUrl : legacyLink,
-      linkLabel: typeof parsed.linkLabel === "string" ? parsed.linkLabel : "",
+      links: parsedLinks.length > 0 ? parsedLinks : legacyLinks,
       bucket: parsed.bucket === "continuativo" ? "continuativo" : undefined,
     };
   } catch {
@@ -146,8 +185,7 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
       meanwhile: value,
       learning: "",
       note: "",
-      linkUrl: "",
-      linkLabel: "",
+      links: [],
     };
   }
 };
@@ -181,6 +219,18 @@ const toTaskHref = (rawLinkUrl: string) => {
 const isExternalHref = (href: string) =>
   /^(https?:\/\/|mailto:|tel:)/i.test(href);
 
+const toDisplayLinks = (links: TaskLink[]) =>
+  links
+    .map((link) => {
+      const href = toTaskHref(link.url);
+      if (!href) return null;
+      return {
+        href,
+        label: link.label.trim() || "Apri link",
+      };
+    })
+    .filter((item): item is { href: string; label: string } => Boolean(item));
+
 export default function TodoBoard() {
   const [tasks, setTasks] = useState<TodoTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,6 +250,87 @@ export default function TodoBoard() {
   const [openTaskDetailsById, setOpenTaskDetailsById] = useState<
     Record<string, boolean>
   >({});
+
+  const updateDraftLink = (
+    index: number,
+    field: keyof TaskLink,
+    value: string
+  ) => {
+    setDraft((prev) => ({
+      ...prev,
+      links: prev.links.map((link, currentIndex) =>
+        currentIndex === index ? { ...link, [field]: value } : link
+      ),
+    }));
+  };
+
+  const addDraftLink = () => {
+    setDraft((prev) => ({
+      ...prev,
+      links: [...prev.links, { ...emptyLink }],
+    }));
+  };
+
+  const removeDraftLink = (index: number) => {
+    setDraft((prev) => {
+      if (prev.links.length === 1) return prev;
+      return {
+        ...prev,
+        links: prev.links.filter((_, currentIndex) => currentIndex !== index),
+      };
+    });
+  };
+
+  const updateEditLink = (
+    taskId: string,
+    index: number,
+    field: keyof TaskLink,
+    value: string
+  ) => {
+    setEditDraftById((prev) => {
+      const currentDraft = prev[taskId];
+      if (!currentDraft) return prev;
+      return {
+        ...prev,
+        [taskId]: {
+          ...currentDraft,
+          links: currentDraft.links.map((link, currentIndex) =>
+            currentIndex === index ? { ...link, [field]: value } : link
+          ),
+        },
+      };
+    });
+  };
+
+  const addEditLink = (taskId: string) => {
+    setEditDraftById((prev) => {
+      const currentDraft = prev[taskId];
+      if (!currentDraft) return prev;
+      return {
+        ...prev,
+        [taskId]: {
+          ...currentDraft,
+          links: [...currentDraft.links, { ...emptyLink }],
+        },
+      };
+    });
+  };
+
+  const removeEditLink = (taskId: string, index: number) => {
+    setEditDraftById((prev) => {
+      const currentDraft = prev[taskId];
+      if (!currentDraft || currentDraft.links.length === 1) return prev;
+      return {
+        ...prev,
+        [taskId]: {
+          ...currentDraft,
+          links: currentDraft.links.filter(
+            (_, currentIndex) => currentIndex !== index
+          ),
+        },
+      };
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -257,8 +388,7 @@ export default function TodoBoard() {
           draft.meanwhile,
           draft.learning,
           draft.note,
-          draft.linkUrl,
-          draft.linkLabel,
+          draft.links,
           draft.priority
         ),
         due_date: null,
@@ -316,8 +446,7 @@ export default function TodoBoard() {
         meanwhile: meta.meanwhile,
         learning: meta.learning,
         note: meta.note,
-        linkUrl: meta.linkUrl,
-        linkLabel: meta.linkLabel,
+        links: meta.links.length > 0 ? meta.links : [{ ...emptyLink }],
       },
     }));
     setOpenTaskDetailsById((prev) => ({ ...prev, [task.id]: true }));
@@ -357,8 +486,7 @@ export default function TodoBoard() {
           editDraft.meanwhile,
           editDraft.learning,
           editDraft.note,
-          editDraft.linkUrl,
-          editDraft.linkLabel,
+          editDraft.links,
           editDraft.priority
         ),
       })
@@ -508,21 +636,46 @@ export default function TodoBoard() {
                 placeholder="Note"
               />
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                value={draft.linkUrl}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, linkUrl: event.target.value }))
-                }
-                placeholder="URL pulsante (opzionale)"
-              />
-              <input
-                value={draft.linkLabel}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, linkLabel: event.target.value }))
-                }
-                placeholder="Nome pulsante (es. Apri documento)"
-              />
+            <div className="grid gap-2">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                Link (multipli)
+              </p>
+              {draft.links.map((link, index) => (
+                <div
+                  key={`new-link-${index}`}
+                  className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                >
+                  <input
+                    value={link.url}
+                    onChange={(event) =>
+                      updateDraftLink(index, "url", event.target.value)
+                    }
+                    placeholder="URL pulsante (opzionale)"
+                  />
+                  <input
+                    value={link.label}
+                    onChange={(event) =>
+                      updateDraftLink(index, "label", event.target.value)
+                    }
+                    placeholder="Nome pulsante (es. Apri documento)"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeDraftLink(index)}
+                    disabled={draft.links.length === 1}
+                    className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-xs font-semibold text-[var(--muted)] transition hover:border-red-400 hover:text-red-200 disabled:opacity-40"
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addDraftLink}
+                className="w-fit rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
+              >
+                + Aggiungi link
+              </button>
             </div>
           </form>
         </section>
@@ -565,8 +718,7 @@ export default function TodoBoard() {
                 {!loading &&
                   column.map((task) => {
                     const meta = parseTaskMeta(task.notes);
-                    const taskHref = toTaskHref(meta.linkUrl);
-                    const taskLinkLabel = meta.linkLabel.trim() || "Apri link";
+                    const taskLinks = toDisplayLinks(meta.links);
                     const isEditing = Boolean(editingById[task.id]);
                     const editDraft = editDraftById[task.id];
                     return (
@@ -702,33 +854,56 @@ export default function TodoBoard() {
                                 }
                                 placeholder="Note"
                               />
-                              <div className="grid gap-2 sm:grid-cols-2">
-                                <input
-                                  value={editDraft.linkUrl}
-                                  onChange={(event) =>
-                                    setEditDraftById((prev) => ({
-                                      ...prev,
-                                      [task.id]: {
-                                        ...editDraft,
-                                        linkUrl: event.target.value,
-                                      },
-                                    }))
-                                  }
-                                  placeholder="URL pulsante (opzionale)"
-                                />
-                                <input
-                                  value={editDraft.linkLabel}
-                                  onChange={(event) =>
-                                    setEditDraftById((prev) => ({
-                                      ...prev,
-                                      [task.id]: {
-                                        ...editDraft,
-                                        linkLabel: event.target.value,
-                                      },
-                                    }))
-                                  }
-                                  placeholder="Nome pulsante (es. Apri documento)"
-                                />
+                              <div className="grid gap-2">
+                                <p className="text-[10px] uppercase tracking-[0.14em]">
+                                  Link (multipli)
+                                </p>
+                                {editDraft.links.map((link, index) => (
+                                  <div
+                                    key={`${task.id}-link-${index}`}
+                                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                                  >
+                                    <input
+                                      value={link.url}
+                                      onChange={(event) =>
+                                        updateEditLink(
+                                          task.id,
+                                          index,
+                                          "url",
+                                          event.target.value
+                                        )
+                                      }
+                                      placeholder="URL pulsante (opzionale)"
+                                    />
+                                    <input
+                                      value={link.label}
+                                      onChange={(event) =>
+                                        updateEditLink(
+                                          task.id,
+                                          index,
+                                          "label",
+                                          event.target.value
+                                        )
+                                      }
+                                      placeholder="Nome pulsante (es. Apri documento)"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEditLink(task.id, index)}
+                                      disabled={editDraft.links.length === 1}
+                                      className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-xs font-semibold text-[var(--muted)] transition hover:border-red-400 hover:text-red-200 disabled:opacity-40"
+                                    >
+                                      Rimuovi
+                                    </button>
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addEditLink(task.id)}
+                                  className="w-fit rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
+                                >
+                                  + Aggiungi link
+                                </button>
                               </div>
                               <div className="mt-1 flex flex-wrap gap-2">
                                 <button
@@ -776,22 +951,25 @@ export default function TodoBoard() {
                                   {meta.note || "—"}
                                 </p>
                               </div>
-                              {taskHref && (
-                                <div className="mt-0.5">
-                                  <a
-                                    href={taskHref}
-                                    target={
-                                      isExternalHref(taskHref) ? "_blank" : undefined
-                                    }
-                                    rel={
-                                      isExternalHref(taskHref)
-                                        ? "noreferrer noopener"
-                                        : undefined
-                                    }
-                                    className="inline-flex items-center rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
-                                  >
-                                    {taskLinkLabel}
-                                  </a>
+                              {taskLinks.length > 0 && (
+                                <div className="mt-0.5 flex flex-wrap gap-2">
+                                  {taskLinks.map((link, linkIndex) => (
+                                    <a
+                                      key={`${task.id}-open-link-${linkIndex}`}
+                                      href={link.href}
+                                      target={
+                                        isExternalHref(link.href) ? "_blank" : undefined
+                                      }
+                                      rel={
+                                        isExternalHref(link.href)
+                                          ? "noreferrer noopener"
+                                          : undefined
+                                      }
+                                      className="inline-flex items-center rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
+                                    >
+                                      {link.label}
+                                    </a>
+                                  ))}
                                 </div>
                               )}
                               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -831,8 +1009,7 @@ export default function TodoBoard() {
             )}
             {doneTasks.map((task) => {
               const meta = parseTaskMeta(task.notes);
-              const taskHref = toTaskHref(meta.linkUrl);
-              const taskLinkLabel = meta.linkLabel.trim() || "Apri link";
+              const taskLinks = toDisplayLinks(meta.links);
               const isEditing = Boolean(editingById[task.id]);
               const editDraft = editDraftById[task.id];
 
@@ -917,33 +1094,56 @@ export default function TodoBoard() {
                         }
                         placeholder="Note"
                       />
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <input
-                          value={editDraft.linkUrl}
-                          onChange={(event) =>
-                            setEditDraftById((prev) => ({
-                              ...prev,
-                              [task.id]: {
-                                ...editDraft,
-                                linkUrl: event.target.value,
-                              },
-                            }))
-                          }
-                          placeholder="URL pulsante (opzionale)"
-                        />
-                        <input
-                          value={editDraft.linkLabel}
-                          onChange={(event) =>
-                            setEditDraftById((prev) => ({
-                              ...prev,
-                              [task.id]: {
-                                ...editDraft,
-                                linkLabel: event.target.value,
-                              },
-                            }))
-                          }
-                          placeholder="Nome pulsante (es. Apri documento)"
-                        />
+                      <div className="grid gap-2">
+                        <p className="text-[10px] uppercase tracking-[0.14em]">
+                          Link (multipli)
+                        </p>
+                        {editDraft.links.map((link, index) => (
+                          <div
+                            key={`${task.id}-done-link-${index}`}
+                            className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                          >
+                            <input
+                              value={link.url}
+                              onChange={(event) =>
+                                updateEditLink(
+                                  task.id,
+                                  index,
+                                  "url",
+                                  event.target.value
+                                )
+                              }
+                              placeholder="URL pulsante (opzionale)"
+                            />
+                            <input
+                              value={link.label}
+                              onChange={(event) =>
+                                updateEditLink(
+                                  task.id,
+                                  index,
+                                  "label",
+                                  event.target.value
+                                )
+                              }
+                              placeholder="Nome pulsante (es. Apri documento)"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeEditLink(task.id, index)}
+                              disabled={editDraft.links.length === 1}
+                              className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-xs font-semibold text-[var(--muted)] transition hover:border-red-400 hover:text-red-200 disabled:opacity-40"
+                            >
+                              Rimuovi
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addEditLink(task.id)}
+                          className="w-fit rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
+                        >
+                          + Aggiungi link
+                        </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -1007,7 +1207,7 @@ export default function TodoBoard() {
                       {(meta.meanwhile ||
                         meta.learning ||
                         meta.note ||
-                        meta.linkUrl) && (
+                        meta.links.length > 0) && (
                         <div className="grid gap-1">
                           <p className="text-[10px] uppercase tracking-[0.14em]">
                             Dettagli
@@ -1027,19 +1227,26 @@ export default function TodoBoard() {
                               Note: {meta.note}
                             </p>
                           )}
-                          {taskHref && (
-                            <a
-                              href={taskHref}
-                              target={isExternalHref(taskHref) ? "_blank" : undefined}
-                              rel={
-                                isExternalHref(taskHref)
-                                  ? "noreferrer noopener"
-                                  : undefined
-                              }
-                              className="inline-flex w-fit items-center rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
-                            >
-                              {taskLinkLabel}
-                            </a>
+                          {taskLinks.length > 0 && (
+                            <div className="mt-0.5 flex flex-wrap gap-2">
+                              {taskLinks.map((link, linkIndex) => (
+                                <a
+                                  key={`${task.id}-done-view-link-${linkIndex}`}
+                                  href={link.href}
+                                  target={
+                                    isExternalHref(link.href) ? "_blank" : undefined
+                                  }
+                                  rel={
+                                    isExternalHref(link.href)
+                                      ? "noreferrer noopener"
+                                      : undefined
+                                  }
+                                  className="inline-flex w-fit items-center rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
+                                >
+                                  {link.label}
+                                </a>
+                              ))}
+                            </div>
                           )}
                         </div>
                       )}
