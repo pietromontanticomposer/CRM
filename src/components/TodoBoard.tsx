@@ -131,6 +131,7 @@ export default function TodoBoard() {
     Record<string, TodoEditDraft>
   >({});
   const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -205,6 +206,7 @@ export default function TodoBoard() {
 
   const handleToggleDone = async (task: TodoTask) => {
     if (updatingById[task.id]) return;
+    setOpenMenuId(null);
     setUpdatingById((prev) => ({ ...prev, [task.id]: true }));
     setError(null);
 
@@ -230,6 +232,7 @@ export default function TodoBoard() {
 
   const handleStartEdit = (task: TodoTask) => {
     const meta = parseTaskMeta(task.notes);
+    setOpenMenuId(null);
     setEditDraftById((prev) => ({
       ...prev,
       [task.id]: {
@@ -296,6 +299,7 @@ export default function TodoBoard() {
   };
 
   const handleDeleteTask = async (taskId: string) => {
+    setOpenMenuId(null);
     if (!window.confirm("Eliminare questo task?")) return;
     setDeletingById((prev) => ({ ...prev, [taskId]: true }));
     setError(null);
@@ -567,7 +571,7 @@ export default function TodoBoard() {
                                   {meta.learning || "—"}
                                 </p>
                               </div>
-                              <div className="mt-1 flex flex-wrap gap-2">
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => handleToggleDone(task)}
@@ -578,23 +582,44 @@ export default function TodoBoard() {
                                     ? "Aggiorno..."
                                     : "Segna completato"}
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEdit(task)}
-                                  className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
-                                >
-                                  Modifica
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteTask(task.id)}
-                                  disabled={Boolean(deletingById[task.id])}
-                                  className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200 transition hover:border-red-400/70 disabled:opacity-60"
-                                >
-                                  {deletingById[task.id]
-                                    ? "Elimino..."
-                                    : "Elimina"}
-                                </button>
+                                <div className="relative ml-auto">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setOpenMenuId((prev) =>
+                                        prev === task.id ? null : task.id
+                                      )
+                                    }
+                                    className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                                    aria-label="Azioni task"
+                                  >
+                                    ...
+                                  </button>
+                                  {openMenuId === task.id && (
+                                    <div className="absolute right-0 z-30 mt-1 w-32 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-1 shadow-lg">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          handleStartEdit(task);
+                                        }}
+                                        className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--panel-strong)]"
+                                      >
+                                        Modifica
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        disabled={Boolean(deletingById[task.id])}
+                                        className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-60"
+                                      >
+                                        {deletingById[task.id]
+                                          ? "Elimino..."
+                                          : "Elimina"}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </>
                           )}
@@ -731,7 +756,7 @@ export default function TodoBoard() {
                           )}
                         </div>
                       )}
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => handleToggleDone(task)}
@@ -740,21 +765,42 @@ export default function TodoBoard() {
                         >
                           {updatingById[task.id] ? "Aggiorno..." : "Riapri"}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(task)}
-                          className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
-                        >
-                          Modifica
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTask(task.id)}
-                          disabled={Boolean(deletingById[task.id])}
-                          className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200 transition hover:border-red-400/70 disabled:opacity-60"
-                        >
-                          {deletingById[task.id] ? "Elimino..." : "Elimina"}
-                        </button>
+                        <div className="relative ml-auto">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenMenuId((prev) =>
+                                prev === task.id ? null : task.id
+                              )
+                            }
+                            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                            aria-label="Azioni task"
+                          >
+                            ...
+                          </button>
+                          {openMenuId === task.id && (
+                            <div className="absolute right-0 z-30 mt-1 w-32 rounded-xl border border-[var(--line)] bg-[var(--panel)] p-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenMenuId(null);
+                                  handleStartEdit(task);
+                                }}
+                                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold text-[var(--ink)] transition hover:bg-[var(--panel-strong)]"
+                              >
+                                Modifica
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTask(task.id)}
+                                disabled={Boolean(deletingById[task.id])}
+                                className="w-full rounded-lg px-2 py-1 text-left text-xs font-semibold text-red-200 transition hover:bg-red-500/10 disabled:opacity-60"
+                              >
+                                {deletingById[task.id] ? "Elimino..." : "Elimina"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
