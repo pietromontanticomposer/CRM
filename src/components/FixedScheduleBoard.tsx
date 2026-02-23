@@ -15,9 +15,28 @@ const WEEK_DAYS = [
 ] as const;
 
 type DayKey = (typeof WEEK_DAYS)[number]["key"];
-type FixedSchedule = Record<DayKey, string>;
 
-const EMPTY_SCHEDULE: FixedSchedule = {
+type WeeklyTask = {
+  id: string;
+  title: string;
+  isDone: boolean;
+  createdAt: string;
+};
+
+type FixedSchedule = Record<DayKey, WeeklyTask[]>;
+type DraftByDay = Record<DayKey, string>;
+
+const createEmptySchedule = (): FixedSchedule => ({
+  lunedi: [],
+  martedi: [],
+  mercoledi: [],
+  giovedi: [],
+  venerdi: [],
+  sabato: [],
+  domenica: [],
+});
+
+const EMPTY_DRAFTS: DraftByDay = {
   lunedi: "",
   martedi: "",
   mercoledi: "",
@@ -27,50 +46,126 @@ const EMPTY_SCHEDULE: FixedSchedule = {
   domenica: "",
 };
 
-export default function FixedScheduleBoard() {
-  const [schedule, setSchedule] = useState<FixedSchedule>(EMPTY_SCHEDULE);
+const makeId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    let timeoutId: number | null = null;
-    try {
-      const parsed = JSON.parse(raw) as Partial<FixedSchedule>;
-      const nextSchedule: FixedSchedule = {
-        lunedi: typeof parsed.lunedi === "string" ? parsed.lunedi : "",
-        martedi: typeof parsed.martedi === "string" ? parsed.martedi : "",
-        mercoledi: typeof parsed.mercoledi === "string" ? parsed.mercoledi : "",
-        giovedi: typeof parsed.giovedi === "string" ? parsed.giovedi : "",
-        venerdi: typeof parsed.venerdi === "string" ? parsed.venerdi : "",
-        sabato: typeof parsed.sabato === "string" ? parsed.sabato : "",
-        domenica: typeof parsed.domenica === "string" ? parsed.domenica : "",
-      };
-      timeoutId = window.setTimeout(() => {
-        setSchedule(nextSchedule);
-      }, 0);
-    } catch {
-      timeoutId = window.setTimeout(() => {
-        setSchedule(EMPTY_SCHEDULE);
-      }, 0);
-    }
-    return () => {
-      if (timeoutId !== null) window.clearTimeout(timeoutId);
+const normalizeTasks = (value: unknown): WeeklyTask[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (!entry || typeof entry !== "object") return null;
+        const task = entry as Partial<WeeklyTask>;
+        const title = typeof task.title === "string" ? task.title.trim() : "";
+        if (!title) return null;
+        return {
+          id: typeof task.id === "string" ? task.id : makeId(),
+          title,
+          isDone: Boolean(task.isDone),
+          createdAt:
+            typeof task.createdAt === "string"
+              ? task.createdAt
+              : new Date().toISOString(),
+        };
+      })
+      .filter((task): task is WeeklyTask => Boolean(task));
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((title) => ({
+        id: makeId(),
+        title,
+        isDone: false,
+        createdAt: new Date().toISOString(),
+      }));
+  }
+
+  return [];
+};
+
+const loadScheduleFromStorage = (): FixedSchedule => {
+  if (typeof window === "undefined") return createEmptySchedule();
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return createEmptySchedule();
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<Record<DayKey, unknown>>;
+    return {
+      lunedi: normalizeTasks(parsed.lunedi),
+      martedi: normalizeTasks(parsed.martedi),
+      mercoledi: normalizeTasks(parsed.mercoledi),
+      giovedi: normalizeTasks(parsed.giovedi),
+      venerdi: normalizeTasks(parsed.venerdi),
+      sabato: normalizeTasks(parsed.sabato),
+      domenica: normalizeTasks(parsed.domenica),
     };
-  }, []);
+  } catch {
+    return createEmptySchedule();
+  }
+};
+
+const sortTasks = (a: WeeklyTask, b: WeeklyTask) => {
+  if (a.isDone !== b.isDone) return Number(a.isDone) - Number(b.isDone);
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+};
+
+export default function FixedScheduleBoard() {
+  const [schedule, setSchedule] = useState<FixedSchedule>(() =>
+    loadScheduleFromStorage()
+  );
+  const [draftByDay, setDraftByDay] = useState<DraftByDay>(EMPTY_DRAFTS);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
   }, [schedule]);
 
-  const handleDayChange = (day: DayKey, value: string) => {
-    setSchedule((prev) => ({ ...prev, [day]: value }));
+  const handleAddTask = (day: DayKey) => {
+    const title = draftByDay[day].trim();
+    if (!title) return;
+
+    const task: WeeklyTask = {
+      id: makeId(),
+      title,
+      isDone: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSchedule((prev) => ({
+      ...prev,
+      [day]: [task, ...prev[day]].sort(sortTasks),
+    }));
+    setDraftByDay((prev) => ({ ...prev, [day]: "" }));
+  };
+
+  const handleToggleTask = (day: DayKey, taskId: string) => {
+    setSchedule((prev) => ({
+      ...prev,
+      [day]: prev[day]
+        .map((task) =>
+          task.id === taskId ? { ...task, isDone: !task.isDone } : task
+        )
+        .sort(sortTasks),
+    }));
+  };
+
+  const handleDeleteTask = (day: DayKey, taskId: string) => {
+    setSchedule((prev) => ({
+      ...prev,
+      [day]: prev[day].filter((task) => task.id !== taskId),
+    }));
   };
 
   const clearAll = () => {
-    if (!window.confirm("Vuoi svuotare tutti gli impegni fissi?")) return;
-    setSchedule(EMPTY_SCHEDULE);
+    if (!window.confirm("Vuoi svuotare tutti i task del calendario?")) return;
+    setSchedule(createEmptySchedule());
   };
 
   return (
@@ -82,11 +177,10 @@ export default function FixedScheduleBoard() {
               MODULO 03
             </p>
             <h1 className="text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-              Impegni Fissi Settimanali
+              Calendario
             </h1>
             <p className="mt-1 text-xs text-[var(--muted)]">
-              Inserisci i tuoi impegni fissi giorno per giorno. Salvataggio
-              automatico locale.
+              Ogni giorno contiene task fissi come nel TODO.
             </p>
           </div>
           <button
@@ -100,25 +194,87 @@ export default function FixedScheduleBoard() {
       </header>
 
       <main className="relative mx-auto grid w-full max-w-6xl items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {WEEK_DAYS.map((day) => (
-          <section
-            key={day.key}
-            className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4 shadow-lg"
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="rounded-full border border-red-400/50 bg-red-500/15 px-2 py-0.5 text-xs font-semibold uppercase text-red-200">
-                {day.label}
-              </span>
-            </div>
-            <textarea
-              rows={6}
-              value={schedule[day.key]}
-              onChange={(event) => handleDayChange(day.key, event.target.value)}
-              placeholder={`Impegni fissi di ${day.label}`}
-              className="w-full border-red-500/30 bg-[#180f12]"
-            />
-          </section>
-        ))}
+        {WEEK_DAYS.map((day) => {
+          const dayTasks = schedule[day.key];
+          return (
+            <section
+              key={day.key}
+              className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4 shadow-lg"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="rounded-full border border-red-400/50 bg-red-500/15 px-2 py-0.5 text-xs font-semibold uppercase text-red-200">
+                  {day.label}
+                </span>
+                <span className="text-xs text-[var(--muted)]">
+                  {dayTasks.length}
+                </span>
+              </div>
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  handleAddTask(day.key);
+                }}
+                className="mb-3 grid gap-2"
+              >
+                <input
+                  value={draftByDay[day.key]}
+                  onChange={(event) =>
+                    setDraftByDay((prev) => ({
+                      ...prev,
+                      [day.key]: event.target.value,
+                    }))
+                  }
+                  placeholder={`Nuovo task per ${day.label}`}
+                  className="border-red-500/30 bg-[#180f12]"
+                />
+                <button
+                  type="submit"
+                  className="rounded-full border border-red-400/50 bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-200 transition hover:bg-red-500/25"
+                >
+                  + Aggiungi task
+                </button>
+              </form>
+
+              <div className="grid gap-2">
+                {dayTasks.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-red-500/30 bg-[#180f12] p-2 text-xs text-[var(--muted)]">
+                    Nessun task
+                  </div>
+                )}
+
+                {dayTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="rounded-xl border border-red-500/25 bg-[#180f12] px-3 py-2"
+                  >
+                    <p
+                      className={`text-sm font-semibold ${task.isDone ? "text-[var(--muted)] line-through" : "text-[var(--ink)]"}`}
+                    >
+                      {task.title}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTask(day.key, task.id)}
+                        className="rounded-full border border-red-400/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200 transition hover:bg-red-500/20"
+                      >
+                        {task.isDone ? "Riapri" : "Completato"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTask(day.key, task.id)}
+                        className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-red-400 hover:text-red-200"
+                      >
+                        Elimina
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </main>
     </div>
   );

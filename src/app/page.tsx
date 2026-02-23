@@ -12,7 +12,7 @@ export default function Home() {
             Scegli dove entrare
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-[var(--muted)]">
-            Tre moduli separati: CRM, TODO e impegni fissi settimanali.
+            Tre moduli separati: CRM, TODO e Calendario.
           </p>
         </header>
 
@@ -54,19 +54,19 @@ export default function Home() {
           </Link>
 
           <Link
-            href="/impegni-fissi"
-            className="group rounded-3xl border border-red-500/30 bg-red-500/5 p-7 shadow-lg transition hover:-translate-y-1 hover:border-red-400/70"
+            href="/calendario"
+            className="group rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-lg transition hover:-translate-y-1 hover:border-[var(--accent)]"
           >
-            <p className="text-xs uppercase tracking-[0.25em] text-red-300/80">
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
               Modulo 03
             </p>
             <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">
-              Impegni Fissi
+              Calendario
             </h2>
             <p className="mt-2 text-sm text-[var(--muted)]">
               Agenda settimanale per impegni ricorrenti divisi per giorno.
             </p>
-            <p className="mt-6 text-sm font-semibold text-red-200 transition group-hover:translate-x-0.5">
+            <p className="mt-6 text-sm font-semibold text-[var(--accent)] transition group-hover:translate-x-0.5">
               Apri Modulo 03 →
             </p>
           </Link>
