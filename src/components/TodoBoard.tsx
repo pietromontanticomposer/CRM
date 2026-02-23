@@ -927,22 +927,26 @@ export default function TodoBoard() {
                             </>
                           ) : (
                             <>
-                              <div>
-                                <p className="uppercase tracking-[0.14em] text-[10px]">
-                                  Cosa fare nel mentre
-                                </p>
-                                <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                                  {meta.meanwhile || "—"}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="uppercase tracking-[0.14em] text-[10px]">
-                                  Cosa imparare per le prossime volte
-                                </p>
-                                <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                                  {meta.learning || "—"}
-                                </p>
-                              </div>
+                              {meta.meanwhile && (
+                                <div>
+                                  <p className="uppercase tracking-[0.14em] text-[10px]">
+                                    Cosa fare nel mentre
+                                  </p>
+                                  <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                    {meta.meanwhile}
+                                  </p>
+                                </div>
+                              )}
+                              {meta.learning && (
+                                <div>
+                                  <p className="uppercase tracking-[0.14em] text-[10px]">
+                                    Cosa imparare per le prossime volte
+                                  </p>
+                                  <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                    {meta.learning}
+                                  </p>
+                                </div>
+                              )}
                               <div>
                                 <p className="uppercase tracking-[0.14em] text-[10px]">
                                   Note
