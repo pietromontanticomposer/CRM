@@ -13,8 +13,8 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CRM Compositore",
-  description: "CRM personale minimale per registi e produzioni.",
+  title: "CRM + TODO",
+  description: "Workspace con CRM e To Do su moduli separati.",
 };
 
 export default function RootLayout({

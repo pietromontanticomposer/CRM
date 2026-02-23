@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import TodoBoard from "@/components/TodoBoard";
 
 const STATUS_OPTIONS = [
   "Da contattare",
@@ -854,12 +853,6 @@ export default function CrmApp() {
     setOpenThreads({});
     setOpenContactGroups((prev) => ({ ...prev, [contact.status]: true }));
     loadEmails(contact.id, contact.email);
-  };
-
-  const handleSelectContactById = (contactId: string) => {
-    const target = contacts.find((contact) => contact.id === contactId);
-    if (!target) return;
-    handleSelectContact(target);
   };
 
   const handleSelectEmail = async (emailId: string) => {
@@ -2120,14 +2113,6 @@ export default function CrmApp() {
             </div>
           )}
         </section>
-
-        <div className="min-w-0 lg:col-span-2">
-          <TodoBoard
-            contacts={contacts}
-            selectedContactId={selectedId}
-            onOpenContact={handleSelectContactById}
-          />
-        </div>
       </main>
     </div>
   );
