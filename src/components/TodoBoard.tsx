@@ -24,6 +24,8 @@ type TodoDraft = {
   learning: string;
 };
 
+type TodoEditDraft = TodoDraft;
+
 type TaskMeta = {
   meanwhile: string;
   learning: string;
@@ -124,6 +126,11 @@ export default function TodoBoard() {
   const [updatingById, setUpdatingById] = useState<Record<string, boolean>>(
     {}
   );
+  const [editingById, setEditingById] = useState<Record<string, boolean>>({});
+  const [editDraftById, setEditDraftById] = useState<
+    Record<string, TodoEditDraft>
+  >({});
+  const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let active = true;
@@ -219,6 +226,94 @@ export default function TodoBoard() {
       prev.map((item) => (item.id === task.id ? updated : item)).sort(sortTasks)
     );
     setUpdatingById((prev) => ({ ...prev, [task.id]: false }));
+  };
+
+  const handleStartEdit = (task: TodoTask) => {
+    const meta = parseTaskMeta(task.notes);
+    setEditDraftById((prev) => ({
+      ...prev,
+      [task.id]: {
+        title: task.title,
+        priority: getTaskBucket(task),
+        meanwhile: meta.meanwhile,
+        learning: meta.learning,
+      },
+    }));
+    setEditingById((prev) => ({ ...prev, [task.id]: true }));
+  };
+
+  const handleCancelEdit = (taskId: string) => {
+    setEditingById((prev) => ({ ...prev, [taskId]: false }));
+    setEditDraftById((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const handleSaveEdit = async (taskId: string) => {
+    const editDraft = editDraftById[taskId];
+    if (!editDraft) return;
+
+    const cleanTitle = editDraft.title.trim();
+    if (!cleanTitle) {
+      setError("Il titolo non puo essere vuoto.");
+      return;
+    }
+
+    setUpdatingById((prev) => ({ ...prev, [taskId]: true }));
+    setError(null);
+
+    const dbPriority =
+      editDraft.priority === "continuativo" ? "bassa" : editDraft.priority;
+    const { data, error: updateError } = await supabase
+      .from("todo_tasks")
+      .update({
+        title: cleanTitle,
+        priority: dbPriority,
+        notes: buildTaskMeta(
+          editDraft.meanwhile,
+          editDraft.learning,
+          editDraft.priority
+        ),
+      })
+      .eq("id", taskId)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      setError("Impossibile salvare le modifiche.");
+      setUpdatingById((prev) => ({ ...prev, [taskId]: false }));
+      return;
+    }
+
+    const updated = data as TodoTask;
+    setTasks((prev) =>
+      prev.map((item) => (item.id === taskId ? updated : item)).sort(sortTasks)
+    );
+    handleCancelEdit(taskId);
+    setUpdatingById((prev) => ({ ...prev, [taskId]: false }));
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!window.confirm("Eliminare questo task?")) return;
+    setDeletingById((prev) => ({ ...prev, [taskId]: true }));
+    setError(null);
+
+    const { error: deleteError } = await supabase
+      .from("todo_tasks")
+      .delete()
+      .eq("id", taskId);
+
+    if (deleteError) {
+      setError("Impossibile eliminare il task.");
+      setDeletingById((prev) => ({ ...prev, [taskId]: false }));
+      return;
+    }
+
+    setTasks((prev) => prev.filter((task) => task.id !== taskId));
+    handleCancelEdit(taskId);
+    setDeletingById((prev) => ({ ...prev, [taskId]: false }));
   };
 
   const openTasks = useMemo(
@@ -360,6 +455,8 @@ export default function TodoBoard() {
                 {!loading &&
                   column.map((task) => {
                     const meta = parseTaskMeta(task.notes);
+                    const isEditing = Boolean(editingById[task.id]);
+                    const editDraft = editDraftById[task.id];
                     return (
                       <details
                         key={task.id}
@@ -369,32 +466,138 @@ export default function TodoBoard() {
                           {task.title}
                         </summary>
                         <div className="mt-2 grid gap-2 text-xs text-[var(--muted)]">
-                          <div>
-                            <p className="uppercase tracking-[0.14em] text-[10px]">
-                              Cosa fare nel mentre
-                            </p>
-                            <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                              {meta.meanwhile || "—"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="uppercase tracking-[0.14em] text-[10px]">
-                              Cosa imparare per le prossime volte
-                            </p>
-                            <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                              {meta.learning || "—"}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleDone(task)}
-                            disabled={Boolean(updatingById[task.id])}
-                            className="mt-1 rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
-                          >
-                            {updatingById[task.id]
-                              ? "Aggiorno..."
-                              : "Segna completato"}
-                          </button>
+                          {isEditing && editDraft ? (
+                            <>
+                              <input
+                                value={editDraft.title}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      title: event.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="Titolo task"
+                              />
+                              <select
+                                value={editDraft.priority}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      priority: event.target
+                                        .value as TodoPriority,
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="alta">Priorita alta</option>
+                                <option value="media">Priorita media</option>
+                                <option value="continuativo">
+                                  Priorita continuativo
+                                </option>
+                                <option value="bassa">Priorita bassa</option>
+                              </select>
+                              <textarea
+                                rows={2}
+                                value={editDraft.meanwhile}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      meanwhile: event.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="Cosa fare nel mentre"
+                              />
+                              <textarea
+                                rows={2}
+                                value={editDraft.learning}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      learning: event.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="Cosa imparare per le prossime volte"
+                              />
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEdit(task.id)}
+                                  disabled={Boolean(updatingById[task.id])}
+                                  className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                                >
+                                  {updatingById[task.id]
+                                    ? "Salvo..."
+                                    : "Salva"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelEdit(task.id)}
+                                  className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                                >
+                                  Annulla
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <p className="uppercase tracking-[0.14em] text-[10px]">
+                                  Cosa fare nel mentre
+                                </p>
+                                <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                  {meta.meanwhile || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="uppercase tracking-[0.14em] text-[10px]">
+                                  Cosa imparare per le prossime volte
+                                </p>
+                                <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                  {meta.learning || "—"}
+                                </p>
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleDone(task)}
+                                  disabled={Boolean(updatingById[task.id])}
+                                  className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                                >
+                                  {updatingById[task.id]
+                                    ? "Aggiorno..."
+                                    : "Segna completato"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(task)}
+                                  className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                                >
+                                  Modifica
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteTask(task.id)}
+                                  disabled={Boolean(deletingById[task.id])}
+                                  className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200 transition hover:border-red-400/70 disabled:opacity-60"
+                                >
+                                  {deletingById[task.id]
+                                    ? "Elimino..."
+                                    : "Elimina"}
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </details>
                     );
@@ -416,17 +619,148 @@ export default function TodoBoard() {
                 Nessun task completato.
               </div>
             )}
-            {doneTasks.map((task) => (
-              <button
-                key={task.id}
-                type="button"
-                onClick={() => handleToggleDone(task)}
-                disabled={Boolean(updatingById[task.id])}
-                className="w-full rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-left text-sm text-[var(--muted)] line-through transition hover:border-[var(--accent)] disabled:opacity-60"
-              >
-                {task.title}
-              </button>
-            ))}
+            {doneTasks.map((task) => {
+              const meta = parseTaskMeta(task.notes);
+              const isEditing = Boolean(editingById[task.id]);
+              const editDraft = editDraftById[task.id];
+
+              return (
+                <div
+                  key={task.id}
+                  className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
+                >
+                  {isEditing && editDraft ? (
+                    <div className="grid gap-2 text-xs text-[var(--muted)]">
+                      <input
+                        value={editDraft.title}
+                        onChange={(event) =>
+                          setEditDraftById((prev) => ({
+                            ...prev,
+                            [task.id]: {
+                              ...editDraft,
+                              title: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Titolo task"
+                      />
+                      <select
+                        value={editDraft.priority}
+                        onChange={(event) =>
+                          setEditDraftById((prev) => ({
+                            ...prev,
+                            [task.id]: {
+                              ...editDraft,
+                              priority: event.target.value as TodoPriority,
+                            },
+                          }))
+                        }
+                      >
+                        <option value="alta">Priorita alta</option>
+                        <option value="media">Priorita media</option>
+                        <option value="continuativo">
+                          Priorita continuativo
+                        </option>
+                        <option value="bassa">Priorita bassa</option>
+                      </select>
+                      <textarea
+                        rows={2}
+                        value={editDraft.meanwhile}
+                        onChange={(event) =>
+                          setEditDraftById((prev) => ({
+                            ...prev,
+                            [task.id]: {
+                              ...editDraft,
+                              meanwhile: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Cosa fare nel mentre"
+                      />
+                      <textarea
+                        rows={2}
+                        value={editDraft.learning}
+                        onChange={(event) =>
+                          setEditDraftById((prev) => ({
+                            ...prev,
+                            [task.id]: {
+                              ...editDraft,
+                              learning: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Cosa imparare per le prossime volte"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(task.id)}
+                          disabled={Boolean(updatingById[task.id])}
+                          className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                        >
+                          {updatingById[task.id] ? "Salvo..." : "Salva"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCancelEdit(task.id)}
+                          className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 text-xs text-[var(--muted)]">
+                      <p className="text-sm text-[var(--muted)] line-through">
+                        {task.title}
+                      </p>
+                      {(meta.meanwhile || meta.learning) && (
+                        <div className="grid gap-1">
+                          <p className="text-[10px] uppercase tracking-[0.14em]">
+                            Dettagli
+                          </p>
+                          {meta.meanwhile && (
+                            <p className="whitespace-pre-wrap">
+                              Nel mentre: {meta.meanwhile}
+                            </p>
+                          )}
+                          {meta.learning && (
+                            <p className="whitespace-pre-wrap">
+                              Imparare: {meta.learning}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDone(task)}
+                          disabled={Boolean(updatingById[task.id])}
+                          className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                        >
+                          {updatingById[task.id] ? "Aggiorno..." : "Riapri"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(task)}
+                          className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)]"
+                        >
+                          Modifica
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTask(task.id)}
+                          disabled={Boolean(deletingById[task.id])}
+                          className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200 transition hover:border-red-400/70 disabled:opacity-60"
+                        >
+                          {deletingById[task.id] ? "Elimino..." : "Elimina"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </details>
       </section>
