@@ -947,14 +947,16 @@ export default function TodoBoard() {
                                   </p>
                                 </div>
                               )}
-                              <div>
-                                <p className="uppercase tracking-[0.14em] text-[10px]">
-                                  Note
-                                </p>
-                                <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                                  {meta.note || "—"}
-                                </p>
-                              </div>
+                              {meta.note && (
+                                <div>
+                                  <p className="uppercase tracking-[0.14em] text-[10px]">
+                                    Note
+                                  </p>
+                                  <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                    {meta.note}
+                                  </p>
+                                </div>
+                              )}
                               {taskLinks.length > 0 && (
                                 <div className="mt-0.5 flex flex-wrap gap-2">
                                   {taskLinks.map((link, linkIndex) => (
