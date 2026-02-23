@@ -22,6 +22,7 @@ type TodoDraft = {
   priority: TodoPriority;
   meanwhile: string;
   learning: string;
+  note: string;
 };
 
 type TodoEditDraft = TodoDraft;
@@ -29,6 +30,7 @@ type TodoEditDraft = TodoDraft;
 type TaskMeta = {
   meanwhile: string;
   learning: string;
+  note: string;
   bucket?: "continuativo";
 };
 
@@ -54,6 +56,7 @@ const emptyDraft: TodoDraft = {
   priority: "media",
   meanwhile: "",
   learning: "",
+  note: "",
 };
 
 const fetchTasks = async () => {
@@ -74,24 +77,27 @@ const sortTasks = (a: TodoTask, b: TodoTask) => {
 const buildTaskMeta = (
   meanwhile: string,
   learning: string,
+  note: string,
   selectedPriority: TodoPriority
 ) => {
   const payload: TaskMeta = {
     meanwhile: meanwhile.trim(),
     learning: learning.trim(),
+    note: note.trim(),
     ...(selectedPriority === "continuativo"
       ? { bucket: "continuativo" as const }
       : {}),
   };
-  if (!payload.meanwhile && !payload.learning && !payload.bucket) return null;
+  if (!payload.meanwhile && !payload.learning && !payload.note && !payload.bucket)
+    return null;
   return `${TASK_META_PREFIX}${JSON.stringify(payload)}`;
 };
 
 const parseTaskMeta = (value?: string | null): TaskMeta => {
-  if (!value) return { meanwhile: "", learning: "" };
+  if (!value) return { meanwhile: "", learning: "", note: "" };
 
   if (!value.startsWith(TASK_META_PREFIX)) {
-    return { meanwhile: value, learning: "" };
+    return { meanwhile: value, learning: "", note: "" };
   }
 
   try {
@@ -102,10 +108,11 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
       meanwhile:
         typeof parsed.meanwhile === "string" ? parsed.meanwhile : "",
       learning: typeof parsed.learning === "string" ? parsed.learning : "",
+      note: typeof parsed.note === "string" ? parsed.note : "",
       bucket: parsed.bucket === "continuativo" ? "continuativo" : undefined,
     };
   } catch {
-    return { meanwhile: value, learning: "" };
+    return { meanwhile: value, learning: "", note: "" };
   }
 };
 
@@ -132,6 +139,9 @@ export default function TodoBoard() {
   >({});
   const [deletingById, setDeletingById] = useState<Record<string, boolean>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [openTaskDetailsById, setOpenTaskDetailsById] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     let active = true;
@@ -185,7 +195,12 @@ export default function TodoBoard() {
         title: cleanTitle,
         priority: dbPriority,
         is_done: false,
-        notes: buildTaskMeta(draft.meanwhile, draft.learning, draft.priority),
+        notes: buildTaskMeta(
+          draft.meanwhile,
+          draft.learning,
+          draft.note,
+          draft.priority
+        ),
         due_date: null,
         contact_id: null,
       })
@@ -240,8 +255,10 @@ export default function TodoBoard() {
         priority: getTaskBucket(task),
         meanwhile: meta.meanwhile,
         learning: meta.learning,
+        note: meta.note,
       },
     }));
+    setOpenTaskDetailsById((prev) => ({ ...prev, [task.id]: true }));
     setEditingById((prev) => ({ ...prev, [task.id]: true }));
   };
 
@@ -277,6 +294,7 @@ export default function TodoBoard() {
         notes: buildTaskMeta(
           editDraft.meanwhile,
           editDraft.learning,
+          editDraft.note,
           editDraft.priority
         ),
       })
@@ -400,7 +418,7 @@ export default function TodoBoard() {
               </button>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               <textarea
                 rows={2}
                 value={draft.meanwhile}
@@ -416,6 +434,14 @@ export default function TodoBoard() {
                   setDraft((prev) => ({ ...prev, learning: event.target.value }))
                 }
                 placeholder="Cosa imparare per le prossime volte"
+              />
+              <textarea
+                rows={2}
+                value={draft.note}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, note: event.target.value }))
+                }
+                placeholder="Note"
               />
             </div>
           </form>
@@ -465,6 +491,15 @@ export default function TodoBoard() {
                       <details
                         key={task.id}
                         className="relative rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
+                        open={isEditing || Boolean(openTaskDetailsById[task.id])}
+                        onToggle={(event) => {
+                          const isOpen = (event.currentTarget as HTMLDetailsElement)
+                            .open;
+                          setOpenTaskDetailsById((prev) => ({
+                            ...prev,
+                            [task.id]: isOpen,
+                          }));
+                        }}
                       >
                         <summary className="cursor-pointer pr-6 text-left text-sm font-semibold text-[var(--ink)]">
                           {task.title}
@@ -571,6 +606,20 @@ export default function TodoBoard() {
                                 }
                                 placeholder="Cosa imparare per le prossime volte"
                               />
+                              <textarea
+                                rows={2}
+                                value={editDraft.note}
+                                onChange={(event) =>
+                                  setEditDraftById((prev) => ({
+                                    ...prev,
+                                    [task.id]: {
+                                      ...editDraft,
+                                      note: event.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="Note"
+                              />
                               <div className="mt-1 flex flex-wrap gap-2">
                                 <button
                                   type="button"
@@ -607,6 +656,14 @@ export default function TodoBoard() {
                                 </p>
                                 <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
                                   {meta.learning || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="uppercase tracking-[0.14em] text-[10px]">
+                                  Note
+                                </p>
+                                <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
+                                  {meta.note || "—"}
                                 </p>
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -716,6 +773,20 @@ export default function TodoBoard() {
                         }
                         placeholder="Cosa imparare per le prossime volte"
                       />
+                      <textarea
+                        rows={2}
+                        value={editDraft.note}
+                        onChange={(event) =>
+                          setEditDraftById((prev) => ({
+                            ...prev,
+                            [task.id]: {
+                              ...editDraft,
+                              note: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Note"
+                      />
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -775,7 +846,7 @@ export default function TodoBoard() {
                       <p className="text-sm text-[var(--muted)] line-through">
                         {task.title}
                       </p>
-                      {(meta.meanwhile || meta.learning) && (
+                      {(meta.meanwhile || meta.learning || meta.note) && (
                         <div className="grid gap-1">
                           <p className="text-[10px] uppercase tracking-[0.14em]">
                             Dettagli
@@ -788,6 +859,11 @@ export default function TodoBoard() {
                           {meta.learning && (
                             <p className="whitespace-pre-wrap">
                               Imparare: {meta.learning}
+                            </p>
+                          )}
+                          {meta.note && (
+                            <p className="whitespace-pre-wrap">
+                              Note: {meta.note}
                             </p>
                           )}
                         </div>

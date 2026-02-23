@@ -492,6 +492,7 @@ export default function CrmApp() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [newContact, setNewContact] = useState<NewContact>(emptyNewContact);
+  const [contactSearch, setContactSearch] = useState("");
   const [draft, setDraft] = useState<DraftContact | null>(null);
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [emailsLoading, setEmailsLoading] = useState(false);
@@ -595,12 +596,31 @@ export default function CrmApp() {
     );
   }, [contacts]);
 
-  const contactsByStatus = useMemo(() => {
+  const filteredContacts = useMemo(() => {
+    const query = contactSearch.trim().toLowerCase();
+    if (!query) return contacts;
+    return contacts.filter((contact) => {
+      const candidates = [
+        contact.name,
+        contact.email,
+        contact.company,
+        contact.role,
+        contact.notes,
+      ];
+      return candidates.some((value) =>
+        value?.toLowerCase().includes(query)
+      );
+    });
+  }, [contacts, contactSearch]);
+
+  const filteredContactsByStatus = useMemo(() => {
     return STATUS_OPTIONS.reduce((acc, status) => {
-      acc[status] = contacts.filter((contact) => contact.status === status);
+      acc[status] = filteredContacts.filter(
+        (contact) => contact.status === status
+      );
       return acc;
     }, {} as Record<Status, Contact[]>);
-  }, [contacts]);
+  }, [filteredContacts]);
 
   const followUpSummary = useMemo(() => {
     const today = getTodayDateInputValue();
@@ -2158,7 +2178,19 @@ export default function CrmApp() {
 
           <div className="mt-8 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <span>Contatti</span>
-            <span>{contacts.length}</span>
+            <span>
+              {contactSearch.trim()
+                ? `${filteredContacts.length} / ${contacts.length}`
+                : contacts.length}
+            </span>
+          </div>
+
+          <div className="mt-3">
+            <input
+              placeholder="Cerca contatto (nome, email, produzione...)"
+              value={contactSearch}
+              onChange={(event) => setContactSearch(event.target.value)}
+            />
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -2172,10 +2204,15 @@ export default function CrmApp() {
                 Nessun contatto ancora. Aggiungi il primo.
               </div>
             )}
+            {!loading && contacts.length > 0 && filteredContacts.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
+                Nessun risultato per “{contactSearch.trim()}”.
+              </div>
+            )}
             {!loading &&
-              contacts.length > 0 &&
+              filteredContacts.length > 0 &&
               STATUS_OPTIONS.map((status) => {
-                const group = contactsByStatus[status] ?? [];
+                const group = filteredContactsByStatus[status] ?? [];
                 return (
                   <details
                     key={status}
