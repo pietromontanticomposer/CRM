@@ -135,6 +135,22 @@ const getTodayDateInputValue = () => {
   return `${year}-${month}-${day}`;
 };
 
+const KEEP_IN_TOUCH_MONTHS = 2;
+const KEEP_IN_TOUCH_NOTE = `Mantenere in contatto (automatico ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`;
+
+const addMonthsToDateInputValue = (dateInput: string, months: number) => {
+  const parsed = new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateInput;
+  parsed.setMonth(parsed.getMonth() + months);
+  const year = parsed.getFullYear();
+  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+  const day = `${parsed.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isKeepInTouchNote = (value?: string | null) =>
+  value?.trim() === KEEP_IN_TOUCH_NOTE;
+
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
@@ -511,6 +527,10 @@ export default function CrmApp() {
   const [aiCategoryByContact, setAiCategoryByContact] = useState<
     Record<string, "pending" | "done">
   >({});
+  const [followUpActionByContact, setFollowUpActionByContact] = useState<
+    Record<string, "recontacted" | "keepwarm">
+  >({});
+  const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
   const selectedEmail =
@@ -853,6 +873,127 @@ export default function CrmApp() {
     setOpenThreads({});
     setOpenContactGroups((prev) => ({ ...prev, [contact.status]: true }));
     loadEmails(contact.id, contact.email);
+  };
+
+  const applyContactUpdate = (updated: Contact) => {
+    setContacts((prev) =>
+      prev.map((contact) => (contact.id === updated.id ? updated : contact))
+    );
+    if (selectedId === updated.id) {
+      setDraft(buildDraft(updated));
+      setOpenContactGroups((prev) => ({ ...prev, [updated.status]: true }));
+    }
+  };
+
+  const markFollowUpRecontacted = async (contact: Contact) => {
+    if (followUpActionByContact[contact.id]) return;
+    setFollowUpMessage(null);
+    setFollowUpActionByContact((prev) => ({
+      ...prev,
+      [contact.id]: "recontacted",
+    }));
+
+    const today = getTodayDateInputValue();
+    const keepWarm = isKeepInTouchNote(contact.next_action_note);
+    const updatePayload: Record<string, unknown> = {
+      last_action_at: today,
+      last_action_note: keepWarm
+        ? "Ricontattato (mantenimento attivo)"
+        : "Ricontattato",
+      next_action_at: keepWarm
+        ? addMonthsToDateInputValue(today, KEEP_IN_TOUCH_MONTHS)
+        : null,
+      next_action_note: keepWarm ? KEEP_IN_TOUCH_NOTE : null,
+    };
+
+    const { data, error: updateError } = await supabase
+      .from("contacts")
+      .update(updatePayload)
+      .eq("id", contact.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      setError("Impossibile aggiornare il follow-up. Riprova.");
+      setFollowUpActionByContact((prev) => {
+        const next = { ...prev };
+        delete next[contact.id];
+        return next;
+      });
+      return;
+    }
+
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("contact_id", contact.id)
+      .eq("type", "followup_due")
+      .eq("is_read", false);
+
+    const updated = data as Contact;
+    applyContactUpdate(updated);
+    setFollowUpMessage(
+      keepWarm
+        ? `Ricontattato: prossimo promemoria tra ${KEEP_IN_TOUCH_MONTHS} mesi.`
+        : "Ricontattato registrato."
+    );
+    setFollowUpActionByContact((prev) => {
+      const next = { ...prev };
+      delete next[contact.id];
+      return next;
+    });
+  };
+
+  const enableKeepInTouch = async (contact: Contact) => {
+    if (followUpActionByContact[contact.id]) return;
+    setFollowUpMessage(null);
+    setFollowUpActionByContact((prev) => ({ ...prev, [contact.id]: "keepwarm" }));
+
+    const today = getTodayDateInputValue();
+    const nextFollowUp = addMonthsToDateInputValue(today, KEEP_IN_TOUCH_MONTHS);
+
+    const updatePayload: Record<string, unknown> = {
+      status: contact.status === "Da contattare" ? "Già contattato" : contact.status,
+      last_action_at: today,
+      last_action_note: `Mantenimento attivo (ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`,
+      next_action_at: nextFollowUp,
+      next_action_note: KEEP_IN_TOUCH_NOTE,
+    };
+
+    const { data, error: updateError } = await supabase
+      .from("contacts")
+      .update(updatePayload)
+      .eq("id", contact.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      setError("Impossibile impostare il mantenimento contatto. Riprova.");
+      setFollowUpActionByContact((prev) => {
+        const next = { ...prev };
+        delete next[contact.id];
+        return next;
+      });
+      return;
+    }
+
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("contact_id", contact.id)
+      .eq("type", "followup_due")
+      .eq("is_read", false);
+
+    const updated = data as Contact;
+    applyContactUpdate(updated);
+    setFollowUpMessage(
+      `Mantenimento attivo: reminder ogni ${KEEP_IN_TOUCH_MONTHS} mesi.`
+    );
+    setFollowUpActionByContact((prev) => {
+      const next = { ...prev };
+      delete next[contact.id];
+      return next;
+    });
   };
 
   const handleSelectEmail = async (emailId: string) => {
@@ -1921,6 +2062,11 @@ export default function CrmApp() {
               Data aggiornata automaticamente (di default 10 giorni dopo la prima
               email inviata).
             </p>
+            {followUpMessage && (
+              <div className="mt-3 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+                {followUpMessage}
+              </div>
+            )}
             {followUpSummary.totalOpen === 0 ? (
               <div className="mt-3 rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
                 Nessun follow-up urgente.
@@ -1942,32 +2088,70 @@ export default function CrmApp() {
                   })),
                 ]
                   .slice(0, 8)
-                  .map(({ contact, label, tone }) => (
-                    <button
-                      key={`${label}-${contact.id}`}
-                      type="button"
-                      onClick={() => handleSelectContact(contact)}
-                      className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition hover:-translate-y-0.5 ${
-                        selectedId === contact.id
-                          ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                          : "border-[var(--line)] bg-[var(--panel)]"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-[var(--ink)]">
-                          {getDisplayName(contact)}
-                        </div>
-                        <div className="text-xs text-[var(--muted)]">
-                          {formatDate(contact.next_action_at)}
+                  .map(({ contact, label, tone }) => {
+                    const pending = followUpActionByContact[contact.id];
+                    const keepWarm = isKeepInTouchNote(contact.next_action_note);
+                    return (
+                      <div
+                        key={`${label}-${contact.id}`}
+                        className={`rounded-xl border px-3 py-2 ${
+                          selectedId === contact.id
+                            ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                            : "border-[var(--line)] bg-[var(--panel)]"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleSelectContact(contact)}
+                          className="flex w-full items-center justify-between gap-3 text-left"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-[var(--ink)]">
+                              {getDisplayName(contact)}
+                            </div>
+                            <div className="text-xs text-[var(--muted)]">
+                              {formatDate(contact.next_action_at)}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            {keepWarm && (
+                              <span className="rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200">
+                                ogni 2 mesi
+                              </span>
+                            )}
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}
+                            >
+                              {label}
+                            </span>
+                          </div>
+                        </button>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => markFollowUpRecontacted(contact)}
+                            disabled={Boolean(pending)}
+                            className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                          >
+                            {pending === "recontacted"
+                              ? "Salvo..."
+                              : "Ricontattato"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => enableKeepInTouch(contact)}
+                            disabled={Boolean(pending)}
+                            className="rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-60"
+                          >
+                            {pending === "keepwarm"
+                              ? "Imposto..."
+                              : "Mantenere in contatto"}
+                          </button>
                         </div>
                       </div>
-                      <span
-                        className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}
-                      >
-                        {label}
-                      </span>
-                    </button>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>
