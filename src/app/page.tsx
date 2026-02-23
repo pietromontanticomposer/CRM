@@ -66,8 +66,8 @@ export default function Home() {
             <p className="mt-2 text-sm text-[var(--muted)]">
               Agenda settimanale per impegni ricorrenti divisi per giorno.
             </p>
-            <p className="mt-6 text-sm font-semibold text-[var(--accent)] transition group-hover:translate-x-0.5">
-              Apri Modulo 03 →
+            <p className="mt-6 text-sm font-semibold text-red-200 transition group-hover:translate-x-0.5">
+              Apri Calendario →
             </p>
           </Link>
         </section>
