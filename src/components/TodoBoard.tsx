@@ -17,6 +17,13 @@ type TodoTask = {
   contact_id: string | null;
 };
 
+type TodoDraft = {
+  title: string;
+  priority: TodoPriority;
+  notes: string;
+  due_date: string;
+};
+
 const PRIORITIES: TodoPriority[] = ["alta", "media", "bassa"];
 
 const priorityRank: Record<TodoPriority, number> = {
@@ -50,8 +57,12 @@ export default function TodoBoard() {
   const [refreshing, setRefreshing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState<TodoPriority>("media");
+  const [draft, setDraft] = useState<TodoDraft>({
+    title: "",
+    priority: "media",
+    notes: "",
+    due_date: "",
+  });
   const [updatingById, setUpdatingById] = useState<Record<string, boolean>>(
     {}
   );
@@ -92,7 +103,7 @@ export default function TodoBoard() {
 
   const handleAddTask = async (event: FormEvent) => {
     event.preventDefault();
-    const cleanTitle = title.trim();
+    const cleanTitle = draft.title.trim();
     if (!cleanTitle) {
       setError("Inserisci un titolo.");
       return;
@@ -104,10 +115,10 @@ export default function TodoBoard() {
       .from("todo_tasks")
       .insert({
         title: cleanTitle,
-        priority,
+        priority: draft.priority,
         is_done: false,
-        notes: null,
-        due_date: null,
+        notes: draft.notes.trim() || null,
+        due_date: draft.due_date || null,
         contact_id: null,
       })
       .select("*")
@@ -121,8 +132,12 @@ export default function TodoBoard() {
 
     const created = data as TodoTask;
     setTasks((prev) => [created, ...prev].sort(sortTasks));
-    setTitle("");
-    setPriority("media");
+    setDraft({
+      title: "",
+      priority: "media",
+      notes: "",
+      due_date: "",
+    });
     setAdding(false);
   };
 
@@ -200,14 +215,19 @@ export default function TodoBoard() {
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg">
           <form onSubmit={handleAddTask} className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
             <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              value={draft.title}
+              onChange={(event) =>
+                setDraft((prev) => ({ ...prev, title: event.target.value }))
+              }
               placeholder="Nuovo task"
             />
             <select
-              value={priority}
+              value={draft.priority}
               onChange={(event) =>
-                setPriority(event.target.value as TodoPriority)
+                setDraft((prev) => ({
+                  ...prev,
+                  priority: event.target.value as TodoPriority,
+                }))
               }
             >
               <option value="alta">Priorita alta</option>
@@ -222,6 +242,27 @@ export default function TodoBoard() {
               {adding ? "Aggiungo..." : "+ Aggiungi"}
             </button>
           </form>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-[11px] uppercase tracking-[0.18em] text-[var(--muted)]">
+              Dettagli (opzionale)
+            </summary>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[180px_1fr]">
+              <input
+                type="date"
+                value={draft.due_date}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, due_date: event.target.value }))
+                }
+              />
+              <input
+                value={draft.notes}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, notes: event.target.value }))
+                }
+                placeholder="Note task"
+              />
+            </div>
+          </details>
         </section>
 
         {error && (
