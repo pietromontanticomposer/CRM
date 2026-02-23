@@ -173,7 +173,7 @@ export default function FixedScheduleBoard() {
       <header className="relative mx-auto mb-6 flex w-full max-w-6xl flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-red-300/80">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
               MODULO 03
             </p>
             <h1 className="text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
@@ -186,7 +186,7 @@ export default function FixedScheduleBoard() {
           <button
             type="button"
             onClick={clearAll}
-            className="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20"
+            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-4 py-2 text-sm font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
           >
             Svuota tutto
           </button>
@@ -199,10 +199,10 @@ export default function FixedScheduleBoard() {
           return (
             <section
               key={day.key}
-              className="rounded-2xl border border-red-500/30 bg-red-500/5 p-4 shadow-lg"
+              className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg"
             >
               <div className="mb-3 flex items-center justify-between">
-                <span className="rounded-full border border-red-400/50 bg-red-500/15 px-2 py-0.5 text-xs font-semibold uppercase text-red-200">
+                <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-xs font-semibold uppercase text-[var(--ink)]">
                   {day.label}
                 </span>
                 <span className="text-xs text-[var(--muted)]">
@@ -226,11 +226,10 @@ export default function FixedScheduleBoard() {
                     }))
                   }
                   placeholder={`Nuovo task per ${day.label}`}
-                  className="border-red-500/30 bg-[#180f12]"
                 />
                 <button
                   type="submit"
-                  className="rounded-full border border-red-400/50 bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-200 transition hover:bg-red-500/25"
+                  className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[var(--accent-strong)]"
                 >
                   + Aggiungi task
                 </button>
@@ -238,7 +237,7 @@ export default function FixedScheduleBoard() {
 
               <div className="grid gap-2">
                 {dayTasks.length === 0 && (
-                  <div className="rounded-xl border border-dashed border-red-500/30 bg-[#180f12] p-2 text-xs text-[var(--muted)]">
+                  <div className="rounded-xl border border-dashed border-[var(--line)] p-2 text-xs text-[var(--muted)]">
                     Nessun task
                   </div>
                 )}
@@ -246,7 +245,7 @@ export default function FixedScheduleBoard() {
                 {dayTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="rounded-xl border border-red-500/25 bg-[#180f12] px-3 py-2"
+                    className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
                   >
                     <p
                       className={`text-sm font-semibold ${task.isDone ? "text-[var(--muted)] line-through" : "text-[var(--ink)]"}`}
@@ -257,14 +256,14 @@ export default function FixedScheduleBoard() {
                       <button
                         type="button"
                         onClick={() => handleToggleTask(day.key, task.id)}
-                        className="rounded-full border border-red-400/40 bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-200 transition hover:bg-red-500/20"
+                        className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
                       >
                         {task.isDone ? "Riapri" : "Completato"}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteTask(day.key, task.id)}
-                        className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-red-400 hover:text-red-200"
+                        className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
                       >
                         Elimina
                       </button>
