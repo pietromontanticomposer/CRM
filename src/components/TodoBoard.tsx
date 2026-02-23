@@ -3,40 +3,26 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-type TodoPriority = "bassa" | "media" | "alta";
-type TodoFilter = "tutte" | "aperte" | "scadute" | "completate";
+type TodoPriority = "alta" | "media" | "bassa";
 
 type TodoTask = {
   id: string;
   title: string;
-  notes: string | null;
-  due_date: string | null;
   priority: TodoPriority;
   is_done: boolean;
   created_at: string;
   updated_at: string;
+  notes: string | null;
+  due_date: string | null;
   contact_id: string | null;
 };
 
-type TodoDraft = {
-  title: string;
-  notes: string;
-  due_date: string;
-  priority: TodoPriority;
-};
+const PRIORITIES: TodoPriority[] = ["alta", "media", "bassa"];
 
-const emptyDraft: TodoDraft = {
-  title: "",
-  notes: "",
-  due_date: "",
-  priority: "media",
-};
-
-const filterLabels: Record<TodoFilter, string> = {
-  tutte: "Tutte",
-  aperte: "Aperte",
-  scadute: "Scadute",
-  completate: "Completate",
+const priorityRank: Record<TodoPriority, number> = {
+  alta: 0,
+  media: 1,
+  bassa: 2,
 };
 
 const priorityStyles: Record<TodoPriority, string> = {
@@ -45,40 +31,17 @@ const priorityStyles: Record<TodoPriority, string> = {
   bassa: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
 };
 
-const getTodayKey = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = `${now.getMonth() + 1}`.padStart(2, "0");
-  const day = `${now.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const formatDate = (value?: string | null) => {
-  if (!value) return "Senza scadenza";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("it-IT", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+const fetchTasks = async () => {
+  return supabase.from("todo_tasks").select("*").order("created_at", {
+    ascending: false,
   });
 };
 
-const compareTasks = (a: TodoTask, b: TodoTask) => {
+const sortTasks = (a: TodoTask, b: TodoTask) => {
   if (a.is_done !== b.is_done) return Number(a.is_done) - Number(b.is_done);
-  const aDue = a.due_date ?? "9999-12-31";
-  const bDue = b.due_date ?? "9999-12-31";
-  if (aDue !== bDue) return aDue.localeCompare(bDue);
+  const priorityDelta = priorityRank[a.priority] - priorityRank[b.priority];
+  if (priorityDelta !== 0) return priorityDelta;
   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-};
-
-const fetchTasks = async () => {
-  return supabase
-    .from("todo_tasks")
-    .select("*")
-    .order("is_done", { ascending: true })
-    .order("due_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: false });
 };
 
 export default function TodoBoard() {
@@ -86,12 +49,12 @@ export default function TodoBoard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState<TodoPriority>("media");
   const [updatingById, setUpdatingById] = useState<Record<string, boolean>>(
     {}
   );
-  const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TodoFilter>("aperte");
-  const [draft, setDraft] = useState<TodoDraft>(emptyDraft);
 
   useEffect(() => {
     let active = true;
@@ -105,10 +68,9 @@ export default function TodoBoard() {
         setLoading(false);
         return;
       }
-      setTasks(((data as TodoTask[]) || []).sort(compareTasks));
+      setTasks(((data as TodoTask[]) || []).sort(sortTasks));
       setLoading(false);
     };
-
     void run();
     return () => {
       active = false;
@@ -124,15 +86,15 @@ export default function TodoBoard() {
       setRefreshing(false);
       return;
     }
-    setTasks(((data as TodoTask[]) || []).sort(compareTasks));
+    setTasks(((data as TodoTask[]) || []).sort(sortTasks));
     setRefreshing(false);
   };
 
   const handleAddTask = async (event: FormEvent) => {
     event.preventDefault();
-    const title = draft.title.trim();
-    if (!title) {
-      setError("Inserisci almeno il titolo del task.");
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setError("Inserisci un titolo.");
       return;
     }
 
@@ -141,10 +103,11 @@ export default function TodoBoard() {
     const { data, error: insertError } = await supabase
       .from("todo_tasks")
       .insert({
-        title,
-        notes: draft.notes.trim() || null,
-        due_date: draft.due_date || null,
-        priority: draft.priority,
+        title: cleanTitle,
+        priority,
+        is_done: false,
+        notes: null,
+        due_date: null,
         contact_id: null,
       })
       .select("*")
@@ -157,8 +120,9 @@ export default function TodoBoard() {
     }
 
     const created = data as TodoTask;
-    setTasks((prev) => [created, ...prev].sort(compareTasks));
-    setDraft(emptyDraft);
+    setTasks((prev) => [created, ...prev].sort(sortTasks));
+    setTitle("");
+    setPriority("media");
     setAdding(false);
   };
 
@@ -182,58 +146,46 @@ export default function TodoBoard() {
 
     const updated = data as TodoTask;
     setTasks((prev) =>
-      prev.map((item) => (item.id === task.id ? updated : item)).sort(compareTasks)
+      prev.map((item) => (item.id === task.id ? updated : item)).sort(sortTasks)
     );
     setUpdatingById((prev) => ({ ...prev, [task.id]: false }));
   };
 
-  const today = getTodayKey();
+  const openTasks = useMemo(
+    () => tasks.filter((task) => !task.is_done),
+    [tasks]
+  );
+  const doneTasks = useMemo(
+    () => tasks.filter((task) => task.is_done),
+    [tasks]
+  );
 
-  const counters = useMemo(() => {
-    const summary = {
-      tutte: tasks.length,
-      aperte: 0,
-      scadute: 0,
-      completate: 0,
+  const groupedOpenTasks = useMemo(() => {
+    const groups: Record<TodoPriority, TodoTask[]> = {
+      alta: [],
+      media: [],
+      bassa: [],
     };
-
-    tasks.forEach((task) => {
-      if (task.is_done) {
-        summary.completate += 1;
-      } else {
-        summary.aperte += 1;
-        if (task.due_date && task.due_date < today) {
-          summary.scadute += 1;
-        }
-      }
+    openTasks.forEach((task) => {
+      groups[task.priority].push(task);
     });
-
-    return summary;
-  }, [tasks, today]);
-
-  const visibleTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      if (filter === "tutte") return true;
-      if (filter === "aperte") return !task.is_done;
-      if (filter === "completate") return task.is_done;
-      if (filter === "scadute") {
-        return !task.is_done && Boolean(task.due_date && task.due_date < today);
-      }
-      return true;
-    });
-  }, [tasks, filter, today]);
+    return groups;
+  }, [openTasks]);
 
   return (
     <div className="relative min-h-screen overflow-hidden px-6 pb-16 pt-10 sm:px-10">
-      <header className="relative mx-auto mb-8 flex w-full max-w-5xl flex-col gap-4">
+      <header className="relative mx-auto mb-6 flex w-full max-w-6xl flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
               TODO
             </p>
             <h1 className="text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-              Le mie attivita
+              Task Prioritari
             </h1>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Clicca una card per segnare completato.
+            </p>
           </div>
           <button
             type="button"
@@ -245,84 +197,30 @@ export default function TodoBoard() {
           </button>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Aperte
-            </p>
-            <p className="mt-1 text-2xl font-semibold text-[var(--ink)]">
-              {counters.aperte}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-rose-200">
-              Scadute
-            </p>
-            <p className="mt-1 text-2xl font-semibold text-rose-100">
-              {counters.scadute}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-              Completate
-            </p>
-            <p className="mt-1 text-2xl font-semibold text-emerald-100">
-              {counters.completate}
-            </p>
-          </div>
-        </div>
-      </header>
-
-      <main className="relative mx-auto grid w-full max-w-5xl gap-6">
-        <section className="rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Nuovo task
-          </h2>
-          <form onSubmit={handleAddTask} className="mt-4 grid gap-3">
-            <div className="grid gap-3 lg:grid-cols-[1fr_180px_140px_auto]">
-              <input
-                value={draft.title}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, title: event.target.value }))
-                }
-                placeholder="Cosa devo fare?"
-              />
-              <input
-                type="date"
-                value={draft.due_date}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, due_date: event.target.value }))
-                }
-              />
-              <select
-                value={draft.priority}
-                onChange={(event) =>
-                  setDraft((prev) => ({
-                    ...prev,
-                    priority: event.target.value as TodoPriority,
-                  }))
-                }
-              >
-                <option value="alta">Priorita alta</option>
-                <option value="media">Priorita media</option>
-                <option value="bassa">Priorita bassa</option>
-              </select>
-              <button
-                type="submit"
-                disabled={adding}
-                className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
-              >
-                {adding ? "Aggiungo..." : "+ Aggiungi"}
-              </button>
-            </div>
-            <textarea
-              rows={2}
-              value={draft.notes}
-              onChange={(event) =>
-                setDraft((prev) => ({ ...prev, notes: event.target.value }))
-              }
-              placeholder="Note (opzionale)"
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg">
+          <form onSubmit={handleAddTask} className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Nuovo task"
             />
+            <select
+              value={priority}
+              onChange={(event) =>
+                setPriority(event.target.value as TodoPriority)
+              }
+            >
+              <option value="alta">Priorita alta</option>
+              <option value="media">Priorita media</option>
+              <option value="bassa">Priorita bassa</option>
+            </select>
+            <button
+              type="submit"
+              disabled={adding}
+              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
+            >
+              {adding ? "Aggiungo..." : "+ Aggiungi"}
+            </button>
           </form>
         </section>
 
@@ -331,98 +229,78 @@ export default function TodoBoard() {
             {error}
           </div>
         )}
+      </header>
 
-        <section className="rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg">
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(filterLabels) as TodoFilter[]).map((item) => {
-              const selected = filter === item;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setFilter(item)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                    selected
-                      ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--ink)]"
-                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
-                  }`}
+      <main className="relative mx-auto grid w-full max-w-6xl gap-4 md:grid-cols-3">
+        {PRIORITIES.map((item) => {
+          const column = groupedOpenTasks[item];
+          return (
+            <section
+              key={item}
+              className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase ${priorityStyles[item]}`}
                 >
-                  {filterLabels[item]} ({counters[item]})
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 grid gap-3">
-            {loading && (
-              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                Caricamento task...
+                  {item}
+                </span>
+                <span className="text-xs text-[var(--muted)]">{column.length}</span>
               </div>
-            )}
-            {!loading && visibleTasks.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                Nessun task in questa vista.
-              </div>
-            )}
-            {!loading &&
-              visibleTasks.map((task) => {
-                const isOverdue = Boolean(
-                  task.due_date && task.due_date < today && !task.is_done
-                );
-                return (
-                  <label
-                    key={task.id}
-                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 ${
-                      task.is_done
-                        ? "border-[var(--line)] bg-[var(--panel)] opacity-75"
-                        : isOverdue
-                          ? "border-rose-400/40 bg-rose-500/10"
-                          : "border-[var(--line)] bg-[var(--panel-strong)]"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.is_done}
+              <div className="grid gap-2">
+                {loading && (
+                  <div className="rounded-xl border border-dashed border-[var(--line)] p-2 text-xs text-[var(--muted)]">
+                    Caricamento...
+                  </div>
+                )}
+                {!loading && column.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-[var(--line)] p-2 text-xs text-[var(--muted)]">
+                    Nessun task
+                  </div>
+                )}
+                {!loading &&
+                  column.map((task) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => handleToggleDone(task)}
                       disabled={Boolean(updatingById[task.id])}
-                      onChange={() => handleToggleDone(task)}
-                      className="mt-1 h-4 w-4 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`break-words text-sm font-semibold ${
-                          task.is_done ? "line-through text-[var(--muted)]" : ""
-                        }`}
-                      >
-                        {task.title}
-                      </p>
-                      {task.notes && (
-                        <p className="mt-1 whitespace-pre-wrap text-xs text-[var(--muted)]">
-                          {task.notes}
-                        </p>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                        <span
-                          className={`rounded-full border px-2 py-0.5 font-semibold ${priorityStyles[task.priority]}`}
-                        >
-                          {task.priority}
-                        </span>
-                        <span
-                          className={`rounded-full border px-2 py-0.5 font-semibold ${
-                            isOverdue
-                              ? "border-rose-400/40 bg-rose-500/10 text-rose-200"
-                              : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)]"
-                          }`}
-                        >
-                          {formatDate(task.due_date)}
-                        </span>
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-          </div>
-        </section>
+                      className="w-full rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-left text-sm font-semibold text-[var(--ink)] transition hover:-translate-y-0.5 hover:border-[var(--accent)] disabled:opacity-60"
+                    >
+                      {task.title}
+                    </button>
+                  ))}
+              </div>
+            </section>
+          );
+        })}
       </main>
+
+      <section className="mx-auto mt-5 w-full max-w-6xl rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg">
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+            Completati ({doneTasks.length})
+          </summary>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {doneTasks.length === 0 && (
+              <div className="rounded-xl border border-dashed border-[var(--line)] p-2 text-xs text-[var(--muted)]">
+                Nessun task completato.
+              </div>
+            )}
+            {doneTasks.map((task) => (
+              <button
+                key={task.id}
+                type="button"
+                onClick={() => handleToggleDone(task)}
+                disabled={Boolean(updatingById[task.id])}
+                className="w-full rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-left text-sm text-[var(--muted)] line-through transition hover:border-[var(--accent)] disabled:opacity-60"
+              >
+                {task.title}
+              </button>
+            ))}
+          </div>
+        </details>
+      </section>
     </div>
   );
 }
