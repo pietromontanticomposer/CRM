@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 const STORAGE_KEY = "fixed_schedule_week_v1";
 
@@ -131,6 +132,14 @@ export default function FixedScheduleBoard() {
     loadScheduleFromStorage()
   );
   const [draftByDay, setDraftByDay] = useState<DraftByDay>(EMPTY_DRAFTS);
+  const [multiTitle, setMultiTitle] = useState("");
+  const [multiDays, setMultiDays] = useState<DayKey[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busyById, setBusyById] = useState<Record<string, boolean>>({});
+
+  const setTaskBusy = (taskId: string, busy: boolean) => {
+    setBusyById((prev) => ({ ...prev, [taskId]: busy }));
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -140,6 +149,7 @@ export default function FixedScheduleBoard() {
   const handleAddTask = (day: DayKey) => {
     const title = draftByDay[day].trim();
     if (!title) return;
+    setError(null);
 
     const task: WeeklyTask = {
       id: makeId(),
@@ -156,30 +166,143 @@ export default function FixedScheduleBoard() {
     setDraftByDay((prev) => ({ ...prev, [day]: "" }));
   };
 
-  const handleToggleTask = (day: DayKey, taskId: string) => {
+  const toggleMultiDay = (day: DayKey) => {
+    setMultiDays((prev) =>
+      prev.includes(day)
+        ? prev.filter((currentDay) => currentDay !== day)
+        : [...prev, day]
+    );
+  };
+
+  const handleAddMultiTask = () => {
+    const title = multiTitle.trim();
+    if (!title) {
+      setError("Inserisci il titolo della stessa azione.");
+      return;
+    }
+    if (multiDays.length === 0) {
+      setError("Seleziona almeno un giorno.");
+      return;
+    }
+    setError(null);
+    const createdAt = new Date().toISOString();
+
+    setSchedule((prev) => {
+      const next = { ...prev };
+      multiDays.forEach((day) => {
+        const task: WeeklyTask = {
+          id: makeId(),
+          title,
+          isDone: false,
+          createdAt,
+          source: "manual",
+        };
+        next[day] = [task, ...next[day]].sort(sortTasks);
+      });
+      return next;
+    });
+
+    setMultiTitle("");
+    setMultiDays([]);
+  };
+
+  const handleToggleTask = async (day: DayKey, task: WeeklyTask) => {
+    if (busyById[task.id]) return;
+    setError(null);
+
+    if (task.source === "todo" && task.todoTaskId) {
+      setTaskBusy(task.id, true);
+      const { error: updateError } = await supabase
+        .from("todo_tasks")
+        .update({ is_done: !task.isDone })
+        .eq("id", task.todoTaskId);
+
+      if (updateError) {
+        setError("Impossibile aggiornare il task collegato al TODO.");
+        setTaskBusy(task.id, false);
+        return;
+      }
+      setTaskBusy(task.id, false);
+    }
+
     setSchedule((prev) => ({
       ...prev,
       [day]: prev[day]
-        .map((task) => {
-          if (task.id !== taskId) return task;
-          if (task.source === "todo") return task;
-          return { ...task, isDone: !task.isDone };
+        .map((currentTask) => {
+          if (currentTask.id !== task.id) return currentTask;
+          return { ...currentTask, isDone: !currentTask.isDone };
         })
         .sort(sortTasks),
     }));
   };
 
-  const handleDeleteTask = (day: DayKey, taskId: string) => {
+  const handleEditTask = async (day: DayKey, task: WeeklyTask) => {
+    if (busyById[task.id]) return;
+    const nextTitleRaw = window.prompt("Titolo task", task.title);
+    if (nextTitleRaw === null) return;
+    const nextTitle = nextTitleRaw.trim();
+    if (!nextTitle) {
+      setError("Il titolo non puo essere vuoto.");
+      return;
+    }
+    setError(null);
+
+    if (task.source === "todo" && task.todoTaskId) {
+      setTaskBusy(task.id, true);
+      const { error: updateError } = await supabase
+        .from("todo_tasks")
+        .update({ title: nextTitle })
+        .eq("id", task.todoTaskId);
+
+      if (updateError) {
+        setError("Impossibile modificare il task collegato al TODO.");
+        setTaskBusy(task.id, false);
+        return;
+      }
+      setTaskBusy(task.id, false);
+    }
+
     setSchedule((prev) => ({
       ...prev,
-      [day]: prev[day].filter(
-        (task) => task.id !== taskId || task.source === "todo"
-      ),
+      [day]: prev[day]
+        .map((currentTask) =>
+          currentTask.id === task.id
+            ? { ...currentTask, title: nextTitle }
+            : currentTask
+        )
+        .sort(sortTasks),
+    }));
+  };
+
+  const handleDeleteTask = async (day: DayKey, task: WeeklyTask) => {
+    if (busyById[task.id]) return;
+    if (!window.confirm("Eliminare questo task?")) return;
+    setError(null);
+
+    if (task.source === "todo" && task.todoTaskId) {
+      setTaskBusy(task.id, true);
+      const { error: deleteError } = await supabase
+        .from("todo_tasks")
+        .delete()
+        .eq("id", task.todoTaskId);
+
+      if (deleteError) {
+        setError("Impossibile eliminare il task collegato al TODO.");
+        setTaskBusy(task.id, false);
+        return;
+      }
+      setTaskBusy(task.id, false);
+    }
+
+    setSchedule((prev) => ({
+      ...prev,
+      [day]: prev[day].filter((currentTask) => currentTask.id !== task.id),
     }));
   };
 
   const clearAll = () => {
     if (!window.confirm("Vuoi svuotare tutti i task del calendario?")) return;
+    setError(null);
     setSchedule(createEmptySchedule());
   };
 
@@ -206,9 +329,49 @@ export default function FixedScheduleBoard() {
             Svuota tutto
           </button>
         </div>
+        {error && (
+          <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
+            {error}
+          </div>
+        )}
       </header>
 
       <main className="relative mx-auto grid w-full max-w-6xl items-start gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="sm:col-span-2 xl:col-span-4 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 shadow-lg">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+            Stessa azione su piu giorni
+          </p>
+          <div className="mt-2 grid gap-2 lg:grid-cols-[1fr_auto]">
+            <input
+              value={multiTitle}
+              onChange={(event) => setMultiTitle(event.target.value)}
+              placeholder="Titolo azione da aggiungere su piu giorni"
+            />
+            <button
+              type="button"
+              onClick={handleAddMultiTask}
+              className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+            >
+              + Aggiungi su giorni selezionati
+            </button>
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {WEEK_DAYS.map((day) => (
+              <label
+                key={`multi-day-${day.key}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-1 text-xs text-[var(--ink)]"
+              >
+                <input
+                  type="checkbox"
+                  checked={multiDays.includes(day.key)}
+                  onChange={() => toggleMultiDay(day.key)}
+                  className="h-4 w-4 accent-[var(--accent)]"
+                />
+                {day.label}
+              </label>
+            ))}
+          </div>
+        </section>
         {WEEK_DAYS.map((day) => {
           const dayTasks = schedule[day.key];
           return (
@@ -278,28 +441,40 @@ export default function FixedScheduleBoard() {
                       </p>
                     )}
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {task.source === "todo" ? (
-                        <span className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                          Modifica dal TODO
-                        </span>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleTask(day.key, task.id)}
-                            className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
-                          >
-                            {task.isDone ? "Riapri" : "Completato"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTask(day.key, task.id)}
-                            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-                          >
-                            Elimina
-                          </button>
-                        </>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleEditTask(day.key, task);
+                        }}
+                        disabled={Boolean(busyById[task.id])}
+                        className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)] disabled:opacity-60"
+                      >
+                        Modifica
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleToggleTask(day.key, task);
+                        }}
+                        disabled={Boolean(busyById[task.id])}
+                        className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
+                      >
+                        {busyById[task.id]
+                          ? "Attendi..."
+                          : task.isDone
+                            ? "Riapri"
+                            : "Completato"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleDeleteTask(day.key, task);
+                        }}
+                        disabled={Boolean(busyById[task.id])}
+                        className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs font-semibold text-[var(--muted)] transition hover:border-[var(--accent)] hover:text-[var(--ink)] disabled:opacity-60"
+                      >
+                        {busyById[task.id] ? "Attendi..." : "Elimina"}
+                      </button>
                     </div>
                   </div>
                 ))}
