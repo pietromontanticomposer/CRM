@@ -36,10 +36,15 @@ type TaskLink = {
   label: string;
 };
 
-type TaskSchedule = {
-  days: CalendarDayKey[];
+type TaskScheduleEntry = {
+  day: CalendarDayKey;
   start: string;
   end: string;
+  allDay?: boolean;
+};
+
+type TaskSchedule = {
+  entries: TaskScheduleEntry[];
 };
 
 type CalendarTask = {
@@ -59,12 +64,17 @@ type TodoDraft = {
   learning: string;
   note: string;
   links: TaskLink[];
-  scheduleDays: CalendarDayKey[];
-  scheduleStart: string;
-  scheduleEnd: string;
+  scheduleByDay: Record<CalendarDayKey, DayScheduleDraft>;
 };
 
 type TodoEditDraft = TodoDraft;
+
+type DayScheduleDraft = {
+  enabled: boolean;
+  allDay: boolean;
+  start: string;
+  end: string;
+};
 
 type TaskMeta = {
   meanwhile: string;
@@ -94,6 +104,20 @@ const priorityStyles: Record<TodoPriority, string> = {
 
 const emptyLink: TaskLink = { url: "", label: "" };
 
+const createEmptyScheduleByDay = (): Record<CalendarDayKey, DayScheduleDraft> =>
+  WEEK_DAY_OPTIONS.reduce(
+    (acc, day) => {
+      acc[day.key] = {
+        enabled: false,
+        allDay: false,
+        start: "",
+        end: "",
+      };
+      return acc;
+    },
+    {} as Record<CalendarDayKey, DayScheduleDraft>
+  );
+
 const emptyDraft: TodoDraft = {
   title: "",
   priority: "media",
@@ -101,9 +125,7 @@ const emptyDraft: TodoDraft = {
   learning: "",
   note: "",
   links: [{ ...emptyLink }],
-  scheduleDays: [],
-  scheduleStart: "",
-  scheduleEnd: "",
+  scheduleByDay: createEmptyScheduleByDay(),
 };
 
 const isCalendarDayKey = (value: string): value is CalendarDayKey =>
@@ -131,9 +153,7 @@ const buildTaskMeta = (
   learning: string,
   note: string,
   links: TaskLink[],
-  scheduleDays: CalendarDayKey[],
-  scheduleStart: string,
-  scheduleEnd: string,
+  scheduleByDay: Record<CalendarDayKey, DayScheduleDraft>,
   selectedPriority: TodoPriority
 ) => {
   const normalizedLinks = links
@@ -143,20 +163,27 @@ const buildTaskMeta = (
     }))
     .filter((link) => Boolean(link.url));
 
-  const normalizedStart = scheduleStart.trim();
-  const normalizedEnd = scheduleEnd.trim();
-  const normalizedDays = Array.from(
-    new Set(scheduleDays.filter((day) => isCalendarDayKey(day)))
+  const normalizedEntries = WEEK_DAY_OPTIONS.reduce<TaskScheduleEntry[]>(
+    (acc, day) => {
+      const daySchedule = scheduleByDay[day.key];
+      if (!daySchedule?.enabled) return acc;
+      if (daySchedule.allDay) {
+        acc.push({ day: day.key, start: "", end: "", allDay: true });
+        return acc;
+      }
+      const start = daySchedule.start.trim();
+      const end = daySchedule.end.trim();
+      if (!start || !end) return acc;
+      acc.push({ day: day.key, start, end });
+      return acc;
+    },
+    []
   );
   const normalizedSchedule =
     selectedPriority === "continuativo" &&
-    normalizedDays.length > 0 &&
-    normalizedStart &&
-    normalizedEnd
+    normalizedEntries.length > 0
       ? {
-          days: normalizedDays,
-          start: normalizedStart,
-          end: normalizedEnd,
+          entries: normalizedEntries,
         }
       : undefined;
 
@@ -232,8 +259,53 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
             const scheduleCandidate = parsedSchedule as Partial<TaskSchedule> & {
               day?: unknown;
               days?: unknown;
+              start?: unknown;
+              end?: unknown;
+              allDay?: unknown;
+              entries?: unknown;
             };
-            const candidateDays = Array.isArray(scheduleCandidate.days)
+
+            const normalizedEntriesFromArray = Array.isArray(
+              scheduleCandidate.entries
+            )
+              ? scheduleCandidate.entries.reduce<TaskScheduleEntry[]>(
+                  (acc, entry) => {
+                    if (!entry || typeof entry !== "object") return acc;
+                    const candidate = entry as Partial<TaskScheduleEntry>;
+                    const day =
+                      typeof candidate.day === "string" &&
+                      isCalendarDayKey(candidate.day)
+                        ? candidate.day
+                        : null;
+                    if (!day) return acc;
+                    const allDay = Boolean(candidate.allDay);
+                    const start =
+                      typeof candidate.start === "string"
+                        ? candidate.start.trim()
+                        : "";
+                    const end =
+                      typeof candidate.end === "string"
+                        ? candidate.end.trim()
+                        : "";
+                    if (allDay || (start && end)) {
+                      acc.push({
+                        day,
+                        start: allDay ? "" : start,
+                        end: allDay ? "" : end,
+                        ...(allDay ? { allDay: true } : {}),
+                      });
+                    }
+                    return acc;
+                  },
+                  []
+                )
+              : [];
+
+            if (normalizedEntriesFromArray.length > 0) {
+              return { entries: normalizedEntriesFromArray };
+            }
+
+            const legacyDays = Array.isArray(scheduleCandidate.days)
               ? scheduleCandidate.days.filter(
                   (day): day is CalendarDayKey =>
                     typeof day === "string" && isCalendarDayKey(day)
@@ -242,18 +314,33 @@ const parseTaskMeta = (value?: string | null): TaskMeta => {
                   isCalendarDayKey(scheduleCandidate.day)
                 ? [scheduleCandidate.day]
                 : [];
-            const days = Array.from(new Set(candidateDays));
-            const start =
+            const uniqueLegacyDays = Array.from(new Set(legacyDays));
+            const legacyAllDay = Boolean(scheduleCandidate.allDay);
+            const legacyStart =
               typeof scheduleCandidate.start === "string"
                 ? scheduleCandidate.start.trim()
                 : "";
-            const end =
+            const legacyEnd =
               typeof scheduleCandidate.end === "string"
                 ? scheduleCandidate.end.trim()
                 : "";
-            if (days.length > 0 && start && end) {
-              return { days, start, end };
+            const legacyEntries = uniqueLegacyDays.reduce<TaskScheduleEntry[]>(
+              (acc, day) => {
+                if (legacyAllDay) {
+                  acc.push({ day, start: "", end: "", allDay: true });
+                  return acc;
+                }
+                if (legacyStart && legacyEnd) {
+                  acc.push({ day, start: legacyStart, end: legacyEnd });
+                }
+                return acc;
+              },
+              []
+            );
+            if (legacyEntries.length > 0) {
+              return { entries: legacyEntries };
             }
+
             return undefined;
           })()
         : undefined;
@@ -407,6 +494,43 @@ const sortCalendarTasks = (a: CalendarTask, b: CalendarTask) => {
   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 };
 
+const toDraftScheduleByDay = (schedule?: TaskSchedule) => {
+  const base = createEmptyScheduleByDay();
+  if (!schedule) return base;
+  schedule.entries.forEach((entry) => {
+    if (!base[entry.day]) return;
+    base[entry.day] = {
+      enabled: true,
+      allDay: Boolean(entry.allDay),
+      start: entry.allDay ? "" : entry.start,
+      end: entry.allDay ? "" : entry.end,
+    };
+  });
+  return base;
+};
+
+const hasIncompleteScheduleSelection = (
+  scheduleByDay: Record<CalendarDayKey, DayScheduleDraft>
+) =>
+  WEEK_DAY_OPTIONS.some((day) => {
+    const schedule = scheduleByDay[day.key];
+    return (
+      schedule.enabled &&
+      !schedule.allDay &&
+      (!schedule.start.trim() || !schedule.end.trim())
+    );
+  });
+
+const hasNoSelectedScheduleDay = (
+  scheduleByDay: Record<CalendarDayKey, DayScheduleDraft>
+) =>
+  !WEEK_DAY_OPTIONS.some((day) => scheduleByDay[day.key].enabled);
+
+const formatScheduleEntry = (entry: TaskScheduleEntry) =>
+  `${calendarDayLabel[entry.day]} · ${
+    entry.allDay ? "Tutto il giorno" : `${entry.start}-${entry.end}`
+  }`;
+
 const syncContinuativiToCalendario = (tasks: TodoTask[]) => {
   if (typeof window === "undefined") return;
 
@@ -417,13 +541,19 @@ const syncContinuativiToCalendario = (tasks: TodoTask[]) => {
     const meta = parseTaskMeta(task.notes);
     const bucket = getTaskBucket(task);
     const schedule = meta.schedule;
-    if (bucket !== "continuativo" || !schedule || schedule.days.length === 0)
+    if (
+      bucket !== "continuativo" ||
+      !schedule ||
+      schedule.entries.length === 0
+    )
       return;
 
-    const timeSlot = `${schedule.start}-${schedule.end}`;
-    schedule.days.forEach((day) => {
-      todoByDay[day].push({
-        id: `todo-${task.id}-${day}`,
+    schedule.entries.forEach((entry, index) => {
+      const timeSlot = entry.allDay
+        ? "Tutto il giorno"
+        : `${entry.start}-${entry.end}`;
+      todoByDay[entry.day].push({
+        id: `todo-${task.id}-${entry.day}-${index}`,
         title: task.title,
         isDone: task.is_done,
         createdAt: task.created_at,
@@ -546,30 +676,92 @@ export default function TodoBoard() {
 
   const toggleDraftScheduleDay = (day: CalendarDayKey) => {
     setDraft((prev) => {
-      const hasDay = prev.scheduleDays.includes(day);
+      const daySchedule = prev.scheduleByDay[day];
+      const enabled = !daySchedule.enabled;
       return {
         ...prev,
-        scheduleDays: hasDay
-          ? prev.scheduleDays.filter((currentDay) => currentDay !== day)
-          : [...prev.scheduleDays, day],
+        scheduleByDay: {
+          ...prev.scheduleByDay,
+          [day]: {
+            ...daySchedule,
+            enabled,
+            ...(enabled
+              ? {}
+              : {
+                  allDay: false,
+                  start: "",
+                  end: "",
+                }),
+          },
+        },
       };
     });
+  };
+
+  const updateDraftDaySchedule = (
+    day: CalendarDayKey,
+    patch: Partial<DayScheduleDraft>
+  ) => {
+    setDraft((prev) => ({
+      ...prev,
+      scheduleByDay: {
+        ...prev.scheduleByDay,
+        [day]: {
+          ...prev.scheduleByDay[day],
+          ...patch,
+        },
+      },
+    }));
   };
 
   const toggleEditScheduleDay = (taskId: string, day: CalendarDayKey) => {
     setEditDraftById((prev) => {
       const currentDraft = prev[taskId];
       if (!currentDraft) return prev;
-      const hasDay = currentDraft.scheduleDays.includes(day);
+      const daySchedule = currentDraft.scheduleByDay[day];
+      const enabled = !daySchedule.enabled;
       return {
         ...prev,
         [taskId]: {
           ...currentDraft,
-          scheduleDays: hasDay
-            ? currentDraft.scheduleDays.filter(
-                (currentDay) => currentDay !== day
-              )
-            : [...currentDraft.scheduleDays, day],
+          scheduleByDay: {
+            ...currentDraft.scheduleByDay,
+            [day]: {
+              ...daySchedule,
+              enabled,
+              ...(enabled
+                ? {}
+                : {
+                    allDay: false,
+                    start: "",
+                    end: "",
+                  }),
+            },
+          },
+        },
+      };
+    });
+  };
+
+  const updateEditDaySchedule = (
+    taskId: string,
+    day: CalendarDayKey,
+    patch: Partial<DayScheduleDraft>
+  ) => {
+    setEditDraftById((prev) => {
+      const currentDraft = prev[taskId];
+      if (!currentDraft) return prev;
+      return {
+        ...prev,
+        [taskId]: {
+          ...currentDraft,
+          scheduleByDay: {
+            ...currentDraft.scheduleByDay,
+            [day]: {
+              ...currentDraft.scheduleByDay[day],
+              ...patch,
+            },
+          },
         },
       };
     });
@@ -637,9 +829,7 @@ export default function TodoBoard() {
           draft.learning,
           draft.note,
           draft.links,
-          draft.scheduleDays,
-          draft.scheduleStart,
-          draft.scheduleEnd,
+          draft.scheduleByDay,
           draft.priority
         ),
         due_date: null,
@@ -698,9 +888,7 @@ export default function TodoBoard() {
         learning: meta.learning,
         note: meta.note,
         links: meta.links.length > 0 ? meta.links : [{ ...emptyLink }],
-        scheduleDays: meta.schedule?.days ?? [],
-        scheduleStart: meta.schedule?.start ?? "",
-        scheduleEnd: meta.schedule?.end ?? "",
+        scheduleByDay: toDraftScheduleByDay(meta.schedule),
       },
     }));
     setOpenTaskDetailsById((prev) => ({ ...prev, [task.id]: true }));
@@ -741,9 +929,7 @@ export default function TodoBoard() {
           editDraft.learning,
           editDraft.note,
           editDraft.links,
-          editDraft.scheduleDays,
-          editDraft.scheduleStart,
-          editDraft.scheduleEnd,
+          editDraft.scheduleByDay,
           editDraft.priority
         ),
       })
@@ -853,9 +1039,7 @@ export default function TodoBoard() {
                     ...(event.target.value === "continuativo"
                       ? {}
                       : {
-                          scheduleDays: [],
-                          scheduleStart: "",
-                          scheduleEnd: "",
+                          scheduleByDay: createEmptyScheduleByDay(),
                         }),
                   }))
                 }
@@ -906,58 +1090,80 @@ export default function TodoBoard() {
                   Calendario (Modulo 03)
                 </p>
                 <p className="text-[10px] text-[var(--muted)]">
-                  Il collegamento e implicito: scegli uno o piu giorni con la
-                  fascia oraria e il task continuativo appare nel Calendario.
+                  Il collegamento e implicito: per ogni giorno selezionato scegli
+                  `Tutto il giorno` oppure imposta orario `Da/A`.
                 </p>
-                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-2">
                   {WEEK_DAY_OPTIONS.map((day) => (
-                    <label
+                    <div
                       key={`new-day-${day.key}`}
-                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-2 py-1 text-xs text-[var(--ink)]"
+                      className="grid gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-2"
                     >
-                      <input
-                        type="checkbox"
-                        checked={draft.scheduleDays.includes(day.key)}
-                        onChange={() => toggleDraftScheduleDay(day.key)}
-                        className="h-4 w-4 accent-[var(--accent)]"
-                      />
-                      {day.label}
-                    </label>
+                      <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
+                        <input
+                          type="checkbox"
+                          checked={draft.scheduleByDay[day.key].enabled}
+                          onChange={() => toggleDraftScheduleDay(day.key)}
+                          className="h-4 w-4 accent-[var(--accent)]"
+                        />
+                        {day.label}
+                      </label>
+                      {draft.scheduleByDay[day.key].enabled && (
+                        <div className="grid gap-2 lg:grid-cols-[auto_1fr_1fr]">
+                          <label className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                            <input
+                              type="checkbox"
+                              checked={draft.scheduleByDay[day.key].allDay}
+                              onChange={(event) =>
+                                updateDraftDaySchedule(day.key, {
+                                  allDay: event.target.checked,
+                                  ...(event.target.checked
+                                    ? { start: "", end: "" }
+                                    : {}),
+                                })
+                              }
+                              className="h-4 w-4 accent-[var(--accent)]"
+                            />
+                            Tutto il giorno
+                          </label>
+                          {!draft.scheduleByDay[day.key].allDay && (
+                            <>
+                              <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                Da
+                                <input
+                                  type="time"
+                                  value={draft.scheduleByDay[day.key].start}
+                                  onChange={(event) =>
+                                    updateDraftDaySchedule(day.key, {
+                                      start: event.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                A
+                                <input
+                                  type="time"
+                                  value={draft.scheduleByDay[day.key].end}
+                                  onChange={(event) =>
+                                    updateDraftDaySchedule(day.key, {
+                                      end: event.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
-                <div className="grid gap-2 lg:grid-cols-2">
-                  <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                    Da
-                    <input
-                      type="time"
-                      value={draft.scheduleStart}
-                      onChange={(event) =>
-                        setDraft((prev) => ({
-                          ...prev,
-                          scheduleStart: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                    A
-                    <input
-                      type="time"
-                      value={draft.scheduleEnd}
-                      onChange={(event) =>
-                        setDraft((prev) => ({
-                          ...prev,
-                          scheduleEnd: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-                {(draft.scheduleDays.length === 0 ||
-                  !draft.scheduleStart ||
-                  !draft.scheduleEnd) && (
+                {(hasNoSelectedScheduleDay(draft.scheduleByDay) ||
+                  hasIncompleteScheduleSelection(draft.scheduleByDay)) && (
                   <p className="text-[10px] text-amber-200">
-                    Completa Giorni, Da e A per mostrare il task nel Calendario.
+                    Seleziona almeno un giorno e imposta `Tutto il giorno` oppure
+                    `Da/A` per ogni giorno selezionato.
                   </p>
                 )}
               </div>
@@ -1130,9 +1336,8 @@ export default function TodoBoard() {
                                       ...(event.target.value === "continuativo"
                                         ? {}
                                         : {
-                                            scheduleDays: [],
-                                            scheduleStart: "",
-                                            scheduleEnd: "",
+                                            scheduleByDay:
+                                              createEmptyScheduleByDay(),
                                           }),
                                     },
                                   }))
@@ -1151,70 +1356,111 @@ export default function TodoBoard() {
                                     Calendario (Modulo 03)
                                   </p>
                                   <p className="text-[10px] text-[var(--muted)]">
-                                    Collegamento implicito: scegli uno o piu giorni
-                                    con la fascia oraria e il task appare nel
-                                    Calendario.
+                                    Collegamento implicito: per ogni giorno
+                                    selezionato scegli `Tutto il giorno` oppure
+                                    imposta orario `Da/A`.
                                   </p>
-                                  <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+                                  <div className="grid gap-2">
                                     {WEEK_DAY_OPTIONS.map((day) => (
-                                      <label
+                                      <div
                                         key={`${task.id}-edit-open-day-${day.key}`}
-                                        className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-1 text-xs text-[var(--ink)]"
+                                        className="grid gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] p-2"
                                       >
-                                        <input
-                                          type="checkbox"
-                                          checked={editDraft.scheduleDays.includes(
-                                            day.key
-                                          )}
-                                          onChange={() =>
-                                            toggleEditScheduleDay(task.id, day.key)
-                                          }
-                                          className="h-4 w-4 accent-[var(--accent)]"
-                                        />
-                                        {day.label}
-                                      </label>
+                                        <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
+                                          <input
+                                            type="checkbox"
+                                            checked={
+                                              editDraft.scheduleByDay[day.key].enabled
+                                            }
+                                            onChange={() =>
+                                              toggleEditScheduleDay(task.id, day.key)
+                                            }
+                                            className="h-4 w-4 accent-[var(--accent)]"
+                                          />
+                                          {day.label}
+                                        </label>
+                                        {editDraft.scheduleByDay[day.key].enabled && (
+                                          <div className="grid gap-2 lg:grid-cols-[auto_1fr_1fr]">
+                                            <label className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                              <input
+                                                type="checkbox"
+                                                checked={
+                                                  editDraft.scheduleByDay[day.key]
+                                                    .allDay
+                                                }
+                                                onChange={(event) =>
+                                                  updateEditDaySchedule(
+                                                    task.id,
+                                                    day.key,
+                                                    {
+                                                      allDay: event.target.checked,
+                                                      ...(event.target.checked
+                                                        ? { start: "", end: "" }
+                                                        : {}),
+                                                    }
+                                                  )
+                                                }
+                                                className="h-4 w-4 accent-[var(--accent)]"
+                                              />
+                                              Tutto il giorno
+                                            </label>
+                                            {!editDraft.scheduleByDay[day.key]
+                                              .allDay && (
+                                              <>
+                                                <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                                  Da
+                                                  <input
+                                                    type="time"
+                                                    value={
+                                                      editDraft.scheduleByDay[
+                                                        day.key
+                                                      ].start
+                                                    }
+                                                    onChange={(event) =>
+                                                      updateEditDaySchedule(
+                                                        task.id,
+                                                        day.key,
+                                                        {
+                                                          start:
+                                                            event.target.value,
+                                                        }
+                                                      )
+                                                    }
+                                                  />
+                                                </label>
+                                                <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                                  A
+                                                  <input
+                                                    type="time"
+                                                    value={
+                                                      editDraft.scheduleByDay[
+                                                        day.key
+                                                      ].end
+                                                    }
+                                                    onChange={(event) =>
+                                                      updateEditDaySchedule(
+                                                        task.id,
+                                                        day.key,
+                                                        { end: event.target.value }
+                                                      )
+                                                    }
+                                                  />
+                                                </label>
+                                              </>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     ))}
                                   </div>
-                                  <div className="grid gap-2 lg:grid-cols-2">
-                                    <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                      Da
-                                      <input
-                                        type="time"
-                                        value={editDraft.scheduleStart}
-                                        onChange={(event) =>
-                                          setEditDraftById((prev) => ({
-                                            ...prev,
-                                            [task.id]: {
-                                              ...editDraft,
-                                              scheduleStart: event.target.value,
-                                            },
-                                          }))
-                                        }
-                                      />
-                                    </label>
-                                    <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                      A
-                                      <input
-                                        type="time"
-                                        value={editDraft.scheduleEnd}
-                                        onChange={(event) =>
-                                          setEditDraftById((prev) => ({
-                                            ...prev,
-                                            [task.id]: {
-                                              ...editDraft,
-                                              scheduleEnd: event.target.value,
-                                            },
-                                          }))
-                                        }
-                                      />
-                                    </label>
-                                  </div>
-                                  {(editDraft.scheduleDays.length === 0 ||
-                                    !editDraft.scheduleStart ||
-                                    !editDraft.scheduleEnd) && (
+                                  {(hasNoSelectedScheduleDay(editDraft.scheduleByDay) ||
+                                    hasIncompleteScheduleSelection(
+                                      editDraft.scheduleByDay
+                                    )) && (
                                     <p className="text-[10px] text-amber-200">
-                                      Completa Giorni, Da e A per mostrare il task
-                                      nel Calendario.
+                                      Seleziona almeno un giorno e imposta `Tutto
+                                      il giorno` oppure `Da/A` per ogni giorno
+                                      selezionato.
                                     </p>
                                   )}
                                 </div>
@@ -1360,11 +1606,9 @@ export default function TodoBoard() {
                                     Calendario
                                   </p>
                                   <p className="mt-0.5 whitespace-pre-wrap text-[var(--ink)]">
-                                    {meta.schedule.days
-                                      .map((day) => calendarDayLabel[day])
-                                      .join(", ")}{" "}
-                                    ·{" "}
-                                    {meta.schedule.start}-{meta.schedule.end}
+                                    {meta.schedule.entries
+                                      .map((entry) => formatScheduleEntry(entry))
+                                      .join(" | ")}
                                   </p>
                                 </div>
                               )}
@@ -1471,9 +1715,7 @@ export default function TodoBoard() {
                               ...(event.target.value === "continuativo"
                                 ? {}
                                 : {
-                                    scheduleDays: [],
-                                    scheduleStart: "",
-                                    scheduleEnd: "",
+                                    scheduleByDay: createEmptyScheduleByDay(),
                                   }),
                             },
                           }))
@@ -1492,67 +1734,96 @@ export default function TodoBoard() {
                             Calendario (Modulo 03)
                           </p>
                           <p className="text-[10px] text-[var(--muted)]">
-                            Collegamento implicito: scegli uno o piu giorni con
-                            la fascia oraria e il task appare nel Calendario.
+                            Collegamento implicito: per ogni giorno selezionato
+                            scegli `Tutto il giorno` oppure imposta orario `Da/A`.
                           </p>
-                          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
+                          <div className="grid gap-2">
                             {WEEK_DAY_OPTIONS.map((day) => (
-                              <label
+                              <div
                                 key={`${task.id}-edit-done-day-${day.key}`}
-                                className="inline-flex items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-1 text-xs text-[var(--ink)]"
+                                className="grid gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] p-2"
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={editDraft.scheduleDays.includes(day.key)}
-                                  onChange={() =>
-                                    toggleEditScheduleDay(task.id, day.key)
-                                  }
-                                  className="h-4 w-4 accent-[var(--accent)]"
-                                />
-                                {day.label}
-                              </label>
+                                <label className="inline-flex items-center gap-2 text-xs font-semibold text-[var(--ink)]">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      editDraft.scheduleByDay[day.key].enabled
+                                    }
+                                    onChange={() =>
+                                      toggleEditScheduleDay(task.id, day.key)
+                                    }
+                                    className="h-4 w-4 accent-[var(--accent)]"
+                                  />
+                                  {day.label}
+                                </label>
+                                {editDraft.scheduleByDay[day.key].enabled && (
+                                  <div className="grid gap-2 lg:grid-cols-[auto_1fr_1fr]">
+                                    <label className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                      <input
+                                        type="checkbox"
+                                        checked={
+                                          editDraft.scheduleByDay[day.key].allDay
+                                        }
+                                        onChange={(event) =>
+                                          updateEditDaySchedule(task.id, day.key, {
+                                            allDay: event.target.checked,
+                                            ...(event.target.checked
+                                              ? { start: "", end: "" }
+                                              : {}),
+                                          })
+                                        }
+                                        className="h-4 w-4 accent-[var(--accent)]"
+                                      />
+                                      Tutto il giorno
+                                    </label>
+                                    {!editDraft.scheduleByDay[day.key].allDay && (
+                                      <>
+                                        <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                          Da
+                                          <input
+                                            type="time"
+                                            value={
+                                              editDraft.scheduleByDay[day.key].start
+                                            }
+                                            onChange={(event) =>
+                                              updateEditDaySchedule(
+                                                task.id,
+                                                day.key,
+                                                { start: event.target.value }
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                        <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                          A
+                                          <input
+                                            type="time"
+                                            value={
+                                              editDraft.scheduleByDay[day.key].end
+                                            }
+                                            onChange={(event) =>
+                                              updateEditDaySchedule(
+                                                task.id,
+                                                day.key,
+                                                { end: event.target.value }
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             ))}
                           </div>
-                          <div className="grid gap-2 lg:grid-cols-2">
-                            <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                              Da
-                              <input
-                                type="time"
-                                value={editDraft.scheduleStart}
-                                onChange={(event) =>
-                                  setEditDraftById((prev) => ({
-                                    ...prev,
-                                    [task.id]: {
-                                      ...editDraft,
-                                      scheduleStart: event.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </label>
-                            <label className="grid gap-1 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                              A
-                              <input
-                                type="time"
-                                value={editDraft.scheduleEnd}
-                                onChange={(event) =>
-                                  setEditDraftById((prev) => ({
-                                    ...prev,
-                                    [task.id]: {
-                                      ...editDraft,
-                                      scheduleEnd: event.target.value,
-                                    },
-                                  }))
-                                }
-                              />
-                            </label>
-                          </div>
-                          {(editDraft.scheduleDays.length === 0 ||
-                            !editDraft.scheduleStart ||
-                            !editDraft.scheduleEnd) && (
+                          {(hasNoSelectedScheduleDay(editDraft.scheduleByDay) ||
+                            hasIncompleteScheduleSelection(
+                              editDraft.scheduleByDay
+                            )) && (
                             <p className="text-[10px] text-amber-200">
-                              Completa Giorni, Da e A per mostrare il task nel
-                              Calendario.
+                              Seleziona almeno un giorno e imposta `Tutto il
+                              giorno` oppure `Da/A` per ogni giorno selezionato.
                             </p>
                           )}
                         </div>
@@ -1731,11 +2002,9 @@ export default function TodoBoard() {
                           {meta.schedule && (
                             <p className="whitespace-pre-wrap">
                               Calendario:{" "}
-                              {meta.schedule.days
-                                .map((day) => calendarDayLabel[day])
-                                .join(", ")}{" "}
-                              ·{" "}
-                              {meta.schedule.start}-{meta.schedule.end}
+                              {meta.schedule.entries
+                                .map((entry) => formatScheduleEntry(entry))
+                                .join(" | ")}
                             </p>
                           )}
                           {meta.note && (
