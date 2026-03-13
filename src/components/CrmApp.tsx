@@ -987,7 +987,6 @@ export default function CrmApp() {
     const readMap = payload.readMap || {};
     setEmails(emailRows);
     setEmailReadById(readMap);
-    await refreshSummary(contactId, false);
     setEmailsLoading(false);
   };
 
