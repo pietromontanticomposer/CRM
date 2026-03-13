@@ -4,6 +4,13 @@ import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type ContactRow = {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+};
+
 type ContactInsert = {
   name: string;
   email: string | null;
@@ -49,6 +56,35 @@ const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
   };
 };
 
+const getTimestamp = (value?: string | null) => {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const sortContactsByActivity = <TRow extends ContactRow>(
+  contacts: TRow[],
+  lastInboundAtByContactId: Map<string, string>
+) =>
+  [...contacts].sort((a, b) => {
+    const aActivity = Math.max(
+      getTimestamp(a.updated_at),
+      getTimestamp(lastInboundAtByContactId.get(a.id)),
+      getTimestamp(a.created_at)
+    );
+    const bActivity = Math.max(
+      getTimestamp(b.updated_at),
+      getTimestamp(lastInboundAtByContactId.get(b.id)),
+      getTimestamp(b.created_at)
+    );
+
+    if (aActivity !== bActivity) {
+      return bActivity - aActivity;
+    }
+
+    return getTimestamp(b.created_at) - getTimestamp(a.created_at);
+  });
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   const details = [
     error instanceof Error ? error.message : "",
@@ -72,7 +108,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("contacts")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("updated_at", { ascending: false });
 
     if (error) {
       console.error("GET /api/contacts failed", error);
@@ -82,7 +118,55 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ contacts: data ?? [] });
+    const { data: inboundEmails, error: inboundEmailsError } = await supabase
+      .from("emails")
+      .select("contact_id, received_at, created_at")
+      .eq("direction", "inbound")
+      .not("contact_id", "is", null);
+
+    if (inboundEmailsError) {
+      console.error("GET /api/contacts inbound email fetch failed", inboundEmailsError);
+      return NextResponse.json(
+        { error: getErrorMessage(inboundEmailsError, "Impossibile caricare i contatti.") },
+        { status: 500 }
+      );
+    }
+
+    const lastInboundAtByContactId = new Map<string, string>();
+    (inboundEmails ?? []).forEach((row) => {
+      if (!row.contact_id) return;
+      const candidate = row.received_at ?? row.created_at ?? null;
+      if (!candidate) return;
+      const current = lastInboundAtByContactId.get(row.contact_id);
+      if (getTimestamp(candidate) > getTimestamp(current)) {
+        lastInboundAtByContactId.set(row.contact_id, candidate);
+      }
+    });
+
+    const contacts = sortContactsByActivity(
+      ((data ?? []) as unknown) as ContactRow[],
+      lastInboundAtByContactId
+    ).map((contact) => ({
+      ...contact,
+      last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
+      activity_at: (() => {
+        const candidates = [
+          contact.updated_at,
+          lastInboundAtByContactId.get(contact.id) ?? null,
+          contact.created_at,
+        ];
+        let best: string | null = null;
+        candidates.forEach((value) => {
+          if (!value) return;
+          if (getTimestamp(value) > getTimestamp(best)) {
+            best = value;
+          }
+        });
+        return best;
+      })(),
+    }));
+
+    return NextResponse.json({ contacts });
   } catch (error) {
     console.error("GET /api/contacts unexpected error", error);
     return NextResponse.json(

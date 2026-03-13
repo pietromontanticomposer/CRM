@@ -28,6 +28,8 @@ type Contact = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  last_inbound_email_at?: string | null;
+  activity_at?: string | null;
 };
 
 type DraftContact = Omit<Contact, "created_at" | "updated_at">;
@@ -471,6 +473,22 @@ const getDisplayName = (contact: Pick<Contact, "name" | "company" | "email">) =>
   contact.email?.trim() ||
   "Senza nome";
 
+const getContactActivityTimestamp = (contact: Contact) =>
+  Math.max(
+    getTimestamp(contact.activity_at ?? null),
+    getTimestamp(contact.last_inbound_email_at ?? null),
+    getTimestamp(contact.updated_at),
+    getTimestamp(contact.created_at)
+  );
+
+const sortContacts = (contacts: Contact[]) =>
+  [...contacts].sort((a, b) => {
+    const activityDiff =
+      getContactActivityTimestamp(b) - getContactActivityTimestamp(a);
+    if (activityDiff !== 0) return activityDiff;
+    return getTimestamp(b.created_at) - getTimestamp(a.created_at);
+  });
+
 const buildDraft = (contact: Contact): DraftContact => ({
   id: contact.id,
   name: contact.name,
@@ -822,7 +840,7 @@ export default function CrmApp() {
     }
 
     const payload = (await response.json()) as ContactsApiResponse;
-    const nextContacts = payload.contacts || [];
+    const nextContacts = sortContacts(payload.contacts || []);
     setContacts(nextContacts);
     if (!silent) {
       setLoading(false);
@@ -936,7 +954,9 @@ export default function CrmApp() {
 
   const applyContactUpdate = (updated: Contact) => {
     setContacts((prev) =>
-      prev.map((contact) => (contact.id === updated.id ? updated : contact))
+      sortContacts(
+        prev.map((contact) => (contact.id === updated.id ? updated : contact))
+      )
     );
     if (selectedId === updated.id) {
       setDraft(buildDraft(updated));
@@ -1224,10 +1244,12 @@ export default function CrmApp() {
         };
         if (payload?.applied_status) {
           setContacts((prev) =>
-            prev.map((contact) =>
-              contact.id === selected.id
-                ? { ...contact, status: payload.applied_status as Status }
-                : contact
+            sortContacts(
+              prev.map((contact) =>
+                contact.id === selected.id
+                  ? { ...contact, status: payload.applied_status as Status }
+                  : contact
+              )
             )
           );
           setDraft((prev) =>
@@ -1331,7 +1353,7 @@ export default function CrmApp() {
 
     const payload = (await response.json()) as ContactsApiResponse;
     const created = payload.contact as Contact;
-    setContacts((prev) => [created, ...prev]);
+    setContacts((prev) => sortContacts([created, ...prev]));
     handleSelectContact(created);
     setNewContact(emptyNewContact);
     setAdding(false);
@@ -1375,7 +1397,9 @@ export default function CrmApp() {
     const payload = (await response.json()) as ContactsApiResponse;
     const updated = payload.contact as Contact;
     setContacts((prev) =>
-      prev.map((contact) => (contact.id === id ? updated : contact))
+      sortContacts(
+        prev.map((contact) => (contact.id === id ? updated : contact))
+      )
     );
     setDraft(buildDraft(updated));
     setSaving(false);
