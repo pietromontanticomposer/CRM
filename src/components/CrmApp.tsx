@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 const STATUS_OPTIONS = [
   "Da contattare",
@@ -691,6 +691,8 @@ export default function CrmApp() {
     Record<string, "recontacted" | "keepwarm">
   >({});
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
+  const emailRequestIdRef = useRef(0);
+  const summaryRequestIdRef = useRef(0);
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
   const selectedEmail =
@@ -941,20 +943,43 @@ export default function CrmApp() {
     return nextContacts;
   };
 
-  const loadEmails = async (contactId: string | null, email?: string | null) => {
+  const loadEmails = async (
+    contactId: string | null,
+    email?: string | null,
+    options?: { resetConversation?: boolean }
+  ) => {
+    const resetConversation = options?.resetConversation ?? false;
     if (!contactId) {
+      emailRequestIdRef.current += 1;
+      summaryRequestIdRef.current += 1;
       setEmails([]);
       setSelectedEmailId(null);
       setEmailReadById({});
+      setOpenThreads({});
+      setEmailsLoading(false);
+      setEmailsError(null);
       setSummary(null);
+      setSummaryLoading(false);
       setSummaryError(null);
       return;
     }
 
+    const requestId = emailRequestIdRef.current + 1;
+    emailRequestIdRef.current = requestId;
+
+    if (resetConversation) {
+      summaryRequestIdRef.current += 1;
+      setEmails([]);
+      setSelectedEmailId(null);
+      setEmailReadById({});
+      setOpenThreads({});
+      setSummary(null);
+      setSummaryLoading(false);
+      setSummaryError(null);
+    }
+
     setEmailsLoading(true);
     setEmailsError(null);
-    setSummary(null);
-    setSummaryError(null);
     const query = new URLSearchParams();
     if (email?.trim()) {
       query.set("email", email);
@@ -971,18 +996,21 @@ export default function CrmApp() {
     ).catch(() => null);
 
     if (!response) {
+      if (emailRequestIdRef.current !== requestId) return;
       setEmailsError("Impossibile caricare le email. Il server non risponde.");
       setEmailsLoading(false);
       return;
     }
 
     if (!response.ok) {
+      if (emailRequestIdRef.current !== requestId) return;
       setEmailsError(await readApiError(response, "Impossibile caricare le email."));
       setEmailsLoading(false);
       return;
     }
 
     const payload = (await response.json()) as EmailsApiResponse;
+    if (emailRequestIdRef.current !== requestId) return;
     const emailRows = payload.emails || [];
     const readMap = payload.readMap || {};
     setEmails(emailRows);
@@ -991,6 +1019,8 @@ export default function CrmApp() {
   };
 
   const refreshSummary = async (contactId: string, force = false) => {
+    const requestId = summaryRequestIdRef.current + 1;
+    summaryRequestIdRef.current = requestId;
     setSummaryLoading(true);
     setSummaryError(null);
     try {
@@ -1002,6 +1032,7 @@ export default function CrmApp() {
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => ({}));
+        if (summaryRequestIdRef.current !== requestId) return;
         setSummaryError(
           errorPayload?.error ||
             "Impossibile generare il riassunto. Riprova."
@@ -1018,6 +1049,7 @@ export default function CrmApp() {
         rate_limited?: boolean;
       };
 
+      if (summaryRequestIdRef.current !== requestId) return;
       const raw = payload.summary ?? "";
       setSummary({
         raw,
@@ -1030,17 +1062,19 @@ export default function CrmApp() {
       setSummaryLoading(false);
     } catch (error) {
       console.error(error);
+      if (summaryRequestIdRef.current !== requestId) return;
       setSummaryError("Impossibile generare il riassunto. Riprova.");
       setSummaryLoading(false);
     }
   };
 
   const handleSelectContact = (contact: Contact) => {
+    const shouldResetConversation = selectedId !== contact.id;
     setSelectedId(contact.id);
     setDraft(buildDraft(contact));
-    setSelectedEmailId(null);
-    setOpenThreads({});
-    loadEmails(contact.id, contact.email);
+    void loadEmails(contact.id, contact.email, {
+      resetConversation: shouldResetConversation,
+    });
   };
 
   const applyContactUpdate = (updated: Contact) => {
@@ -1857,13 +1891,14 @@ export default function CrmApp() {
           <button
             type="button"
             onClick={() => loadEmails(selected.id, selected.email)}
-            className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)]"
+            disabled={emailsLoading}
+            className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)] disabled:opacity-60"
           >
-            Aggiorna
+            {emailsLoading ? "Aggiorno..." : "Aggiorna"}
           </button>
         </div>
 
-        {emailsLoading && (
+        {emailsLoading && emails.length === 0 && (
           <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-sm text-[var(--muted)]">
             Caricamento email...
           </div>
@@ -1912,7 +1947,7 @@ export default function CrmApp() {
               </div>
             )}
 
-            {!summary && !summaryLoading && (
+            {!summary && !summaryLoading && !summaryError && (
               <div className="mt-3 text-sm text-[var(--muted)]">
                 Nessun riassunto disponibile. Premi “Aggiorna riassunto”.
               </div>
