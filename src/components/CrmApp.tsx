@@ -478,6 +478,22 @@ const sanitizeHtml = (html: string) => {
     anchor.setAttribute("rel", "noreferrer");
   });
 
+  doc.querySelectorAll("img").forEach((image) => {
+    const src = image.getAttribute("src")?.trim() || "";
+    if (!src) {
+      image.remove();
+      return;
+    }
+
+    image.setAttribute("loading", "lazy");
+    image.setAttribute("decoding", "async");
+    image.setAttribute("referrerpolicy", "no-referrer");
+    image.removeAttribute("srcset");
+    if (!image.getAttribute("alt")) {
+      image.setAttribute("alt", "");
+    }
+  });
+
   return doc.body.innerHTML;
 };
 

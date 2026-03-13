@@ -94,10 +94,6 @@ summary::-webkit-details-marker {
   word-break: break-word;
 }
 
-.email-html * {
-  color: inherit;
-}
-
 .email-html img {
   max-width: 100%;
   height: auto;
