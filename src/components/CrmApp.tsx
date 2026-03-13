@@ -695,6 +695,10 @@ export default function CrmApp() {
   const summaryRequestIdRef = useRef(0);
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
+  const conversationRefreshing = Boolean(
+    selected &&
+      (emailsLoading || backfillByContact[selected.id] === "pending")
+  );
   const selectedEmail =
     emails.find((email) => email.id === selectedEmailId) || null;
   const selectedEmailAttachments = useMemo(
@@ -733,7 +737,7 @@ export default function CrmApp() {
         if (!response.ok) return;
         const payload = (await response.json()) as { updated?: boolean };
         if (payload?.updated) {
-          await loadEmails(selected.id, selected.email);
+          await loadEmails(selected.id, selected.email, { background: true });
         }
       } catch (error) {
         console.error(error);
@@ -946,9 +950,10 @@ export default function CrmApp() {
   const loadEmails = async (
     contactId: string | null,
     email?: string | null,
-    options?: { resetConversation?: boolean }
+    options?: { resetConversation?: boolean; background?: boolean }
   ) => {
     const resetConversation = options?.resetConversation ?? false;
+    const background = options?.background ?? false;
     if (!contactId) {
       emailRequestIdRef.current += 1;
       summaryRequestIdRef.current += 1;
@@ -978,8 +983,10 @@ export default function CrmApp() {
       setSummaryError(null);
     }
 
-    setEmailsLoading(true);
-    setEmailsError(null);
+    if (!background) {
+      setEmailsLoading(true);
+      setEmailsError(null);
+    }
     const query = new URLSearchParams();
     if (email?.trim()) {
       query.set("email", email);
@@ -997,14 +1004,20 @@ export default function CrmApp() {
 
     if (!response) {
       if (emailRequestIdRef.current !== requestId) return;
-      setEmailsError("Impossibile caricare le email. Il server non risponde.");
+      if (!background) {
+        setEmailsError("Impossibile caricare le email. Il server non risponde.");
+      }
       setEmailsLoading(false);
       return;
     }
 
     if (!response.ok) {
       if (emailRequestIdRef.current !== requestId) return;
-      setEmailsError(await readApiError(response, "Impossibile caricare le email."));
+      if (!background) {
+        setEmailsError(
+          await readApiError(response, "Impossibile caricare le email.")
+        );
+      }
       setEmailsLoading(false);
       return;
     }
@@ -1016,6 +1029,57 @@ export default function CrmApp() {
     setEmails(emailRows);
     setEmailReadById(readMap);
     setEmailsLoading(false);
+  };
+
+  const runBackfillForContact = async (
+    contactId: string,
+    email?: string | null
+  ) => {
+    const emailList = extractEmails(email);
+    if (!emailList.length) return;
+    if (backfillByContact[contactId] === "pending") return;
+
+    setBackfillByContact((prev) => ({ ...prev, [contactId]: "pending" }));
+    try {
+      let beforeUid: number | null = null;
+      let batchCount = 0;
+
+      while (batchCount < 20) {
+        const response = await fetch("/api/gmail/backfill-contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            emails: emailList,
+            contactId,
+            limit: 400,
+            beforeUid,
+          }),
+        });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as {
+          nextCursor?: number | null;
+        };
+        const nextCursor =
+          typeof payload?.nextCursor === "number" && payload.nextCursor > 0
+            ? payload.nextCursor
+            : null;
+
+        batchCount += 1;
+        if (!nextCursor) {
+          break;
+        }
+        beforeUid = nextCursor;
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setBackfillByContact((prev) => {
+        const next = { ...prev };
+        delete next[contactId];
+        return next;
+      });
+    }
   };
 
   const refreshSummary = async (contactId: string, force = false) => {
@@ -1441,77 +1505,15 @@ export default function CrmApp() {
     setSyncing(false);
   };
 
+  const handleRefreshConversation = async () => {
+    if (!selected || conversationRefreshing) return;
+    await runBackfillForContact(selected.id, selected.email);
+    await loadEmails(selected.id, selected.email);
+  };
+
   useEffect(() => {
     loadContacts();
   }, []);
-
-  useEffect(() => {
-    if (!selected || emailsLoading) return;
-    const selectedId = selected.id;
-    const selectedEmail = selected.email;
-    const emailList = extractEmails(selectedEmail);
-    if (!emailList.length) return;
-    if (backfillByContact[selectedId]) return;
-
-    setBackfillByContact((prev) => ({ ...prev, [selectedId]: "pending" }));
-    let cancelled = false;
-
-    const run = async () => {
-      try {
-        let beforeUid: number | null = null;
-        let batchCount = 0;
-
-        while (!cancelled && batchCount < 20) {
-          const response = await fetch("/api/gmail/backfill-contact", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              emails: emailList,
-              contactId: selectedId,
-              limit: 400,
-              beforeUid,
-            }),
-          });
-          if (!response.ok) return;
-
-          const payload = (await response.json()) as {
-            nextCursor?: number | null;
-          };
-          const nextCursor =
-            typeof payload?.nextCursor === "number" && payload.nextCursor > 0
-              ? payload.nextCursor
-              : null;
-
-          batchCount += 1;
-          if (!nextCursor) {
-            break;
-          }
-          beforeUid = nextCursor;
-        }
-
-        if (cancelled) return;
-        await loadEmails(selectedId, selectedEmail);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setBackfillByContact((prev) => {
-          const next = { ...prev };
-          if (cancelled) {
-            delete next[selectedId];
-          } else {
-            next[selectedId] = "done";
-          }
-          return next;
-        });
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, selected?.email, emailsLoading]);
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
@@ -1890,11 +1892,11 @@ export default function CrmApp() {
           </div>
           <button
             type="button"
-            onClick={() => loadEmails(selected.id, selected.email)}
-            disabled={emailsLoading}
+            onClick={handleRefreshConversation}
+            disabled={conversationRefreshing}
             className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)] disabled:opacity-60"
           >
-            {emailsLoading ? "Aggiorno..." : "Aggiorna"}
+            {conversationRefreshing ? "Aggiorno..." : "Aggiorna"}
           </button>
         </div>
 
