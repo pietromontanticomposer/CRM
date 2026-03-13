@@ -2071,7 +2071,7 @@ export default function CrmApp() {
       </header>
 
       <main className="relative mx-auto grid w-full max-w-7xl gap-8 lg:items-start lg:grid-cols-[340px_1fr]">
-        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100vh-3rem)] lg:flex-col lg:overflow-hidden">
+        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-3">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
           </h2>
@@ -2257,7 +2257,7 @@ export default function CrmApp() {
             )}
           </div>
 
-          <div className="mt-8 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+          <div className="mt-8">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
@@ -2275,7 +2275,7 @@ export default function CrmApp() {
               />
             </div>
 
-            <div className="mt-4 grid gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+            <div className="mt-4 grid gap-3">
               {loading && (
                 <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
                   Caricamento...
