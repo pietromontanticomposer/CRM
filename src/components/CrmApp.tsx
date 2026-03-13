@@ -11,6 +11,7 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
+type ContactFolder = "Tutte" | Status;
 const NEW_CONTACT_STATUS_OPTIONS = ["Da contattare", "Già contattato"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
@@ -566,6 +567,7 @@ export default function CrmApp() {
   const [deleting, setDeleting] = useState(false);
   const [newContact, setNewContact] = useState<NewContact>(emptyNewContact);
   const [contactSearch, setContactSearch] = useState("");
+  const [contactFolder, setContactFolder] = useState<ContactFolder>("Tutte");
   const [draft, setDraft] = useState<DraftContact | null>(null);
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [emailsLoading, setEmailsLoading] = useState(false);
@@ -661,7 +663,7 @@ export default function CrmApp() {
     );
   }, [contacts]);
 
-  const filteredContacts = useMemo(() => {
+  const searchedContacts = useMemo(() => {
     const query = contactSearch.trim().toLowerCase();
     if (!query) return contacts;
     return contacts.filter((contact) => {
@@ -677,6 +679,11 @@ export default function CrmApp() {
       );
     });
   }, [contacts, contactSearch]);
+
+  const filteredContacts = useMemo(() => {
+    if (contactFolder === "Tutte") return searchedContacts;
+    return searchedContacts.filter((contact) => contact.status === contactFolder);
+  }, [searchedContacts, contactFolder]);
 
   const followUpSummary = useMemo(() => {
     const today = getTodayDateInputValue();
@@ -2261,10 +2268,40 @@ export default function CrmApp() {
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
-                {contactSearch.trim()
+                {contactSearch.trim() || contactFolder !== "Tutte"
                   ? `${filteredContacts.length} / ${contacts.length}`
                   : contacts.length}
               </span>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setContactFolder("Tutte")}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                  contactFolder === "Tutte"
+                    ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--ink)]"
+                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                }`}
+              >
+                Tutte
+                <span className="ml-1 text-[10px] opacity-80">{contacts.length}</span>
+              </button>
+              {STATUS_OPTIONS.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setContactFolder(status)}
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                    contactFolder === status
+                      ? `${statusStyles[status]}`
+                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                  }`}
+                >
+                  {status}
+                  <span className="ml-1 text-[10px] opacity-80">{counts[status] ?? 0}</span>
+                </button>
+              ))}
             </div>
 
             <div className="mt-3">
