@@ -1201,6 +1201,116 @@ export default function CrmApp() {
   };
 
   const selectedThreadKey = selectedEmail ? getEmailThreadKey(selectedEmail) : null;
+  const renderSelectedEmailDetail = () => {
+    if (!selectedEmail) return null;
+
+    return (
+      <div className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-3">
+        <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          Dettaglio email
+        </div>
+        <div className="mt-2 text-sm font-semibold">
+          {selectedEmail.subject || "Senza oggetto"}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+              selectedEmail.direction === "inbound"
+                ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
+                : "border-amber-400/40 bg-amber-500/10 text-amber-200"
+            }`}
+          >
+            {selectedEmail.direction === "inbound" ? "Ricevuta" : "Inviata"}
+          </span>
+          <span className="break-all">
+            {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
+            {selectedEmail.direction === "inbound"
+              ? selectedEmail.from_email
+              : getRecipientSummary(selectedEmail.to_email)}
+          </span>
+          <span>·</span>
+          <span>
+            {formatDateTime(
+              selectedEmail.received_at ?? selectedEmail.created_at
+            )}
+          </span>
+        </div>
+        {selectedEmail.direction === "outbound" &&
+          extractEmails(selectedEmail.to_email).length > 1 && (
+            <details className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2">
+              <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
+                Mostra tutti i destinatari ({extractEmails(selectedEmail.to_email).length})
+              </summary>
+              <div className="mt-2 break-all text-xs text-[var(--muted)]">
+                {extractEmails(selectedEmail.to_email).join(", ")}
+              </div>
+            </details>
+          )}
+        <div className="mt-3 text-sm text-[var(--ink)]">
+          {selectedEmailHtml ? (
+            <div
+              className="email-html"
+              dangerouslySetInnerHTML={{ __html: selectedEmailHtml }}
+            />
+          ) : (
+            <div className="whitespace-pre-wrap">
+              {selectedEmail.text_body ||
+                "Nessun testo disponibile per questa email."}
+            </div>
+          )}
+        </div>
+        {selectedEmailAttachments.length > 0 && (
+          <div className="mt-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Allegati ({selectedEmailAttachments.length})
+            </div>
+            <div className="mt-2 grid gap-2">
+              {selectedEmailAttachments.map((attachment, index) => {
+                const meta = [
+                  attachment.contentType,
+                  formatBytes(attachment.size),
+                  attachment.inline ? "inline" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                const downloadUrl = buildAttachmentDownloadUrl(
+                  selectedEmail.id,
+                  attachment.index,
+                  false
+                );
+                return (
+                  <div
+                    key={`${attachment.filename}-${index}`}
+                    className="rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2"
+                  >
+                    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0 break-all text-sm font-semibold text-[var(--ink)]">
+                        {attachment.filename}
+                      </div>
+                      <a
+                        href={downloadUrl}
+                        download
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 rounded-full border border-[var(--accent)] bg-[var(--accent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-[var(--accent-strong)]"
+                      >
+                        Scarica
+                      </a>
+                    </div>
+                    {meta && (
+                      <div className="text-xs text-[var(--muted)]">
+                        {meta}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const getReplyTarget = () => {
     if (selectedEmail?.direction === "inbound") return selectedEmail;
@@ -1951,6 +2061,7 @@ export default function CrmApp() {
               <div className="border-t border-[var(--line)] px-4 py-3">
                 <div className="grid gap-2">
                   {thread.messages.map((email) => {
+                    const isSelected = email.id === selectedEmailId;
                     const address =
                       email.direction === "inbound"
                         ? email.from_email
@@ -1964,54 +2075,58 @@ export default function CrmApp() {
                         ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
                         : "border-amber-400/40 bg-amber-500/10 text-amber-200";
                     return (
-                      <button
-                        key={email.id}
-                        type="button"
-                        onClick={() => handleSelectEmail(email.id)}
-                        className={`perf-card rounded-xl border px-3 py-2 text-left transition ${
-                          email.id === selectedEmailId
-                            ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                            : isRead
-                              ? "border-[var(--line)] bg-[var(--panel)]"
-                              : "border-[var(--accent)] bg-[var(--panel-strong)]"
-                        }`}
-                      >
-                        <div className="flex min-w-0 items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                          <span className="flex min-w-0 items-center gap-2">
-                            {!isRead && (
-                              <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
-                            )}
-                            <span className="min-w-0 break-all">
-                              {email.direction === "inbound" ? "Da" : "A"}{" "}
-                              {address || "—"}
-                            </span>
-                          </span>
-                          <span className="flex shrink-0 items-center gap-2">
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
-                            >
-                              {directionLabel}
-                            </span>
-                            <span>
-                              {formatDateTime(
-                                email.received_at ?? email.created_at
-                              )}
-                            </span>
-                          </span>
-                        </div>
-                        <div
-                          className={`mt-1 break-words text-sm text-[var(--ink)] ${
-                            isRead ? "font-semibold" : "font-bold"
+                      <div key={email.id} className="grid gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectEmail(email.id)}
+                          className={`perf-card rounded-xl border px-3 py-2 text-left transition ${
+                            isSelected
+                              ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                              : isRead
+                                ? "border-[var(--line)] bg-[var(--panel)]"
+                                : "border-[var(--accent)] bg-[var(--panel-strong)]"
                           }`}
                         >
-                          {email.subject || "Senza oggetto"}
-                        </div>
-                        <div className="mt-1 break-words text-xs text-[var(--muted)]">
-                          {preview.length > 180
-                            ? `${preview.slice(0, 180)}…`
-                            : preview}
-                        </div>
-                      </button>
+                          <div className="flex min-w-0 items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                            <span className="flex min-w-0 items-center gap-2">
+                              {!isRead && (
+                                <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                              )}
+                              <span className="min-w-0 break-all">
+                                {email.direction === "inbound" ? "Da" : "A"}{" "}
+                                {address || "—"}
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
+                              >
+                                {directionLabel}
+                              </span>
+                              <span>
+                                {formatDateTime(
+                                  email.received_at ?? email.created_at
+                                )}
+                              </span>
+                            </span>
+                          </div>
+                          <div
+                            className={`mt-1 break-words text-sm text-[var(--ink)] ${
+                              isRead ? "font-semibold" : "font-bold"
+                            }`}
+                          >
+                            {email.subject || "Senza oggetto"}
+                          </div>
+                          <div className="mt-1 break-words text-xs text-[var(--muted)]">
+                            {preview.length > 180
+                              ? `${preview.slice(0, 180)}…`
+                              : preview}
+                          </div>
+                        </button>
+                        {isSelected &&
+                          selectedEmail?.id === email.id &&
+                          renderSelectedEmailDetail()}
+                      </div>
                     );
                   })}
                 </div>
@@ -2019,123 +2134,6 @@ export default function CrmApp() {
             </details>
           ))}
         </div>
-
-        {selectedEmail &&
-          selectedThreadKey &&
-          openThreads[selectedThreadKey] && (
-            <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Dettaglio email
-              </div>
-              <div className="mt-2 text-sm font-semibold">
-                {selectedEmail.subject || "Senza oggetto"}
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                    selectedEmail.direction === "inbound"
-                      ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
-                      : "border-amber-400/40 bg-amber-500/10 text-amber-200"
-                  }`}
-                >
-                  {selectedEmail.direction === "inbound" ? "Ricevuta" : "Inviata"}
-                </span>
-                <span className="break-all">
-                  {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
-                  {selectedEmail.direction === "inbound"
-                    ? selectedEmail.from_email
-                    : getRecipientSummary(selectedEmail.to_email)}
-                </span>
-                <span>·</span>
-                <span>
-                  {formatDateTime(
-                    selectedEmail.received_at ?? selectedEmail.created_at
-                  )}
-                </span>
-              </div>
-              {selectedEmail.direction === "outbound" &&
-                extractEmails(selectedEmail.to_email).length > 1 && (
-                  <details className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
-                      Mostra tutti i destinatari ({extractEmails(selectedEmail.to_email).length})
-                    </summary>
-                    <div className="mt-2 break-all text-xs text-[var(--muted)]">
-                      {extractEmails(selectedEmail.to_email).join(", ")}
-                    </div>
-                  </details>
-                )}
-              <div className="mt-3 text-sm text-[var(--ink)]">
-                {selectedEmailHtml ? (
-                  <div
-                    className="email-html"
-                    dangerouslySetInnerHTML={{ __html: selectedEmailHtml }}
-                  />
-                ) : (
-                  <div className="whitespace-pre-wrap">
-                    {selectedEmail.text_body ||
-                      "Nessun testo disponibile per questa email."}
-                  </div>
-                )}
-              </div>
-              {selectedEmailAttachments.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                    Allegati ({selectedEmailAttachments.length})
-                  </div>
-                  <div className="mt-2 grid gap-2">
-                    {selectedEmailAttachments.map((attachment, index) => {
-                      const meta = [
-                        attachment.contentType,
-                        formatBytes(attachment.size),
-                        attachment.inline ? "inline" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ");
-                      const downloadUrl = selectedEmail?.id
-                        ? buildAttachmentDownloadUrl(
-                            selectedEmail.id,
-                            attachment.index,
-                            false
-                          )
-                        : null;
-                      return (
-                        <div
-                          key={`${attachment.filename}-${index}`}
-                          className="rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2"
-                        >
-                          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                            <div className="min-w-0 break-all text-sm font-semibold text-[var(--ink)]">
-                              {attachment.filename}
-                            </div>
-                            {downloadUrl ? (
-                              <a
-                                href={downloadUrl}
-                                download
-                                target="_blank"
-                                rel="noreferrer"
-                                className="shrink-0 rounded-full border border-[var(--accent)] bg-[var(--accent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-[var(--accent-strong)]"
-                              >
-                                Scarica
-                              </a>
-                            ) : (
-                              <span className="text-xs text-[var(--muted)]">
-                                Non disponibile
-                              </span>
-                            )}
-                          </div>
-                          {meta && (
-                            <div className="text-xs text-[var(--muted)]">
-                              {meta}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
         <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3">
           <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
