@@ -687,9 +687,6 @@ export default function CrmApp() {
   const [backfillByContact, setBackfillByContact] = useState<
     Record<string, "pending" | "done">
   >({});
-  const [aiCategoryByContact, setAiCategoryByContact] = useState<
-    Record<string, "pending" | "done">
-  >({});
   const [followUpActionByContact, setFollowUpActionByContact] = useState<
     Record<string, "recontacted" | "keepwarm">
   >({});
@@ -1416,54 +1413,6 @@ export default function CrmApp() {
   }, []);
 
   useEffect(() => {
-    handleSyncNow();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!selected || emailsLoading) return;
-    if (emails.length === 0) return;
-    if (aiCategoryByContact[selected.id]) return;
-
-    setAiCategoryByContact((prev) => ({ ...prev, [selected.id]: "pending" }));
-
-    const run = async () => {
-      try {
-        const response = await fetch("/api/ai/category", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contactId: selected.id }),
-        });
-        if (!response.ok) return;
-        const payload = (await response.json()) as {
-          applied_status?: Status;
-        };
-        if (payload?.applied_status) {
-          setContacts((prev) =>
-            sortContacts(
-              prev.map((contact) =>
-                contact.id === selected.id
-                  ? { ...contact, status: payload.applied_status as Status }
-                  : contact
-              )
-            )
-          );
-          setDraft((prev) =>
-            prev ? { ...prev, status: payload.applied_status as Status } : prev
-          );
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setAiCategoryByContact((prev) => ({ ...prev, [selected.id]: "done" }));
-      }
-    };
-
-    void run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, emailsLoading, emails.length]);
-
-  useEffect(() => {
     if (!selected || emailsLoading) return;
     const selectedId = selected.id;
     const selectedEmail = selected.email;
@@ -1509,15 +1458,6 @@ export default function CrmApp() {
 
         if (cancelled) return;
         await loadEmails(selectedId, selectedEmail);
-        if (cancelled) return;
-        const refreshedContacts = await loadContacts({ silent: true });
-        if (cancelled) return;
-        const refreshedSelected = refreshedContacts.find(
-          (contact) => contact.id === selectedId
-        );
-        if (refreshedSelected) {
-          setDraft(buildDraft(refreshedSelected));
-        }
       } catch (error) {
         console.error(error);
       } finally {
