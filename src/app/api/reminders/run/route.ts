@@ -4,6 +4,9 @@ import nodemailer from "nodemailer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const REMINDER_RECIPIENT = "pietromontanticomposer@gmail.com";
+const KEEP_IN_TOUCH_MONTHS = 2;
+const KEEP_IN_TOUCH_NOTE = `Mantenere in contatto (automatico ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`;
 
 const getEnv = (key: string) => {
   const value = process.env[key];
@@ -14,6 +17,16 @@ const getEnv = (key: string) => {
 const getOptionalEnv = (key: string) => {
   const value = process.env[key];
   return value && value.trim().length > 0 ? value : null;
+};
+
+const getCronSecretFromRequest = (request: Request) => {
+  const headerSecret = request.headers.get("x-cron-secret");
+  if (headerSecret && headerSecret.trim().length > 0) return headerSecret.trim();
+  const authHeader = request.headers.get("authorization");
+  if (authHeader && /^Bearer\s+/i.test(authHeader)) {
+    return authHeader.replace(/^Bearer\s+/i, "").trim();
+  }
+  return null;
 };
 
 const getSupabase = () =>
@@ -31,6 +44,19 @@ const getTodayDate = () => {
     day: "2-digit",
   }).format(new Date());
 };
+
+const addMonthsToDateOnly = (dateOnly: string, months: number) => {
+  const parsed = new Date(`${dateOnly}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateOnly;
+  parsed.setMonth(parsed.getMonth() + months);
+  const year = parsed.getFullYear();
+  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+  const day = `${parsed.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const isKeepInTouchNote = (value?: string | null) =>
+  value?.trim() === KEEP_IN_TOUCH_NOTE;
 
 const getSmtpConfig = () => {
   const host =
@@ -79,19 +105,12 @@ const buildBody = (
 };
 
 export async function POST(request: Request) {
-  const cronSecret = request.headers.get("x-cron-secret");
+  const cronSecret = getCronSecretFromRequest(request);
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  const reminderEmail =
-    getOptionalEnv("REMINDER_EMAIL") || getOptionalEnv("GMAIL_USER");
-  if (!reminderEmail) {
-    return NextResponse.json(
-      { ok: false, error: "Missing REMINDER_EMAIL or GMAIL_USER" },
-      { status: 500 }
-    );
-  }
+  const reminderEmail = REMINDER_RECIPIENT;
 
   const supabase = getSupabase();
   const today = getTodayDate();
@@ -160,6 +179,28 @@ export async function POST(request: Request) {
   }));
   if (notifications.length) {
     await supabase.from("notifications").insert(notifications);
+  }
+
+  const keepInTouchContacts = dueContacts.filter((contact) =>
+    isKeepInTouchNote(contact.next_action_note)
+  );
+
+  if (keepInTouchContacts.length) {
+    for (const contact of keepInTouchContacts) {
+      const baseDate =
+        typeof contact.next_action_at === "string" &&
+        contact.next_action_at.length >= 10
+          ? contact.next_action_at.slice(0, 10)
+          : today;
+      const nextDate = addMonthsToDateOnly(baseDate, KEEP_IN_TOUCH_MONTHS);
+      await supabase
+        .from("contacts")
+        .update({
+          next_action_at: nextDate,
+          next_action_note: KEEP_IN_TOUCH_NOTE,
+        })
+        .eq("id", contact.id);
+    }
   }
 
   return NextResponse.json({ ok: true, sent });

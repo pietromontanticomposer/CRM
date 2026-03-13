@@ -266,7 +266,7 @@ const updateContactAfterOutbound = async (
   const supabase = getSupabase();
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id, status, last_action_at")
+    .select("id, status, last_action_at, next_action_at")
     .eq("id", contactId)
     .maybeSingle();
 
@@ -277,25 +277,39 @@ const updateContactAfterOutbound = async (
   const promotedStatus =
     contact.status === "Da contattare" ? "Già contattato" : contact.status;
   const shouldPromoteStatus = promotedStatus !== contact.status;
-  let shouldRefreshFollowUp = true;
-  if (contact.last_action_at) {
-    const lastActionDate = parseDateValue(contact.last_action_at);
-    if (lastActionDate && lastActionDate >= new Date(sentDateOnly)) {
-      shouldRefreshFollowUp = false;
-    }
+  const followUpDays = getFollowUpDays();
+  const { data: firstOutboundEmail } = await supabase
+    .from("emails")
+    .select("received_at")
+    .eq("contact_id", contactId)
+    .eq("direction", "outbound")
+    .not("received_at", "is", null)
+    .order("received_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const firstOutboundDate =
+    parseDateValue(firstOutboundEmail?.received_at) ?? sentDate;
+  const followUpDateOnly = toDateOnly(addDays(firstOutboundDate, followUpDays));
+  const lastActionDate = parseDateValue(contact.last_action_at);
+  const nextActionDate = parseDateValue(contact.next_action_at);
+  const shouldRefreshLastAction =
+    !lastActionDate || toDateOnly(lastActionDate) < sentDateOnly;
+  const shouldRefreshFollowUp =
+    (nextActionDate ? toDateOnly(nextActionDate) : null) !== followUpDateOnly;
+
+  if (!shouldPromoteStatus && !shouldRefreshLastAction && !shouldRefreshFollowUp) {
+    return;
   }
 
-  if (!shouldPromoteStatus && !shouldRefreshFollowUp) return;
-
-  const followUpDays = getFollowUpDays();
-  const followUpDateOnly = toDateOnly(addDays(sentDate, followUpDays));
   const updatePayload: Record<string, unknown> = {};
   if (shouldPromoteStatus) {
     updatePayload.status = promotedStatus;
   }
-  if (shouldRefreshFollowUp) {
+  if (shouldRefreshLastAction) {
     updatePayload.last_action_at = sentDateOnly;
     updatePayload.last_action_note = "Email inviata (backfill Gmail)";
+  }
+  if (shouldRefreshFollowUp) {
     updatePayload.next_action_at = followUpDateOnly;
     updatePayload.next_action_note = `Follow-up automatico (${followUpDays} giorni)`;
   }

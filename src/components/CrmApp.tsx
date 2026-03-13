@@ -41,6 +41,12 @@ type NewContact = {
   status: NewContactStatus;
 };
 
+type ContactsApiResponse = {
+  contacts?: Contact[];
+  contact?: Contact;
+  error?: string;
+};
+
 type EmailDirection = "inbound" | "outbound";
 
 type EmailRow = {
@@ -170,6 +176,13 @@ const extractEmails = (value?: string | null) => {
 };
 
 const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+const readApiError = async (response: Response, fallback: string) => {
+  const payload = (await response.json().catch(() => null)) as
+    | ContactsApiResponse
+    | null;
+  return payload?.error?.trim() || fallback;
+};
 
 type AttachmentMeta = {
   filename: string;
@@ -742,20 +755,34 @@ export default function CrmApp() {
       setLoading(true);
     }
     setError(null);
-    const { data, error: fetchError } = await supabase
-      .from("contacts")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const response = await fetch("/api/contacts", {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => null);
 
-    if (fetchError) {
-      setError("Impossibile caricare i contatti. Controlla il database.");
+    if (!response) {
+      setError("Impossibile caricare i contatti. Il server non risponde.");
       if (!silent) {
         setLoading(false);
       }
       return [];
     }
 
-    const nextContacts = (data as Contact[]) || [];
+    if (!response.ok) {
+      setError(
+        await readApiError(
+          response,
+          "Impossibile caricare i contatti. Controlla il database."
+        )
+      );
+      if (!silent) {
+        setLoading(false);
+      }
+      return [];
+    }
+
+    const payload = (await response.json()) as ContactsApiResponse;
+    const nextContacts = payload.contacts || [];
     setContacts(nextContacts);
     if (!silent) {
       setLoading(false);
@@ -926,15 +953,17 @@ export default function CrmApp() {
       next_action_note: keepWarm ? KEEP_IN_TOUCH_NOTE : null,
     };
 
-    const { data, error: updateError } = await supabase
-      .from("contacts")
-      .update(updatePayload)
-      .eq("id", contact.id)
-      .select("*")
-      .single();
+    const response = await fetch(`/api/contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...updatePayload,
+        mark_followup_read: true,
+      }),
+    }).catch(() => null);
 
-    if (updateError) {
-      setError("Impossibile aggiornare il follow-up. Riprova.");
+    if (!response) {
+      setError("Impossibile aggiornare il follow-up. Il server non risponde.");
       setFollowUpActionByContact((prev) => {
         const next = { ...prev };
         delete next[contact.id];
@@ -943,14 +972,20 @@ export default function CrmApp() {
       return;
     }
 
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("contact_id", contact.id)
-      .eq("type", "followup_due")
-      .eq("is_read", false);
+    if (!response.ok) {
+      setError(
+        await readApiError(response, "Impossibile aggiornare il follow-up.")
+      );
+      setFollowUpActionByContact((prev) => {
+        const next = { ...prev };
+        delete next[contact.id];
+        return next;
+      });
+      return;
+    }
 
-    const updated = data as Contact;
+    const payload = (await response.json()) as ContactsApiResponse;
+    const updated = payload.contact as Contact;
     applyContactUpdate(updated);
     setFollowUpMessage(
       keepWarm
@@ -980,15 +1015,19 @@ export default function CrmApp() {
       next_action_note: KEEP_IN_TOUCH_NOTE,
     };
 
-    const { data, error: updateError } = await supabase
-      .from("contacts")
-      .update(updatePayload)
-      .eq("id", contact.id)
-      .select("*")
-      .single();
+    const response = await fetch(`/api/contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...updatePayload,
+        mark_followup_read: true,
+      }),
+    }).catch(() => null);
 
-    if (updateError) {
-      setError("Impossibile impostare il mantenimento contatto. Riprova.");
+    if (!response) {
+      setError(
+        "Impossibile impostare il mantenimento contatto. Il server non risponde."
+      );
       setFollowUpActionByContact((prev) => {
         const next = { ...prev };
         delete next[contact.id];
@@ -997,14 +1036,23 @@ export default function CrmApp() {
       return;
     }
 
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("contact_id", contact.id)
-      .eq("type", "followup_due")
-      .eq("is_read", false);
+    if (!response.ok) {
+      setError(
+        await readApiError(
+          response,
+          "Impossibile impostare il mantenimento contatto."
+        )
+      );
+      setFollowUpActionByContact((prev) => {
+        const next = { ...prev };
+        delete next[contact.id];
+        return next;
+      });
+      return;
+    }
 
-    const updated = data as Contact;
+    const payload = (await response.json()) as ContactsApiResponse;
+    const updated = payload.contact as Contact;
     applyContactUpdate(updated);
     setFollowUpMessage(
       `Mantenimento attivo: reminder ogni ${KEEP_IN_TOUCH_MONTHS} mesi.`
@@ -1232,26 +1280,33 @@ export default function CrmApp() {
     const today = getTodayDateInputValue();
     const selectedStatus = newContact.status;
 
-    const { data, error: insertError } = await supabase
-      .from("contacts")
-      .insert({
+    const response = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         name,
         email: newContact.email.trim() || null,
         company: company || null,
         role: newContact.role.trim() || null,
         status: selectedStatus,
         last_action_at: selectedStatus === "Già contattato" ? today : null,
-      })
-      .select("*")
-      .single();
+      }),
+    }).catch(() => null);
 
-    if (insertError) {
-      setError("Impossibile salvare. Controlla le policy del database.");
+    if (!response) {
+      setError("Impossibile salvare. Il server non risponde.");
       setAdding(false);
       return;
     }
 
-    const created = data as Contact;
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile salvare."));
+      setAdding(false);
+      return;
+    }
+
+    const payload = (await response.json()) as ContactsApiResponse;
+    const created = payload.contact as Contact;
     setContacts((prev) => [created, ...prev]);
     handleSelectContact(created);
     setNewContact(emptyNewContact);
@@ -1264,9 +1319,10 @@ export default function CrmApp() {
     setError(null);
 
     const { id, ...updates } = draft;
-    const { data, error: updateError } = await supabase
-      .from("contacts")
-      .update({
+    const response = await fetch(`/api/contacts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         ...updates,
         name: updates.name.trim(),
         email: updates.email?.trim() || null,
@@ -1277,18 +1333,23 @@ export default function CrmApp() {
         next_action_at: updates.next_action_at || null,
         next_action_note: updates.next_action_note?.trim() || null,
         notes: updates.notes?.trim() || null,
-      })
-      .eq("id", id)
-      .select("*")
-      .single();
+      }),
+    }).catch(() => null);
 
-    if (updateError) {
-      setError("Impossibile aggiornare. Riprova.");
+    if (!response) {
+      setError("Impossibile aggiornare. Il server non risponde.");
       setSaving(false);
       return;
     }
 
-    const updated = data as Contact;
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile aggiornare."));
+      setSaving(false);
+      return;
+    }
+
+    const payload = (await response.json()) as ContactsApiResponse;
+    const updated = payload.contact as Contact;
     setContacts((prev) =>
       prev.map((contact) => (contact.id === id ? updated : contact))
     );
@@ -1301,13 +1362,18 @@ export default function CrmApp() {
     setDeleting(true);
     setError(null);
 
-    const { error: deleteError } = await supabase
-      .from("contacts")
-      .delete()
-      .eq("id", selected.id);
+    const response = await fetch(`/api/contacts/${selected.id}`, {
+      method: "DELETE",
+    }).catch(() => null);
 
-    if (deleteError) {
-      setError("Impossibile eliminare. Riprova.");
+    if (!response) {
+      setError("Impossibile eliminare. Il server non risponde.");
+      setDeleting(false);
+      return;
+    }
+
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile eliminare."));
       setDeleting(false);
       return;
     }
@@ -1538,12 +1604,6 @@ export default function CrmApp() {
               placeholder="Mood della conversazione, preferenze, referenze, ecc."
             />
           </div>
-
-          {error && (
-            <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
-              {error}
-            </div>
-          )}
 
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -1974,6 +2034,11 @@ export default function CrmApp() {
             {syncMessage}
           </div>
         )}
+        {error && (
+          <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100 shadow-sm">
+            {error}
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           {STATUS_OPTIONS.map((status) => (
             <div
@@ -2199,12 +2264,15 @@ export default function CrmApp() {
                 Caricamento...
               </div>
             )}
-            {!loading && contacts.length === 0 && (
+            {!loading && !error && contacts.length === 0 && (
               <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
                 Nessun contatto ancora. Aggiungi il primo.
               </div>
             )}
-            {!loading && contacts.length > 0 && filteredContacts.length === 0 && (
+            {!loading &&
+              !error &&
+              contacts.length > 0 &&
+              filteredContacts.length === 0 && (
               <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
                 Nessun risultato per “{contactSearch.trim()}”.
               </div>
