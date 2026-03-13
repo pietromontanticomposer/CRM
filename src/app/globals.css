@@ -89,8 +89,13 @@ summary::-webkit-details-marker {
 }
 
 .email-html {
+  color: var(--ink);
   line-height: 1.55;
   word-break: break-word;
+}
+
+.email-html * {
+  color: inherit;
 }
 
 .email-html img {

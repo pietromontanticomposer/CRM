@@ -428,12 +428,43 @@ const sanitizeHtml = (html: string) => {
     doc.querySelectorAll(tag).forEach((node) => node.remove());
   });
 
+  const sanitizeInlineStyle = (value: string) => {
+    const cleaned = value
+      .split(";")
+      .map((rule) => rule.trim())
+      .filter(Boolean)
+      .filter((rule) => {
+        const [property] = rule.split(":");
+        const normalized = property?.trim().toLowerCase();
+        if (!normalized) return false;
+        return ![
+          "color",
+          "background",
+          "background-color",
+          "background-image",
+        ].includes(normalized);
+      });
+
+    return cleaned.join("; ");
+  };
+
   doc.querySelectorAll("*").forEach((node) => {
     Array.from(node.attributes).forEach((attr) => {
       const name = attr.name.toLowerCase();
       const value = attr.value;
       if (name.startsWith("on")) {
         node.removeAttribute(attr.name);
+      }
+      if (["bgcolor", "text", "color", "link", "vlink"].includes(name)) {
+        node.removeAttribute(attr.name);
+      }
+      if (name === "style") {
+        const sanitizedStyle = sanitizeInlineStyle(value);
+        if (sanitizedStyle) {
+          node.setAttribute("style", sanitizedStyle);
+        } else {
+          node.removeAttribute(attr.name);
+        }
       }
       if ((name === "href" || name === "src") &&
           value.trim().toLowerCase().startsWith("javascript:")) {
