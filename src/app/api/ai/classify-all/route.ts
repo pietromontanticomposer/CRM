@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { loadContactEmailHistory } from "@/lib/server/contactEmailHistory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,18 @@ type CategoryPayload = {
   category?: string;
   confidence?: number;
   reason?: string;
+};
+
+type CategoryEmailRow = {
+  id: string;
+  direction: "inbound" | "outbound" | null;
+  from_email: string | null;
+  to_email: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  received_at: string | null;
+  created_at: string | null;
 };
 
 const getTimestamp = (value?: string | null) => {
@@ -256,22 +269,6 @@ const callGroq = async (prompt: string) => {
   return { raw: content, model: payload.model ?? activeModel };
 };
 
-const buildEmailFilters = (contactId: string, emailText?: string | null) => {
-  const filters = [`contact_id.eq.${contactId}`];
-  if (!emailText) return filters;
-  const matches = emailText.match(
-    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-  );
-  if (matches) {
-    matches.forEach((address: string) => {
-      const safeEmail = address.replace(/[\\%_]/g, "\\$&");
-      filters.push(`from_email.ilike.%${safeEmail}%`);
-      filters.push(`to_email.ilike.%${safeEmail}%`);
-    });
-  }
-  return filters;
-};
-
 const classifyContact = async (contact: {
   id: string;
   name: string | null;
@@ -279,7 +276,6 @@ const classifyContact = async (contact: {
   status: string | null;
 }) => {
   const supabase = getSupabase();
-  const emailFilters = buildEmailFilters(contact.id, contact.email);
   const emailLimit = Number(process.env.SUMMARY_EMAIL_LIMIT ?? DEFAULT_LIMIT);
   const recentCountRaw = Number(
     process.env.SUMMARY_RECENT_COUNT ?? DEFAULT_RECENT_COUNT
@@ -292,14 +288,14 @@ const classifyContact = async (contact: {
     )
   );
 
-  const { data: emails, error: emailsError } = await supabase
-    .from("emails")
-    .select(
-      "direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
-    )
-    .or(emailFilters.join(","))
-    .order("received_at", { ascending: false })
-    .limit(Math.max(emailLimit, recentCount));
+  const { data: emails, error: emailsError } =
+    await loadContactEmailHistory<CategoryEmailRow>(supabase, {
+      contactId: contact.id,
+      emailText: contact.email,
+      select:
+        "id, direction, from_email, to_email, subject, text_body, html_body, received_at, created_at",
+      limit: Math.max(emailLimit, recentCount),
+    });
 
   if (emailsError) {
     return { ok: false, error: "Email fetch failed" };

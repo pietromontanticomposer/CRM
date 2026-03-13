@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadContactEmailHistory } from "@/lib/server/contactEmailHistory";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 
 export const runtime = "nodejs";
@@ -8,16 +9,21 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
-
-const extractEmails = (value?: string | null) => {
-  if (!value) return [];
-  const matches = value.match(
-    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-  );
-  if (!matches) return [];
-  const unique = new Set(matches.map((item) => item.toLowerCase()));
-  return Array.from(unique);
+type ContactEmailRow = {
+  id: string;
+  contact_id: string | null;
+  direction: "inbound" | "outbound" | null;
+  gmail_uid: number | null;
+  message_id_header: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  to_email: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  received_at: string | null;
+  created_at: string | null;
+  raw: Record<string, unknown> | null;
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -48,25 +54,16 @@ export async function GET(request: Request, context: RouteContext) {
     const emailParam = url.searchParams.get("email");
 
     const supabase = getSupabaseAdmin();
-    const query = supabase
-      .from("emails")
-      .select(
-        "id, contact_id, direction, gmail_uid, message_id_header, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at, raw"
-      )
-      .order("received_at", { ascending: false });
-
-    const emailList = extractEmails(emailParam);
-    const emailFilters = [`contact_id.eq.${id}`];
-    emailList.forEach((address) => {
-      const safe = escapeIlike(address);
-      emailFilters.push(`from_email.ilike.%${safe}%`);
-      emailFilters.push(`to_email.ilike.%${safe}%`);
-    });
-
-    const { data, error } =
-      emailFilters.length > 1
-        ? await query.or(emailFilters.join(","))
-        : await query.eq("contact_id", id);
+    const { data, error } = await loadContactEmailHistory<ContactEmailRow>(
+      supabase,
+      {
+        contactId: id,
+        emailText: emailParam,
+        select:
+          "id, contact_id, direction, gmail_uid, message_id_header, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at, raw",
+        limit: 400,
+      }
+    );
 
     if (error) {
       console.error(`GET /api/contacts/${id}/emails failed`, error);

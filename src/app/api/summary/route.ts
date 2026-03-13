@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { loadContactEmailHistory } from "@/lib/server/contactEmailHistory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +17,18 @@ type SummaryPayload = {
   next_actions: string[];
   last_inbound: string;
   last_outbound: string;
+};
+
+type SummaryEmailRow = {
+  id: string;
+  direction: "inbound" | "outbound" | null;
+  from_email: string | null;
+  to_email: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  received_at: string | null;
+  created_at: string | null;
 };
 
 const normalizeString = (value: unknown, maxLen = 0) => {
@@ -49,18 +62,6 @@ const getTimestamp = (value?: string | null) => {
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
-
-const extractEmails = (value?: string | null) => {
-  if (!value) return [];
-  const matches = value.match(
-    /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-  );
-  if (!matches) return [];
-  const unique = new Set(matches.map((item) => item.toLowerCase()));
-  return Array.from(unique);
-};
-
-const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const getEnv = (key: string) => {
   const value = process.env[key];
@@ -265,14 +266,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const emailFilters = [`contact_id.eq.${contact.id}`];
-  const emailList = extractEmails(contact.email?.trim() || null);
-  emailList.forEach((address) => {
-    const safeEmail = escapeIlike(address);
-    emailFilters.push(`from_email.ilike.%${safeEmail}%`);
-    emailFilters.push(`to_email.ilike.%${safeEmail}%`);
-  });
-
   const emailLimit = Number(process.env.SUMMARY_EMAIL_LIMIT ?? DEFAULT_LIMIT);
   const recentCountRaw = Number(
     process.env.SUMMARY_RECENT_COUNT ?? DEFAULT_RECENT_COUNT
@@ -282,14 +275,14 @@ export async function POST(request: Request) {
     Math.min(Number.isFinite(recentCountRaw) ? recentCountRaw : DEFAULT_RECENT_COUNT, emailLimit)
   );
 
-  const { data: emails, error: emailsError } = await supabase
-    .from("emails")
-    .select(
-      "id, direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
-    )
-    .or(emailFilters.join(","))
-    .order("received_at", { ascending: false })
-    .limit(Math.max(emailLimit, recentCount));
+  const { data: emails, error: emailsError } =
+    await loadContactEmailHistory<SummaryEmailRow>(supabase, {
+      contactId: contact.id,
+      emailText: contact.email,
+      select:
+        "id, direction, from_email, to_email, subject, text_body, html_body, received_at, created_at",
+      limit: Math.max(emailLimit, recentCount),
+    });
 
   if (emailsError) {
     return NextResponse.json(
