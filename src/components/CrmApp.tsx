@@ -194,6 +194,45 @@ const extractEmails = (value?: string | null) => {
   return Array.from(unique);
 };
 
+const stripHtmlToText = (value?: string | null) => {
+  if (!value) return "";
+  if (typeof window !== "undefined") {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(value, "text/html");
+    return (doc.body.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const getEmailExcerpt = (
+  email: Pick<EmailRow, "text_body" | "html_body" | "subject">
+) => {
+  const textBody = email.text_body?.replace(/\s+/g, " ").trim();
+  if (textBody) return textBody;
+
+  const htmlText = stripHtmlToText(email.html_body);
+  if (htmlText) return htmlText;
+
+  const subject = email.subject?.replace(/\s+/g, " ").trim();
+  return subject || "Nessun testo disponibile.";
+};
+
+const getRecipientSummary = (value?: string | null) => {
+  const addresses = extractEmails(value);
+  if (!addresses.length) return value?.trim() || "—";
+  if (addresses.length === 1) return addresses[0];
+  if (addresses.length === 2) return `${addresses[0]}, ${addresses[1]}`;
+  return `${addresses[0]} +${addresses.length - 1} destinatari`;
+};
+
 const readApiError = async (response: Response, fallback: string) => {
   const payload = (await response.json().catch(() => null)) as
     | ContactsApiResponse
@@ -1822,6 +1861,14 @@ export default function CrmApp() {
                   ...prev,
                   [thread.key]: isOpen,
                 }));
+                if (isOpen) {
+                  const isSelectedInThread = selectedEmailId
+                    ? thread.messages.some((message) => message.id === selectedEmailId)
+                    : false;
+                  if (!isSelectedInThread) {
+                    setSelectedEmailId(thread.messages[0]?.id ?? null);
+                  }
+                }
                 if (!isOpen && selectedEmailId) {
                   const isSelectedInThread = thread.messages.some(
                     (message) => message.id === selectedEmailId
@@ -1860,11 +1907,8 @@ export default function CrmApp() {
                     const address =
                       email.direction === "inbound"
                         ? email.from_email
-                        : email.to_email;
-                    const preview =
-                      email.subject ||
-                      email.text_body?.replace(/\s+/g, " ").trim() ||
-                      "Senza oggetto";
+                        : getRecipientSummary(email.to_email);
+                    const preview = getEmailExcerpt(email);
                     const isRead = emailReadById[email.id] ?? true;
                     const directionLabel =
                       email.direction === "inbound" ? "Ricevuta" : "Inviata";
@@ -1913,8 +1957,11 @@ export default function CrmApp() {
                             isRead ? "font-semibold" : "font-bold"
                           }`}
                         >
-                          {preview.length > 120
-                            ? `${preview.slice(0, 120)}…`
+                          {email.subject || "Senza oggetto"}
+                        </div>
+                        <div className="mt-1 break-words text-xs text-[var(--muted)]">
+                          {preview.length > 180
+                            ? `${preview.slice(0, 180)}…`
                             : preview}
                         </div>
                       </button>
@@ -1950,7 +1997,7 @@ export default function CrmApp() {
                   {selectedEmail.direction === "inbound" ? "Da" : "A"}{" "}
                   {selectedEmail.direction === "inbound"
                     ? selectedEmail.from_email
-                    : selectedEmail.to_email}
+                    : getRecipientSummary(selectedEmail.to_email)}
                 </span>
                 <span>·</span>
                 <span>
@@ -1959,6 +2006,17 @@ export default function CrmApp() {
                   )}
                 </span>
               </div>
+              {selectedEmail.direction === "outbound" &&
+                extractEmails(selectedEmail.to_email).length > 1 && (
+                  <details className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2">
+                    <summary className="cursor-pointer text-xs font-semibold text-[var(--muted)]">
+                      Mostra tutti i destinatari ({extractEmails(selectedEmail.to_email).length})
+                    </summary>
+                    <div className="mt-2 break-all text-xs text-[var(--muted)]">
+                      {extractEmails(selectedEmail.to_email).join(", ")}
+                    </div>
+                  </details>
+                )}
               <div className="mt-3 text-sm text-[var(--ink)]">
                 {selectedEmailHtml ? (
                   <div
