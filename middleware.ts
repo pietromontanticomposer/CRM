@@ -7,13 +7,13 @@ import {
 
 const PUBLIC_PATHS = new Set(["/api/auth/login", "/api/auth/logout"]);
 
-const EXEMPT_API_PREFIXES = [
+const EXEMPT_API_PATHS = new Set([
   "/api/postmark/inbound",
   "/api/gmail/sync",
   "/api/gmail/backfill-attachments",
   "/api/reminders/run",
   "/api/ai/classify-all",
-];
+]);
 
 const isPublicAsset = (pathname: string) =>
   pathname.startsWith("/_next/") ||
@@ -27,7 +27,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (PUBLIC_PATHS.has(pathname) || EXEMPT_API_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+  if (PUBLIC_PATHS.has(pathname) || EXEMPT_API_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 

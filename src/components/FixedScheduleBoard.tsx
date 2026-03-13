@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 const STORAGE_KEY = "fixed_schedule_week_v1";
 
@@ -43,6 +42,19 @@ type FixedSchedule = Record<DayKey, WeeklyTask[]>;
 type DraftByDay = Record<DayKey, string>;
 type TodoMetaById = Record<string, TodoTaskMeta>;
 
+type TodoTaskRow = {
+  id: string;
+  title: string;
+  is_done: boolean;
+  notes: string | null;
+};
+
+type TodoApiResponse = {
+  tasks?: TodoTaskRow[];
+  task?: TodoTaskRow;
+  error?: string;
+};
+
 const TASK_META_PREFIX = "__todo_meta_v1__:";
 
 const createEmptySchedule = (): FixedSchedule => ({
@@ -70,6 +82,13 @@ const makeId = () => {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const readApiError = async (response: Response, fallback: string) => {
+  const payload = (await response.json().catch(() => null)) as
+    | TodoApiResponse
+    | null;
+  return payload?.error?.trim() || fallback;
 };
 
 const normalizeTasks = (value: unknown): WeeklyTask[] => {
@@ -267,15 +286,15 @@ export default function FixedScheduleBoard() {
   useEffect(() => {
     let active = true;
     const loadTodoMeta = async () => {
-      const { data, error: fetchError } = await supabase
-        .from("todo_tasks")
-        .select("id,notes");
+      const response = await fetch("/api/todo", {
+        method: "GET",
+        cache: "no-store",
+      }).catch(() => null);
 
-      if (!active || fetchError || !data) return;
+      if (!active || !response || !response.ok) return;
 
-      const next = (data as Array<{ id: string; notes: string | null }>).reduce<
-        TodoMetaById
-      >((acc, row) => {
+      const payload = (await response.json()) as TodoApiResponse;
+      const next = (payload.tasks || []).reduce<TodoMetaById>((acc, row) => {
         acc[row.id] = parseTodoTaskMeta(row.notes);
         return acc;
       }, {});
@@ -355,13 +374,25 @@ export default function FixedScheduleBoard() {
 
     if (task.source === "todo" && task.todoTaskId) {
       setTaskBusy(task.id, true);
-      const { error: updateError } = await supabase
-        .from("todo_tasks")
-        .update({ is_done: !task.isDone })
-        .eq("id", task.todoTaskId);
+      const response = await fetch(`/api/todo/${task.todoTaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_done: !task.isDone }),
+      }).catch(() => null);
 
-      if (updateError) {
+      if (!response) {
         setError("Impossibile aggiornare il task collegato al TODO.");
+        setTaskBusy(task.id, false);
+        return;
+      }
+
+      if (!response.ok) {
+        setError(
+          await readApiError(
+            response,
+            "Impossibile aggiornare il task collegato al TODO."
+          )
+        );
         setTaskBusy(task.id, false);
         return;
       }
@@ -392,13 +423,25 @@ export default function FixedScheduleBoard() {
 
     if (task.source === "todo" && task.todoTaskId) {
       setTaskBusy(task.id, true);
-      const { error: updateError } = await supabase
-        .from("todo_tasks")
-        .update({ title: nextTitle })
-        .eq("id", task.todoTaskId);
+      const response = await fetch(`/api/todo/${task.todoTaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: nextTitle }),
+      }).catch(() => null);
 
-      if (updateError) {
+      if (!response) {
         setError("Impossibile modificare il task collegato al TODO.");
+        setTaskBusy(task.id, false);
+        return;
+      }
+
+      if (!response.ok) {
+        setError(
+          await readApiError(
+            response,
+            "Impossibile modificare il task collegato al TODO."
+          )
+        );
         setTaskBusy(task.id, false);
         return;
       }
@@ -424,13 +467,23 @@ export default function FixedScheduleBoard() {
 
     if (task.source === "todo" && task.todoTaskId) {
       setTaskBusy(task.id, true);
-      const { error: deleteError } = await supabase
-        .from("todo_tasks")
-        .delete()
-        .eq("id", task.todoTaskId);
+      const response = await fetch(`/api/todo/${task.todoTaskId}`, {
+        method: "DELETE",
+      }).catch(() => null);
 
-      if (deleteError) {
+      if (!response) {
         setError("Impossibile eliminare il task collegato al TODO.");
+        setTaskBusy(task.id, false);
+        return;
+      }
+
+      if (!response.ok) {
+        setError(
+          await readApiError(
+            response,
+            "Impossibile eliminare il task collegato al TODO."
+          )
+        );
         setTaskBusy(task.id, false);
         return;
       }

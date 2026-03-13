@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 const STATUS_OPTIONS = [
   "Da contattare",
@@ -44,6 +43,12 @@ type NewContact = {
 type ContactsApiResponse = {
   contacts?: Contact[];
   contact?: Contact;
+  error?: string;
+};
+
+type EmailsApiResponse = {
+  emails?: EmailRow[];
+  readMap?: Record<string, boolean>;
   error?: string;
 };
 
@@ -174,8 +179,6 @@ const extractEmails = (value?: string | null) => {
   const unique = new Set(matches.map((item) => item.toLowerCase()));
   return Array.from(unique);
 };
-
-const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const readApiError = async (response: Response, fallback: string) => {
   const payload = (await response.json().catch(() => null)) as
@@ -804,64 +807,36 @@ export default function CrmApp() {
     setEmailsError(null);
     setSummary(null);
     setSummaryError(null);
-    const query = supabase
-      .from("emails")
-      .select(
-        "id, contact_id, direction, gmail_uid, message_id_header, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at, raw"
-      )
-      .order("received_at", { ascending: false });
+    const query = new URLSearchParams();
+    if (email?.trim()) {
+      query.set("email", email);
+    }
 
-    const emailList = extractEmails(email);
-    const emailFilters = [`contact_id.eq.${contactId}`];
-    emailList.forEach((address) => {
-      const safe = escapeIlike(address);
-      emailFilters.push(`from_email.ilike.%${safe}%`);
-      emailFilters.push(`to_email.ilike.%${safe}%`);
-    });
+    const response = await fetch(
+      `/api/contacts/${contactId}/emails${
+        query.size ? `?${query.toString()}` : ""
+      }`,
+      {
+        method: "GET",
+        cache: "no-store",
+      }
+    ).catch(() => null);
 
-    const { data, error: fetchError } =
-      emailFilters.length > 1
-        ? await query.or(emailFilters.join(","))
-        : await query.eq("contact_id", contactId);
-
-    if (fetchError) {
-      setEmailsError("Impossibile caricare le email.");
+    if (!response) {
+      setEmailsError("Impossibile caricare le email. Il server non risponde.");
       setEmailsLoading(false);
       return;
     }
 
-    const emailRows = (data as EmailRow[]) || [];
-    const readMap: Record<string, boolean> = {};
-    emailRows.forEach((row) => {
-      readMap[row.id] = true;
-    });
-
-    const inboundIds = emailRows
-      .filter((row) => row.direction === "inbound")
-      .map((row) => row.id);
-
-    if (inboundIds.length) {
-      const { data: notifications, error: notificationsError } =
-        await supabase
-          .from("notifications")
-          .select("email_id, is_read")
-          .in("email_id", inboundIds)
-          .eq("type", "email_received");
-
-      if (!notificationsError && notifications) {
-        notifications.forEach((notification) => {
-          if (!notification.email_id) return;
-          const isRead = Boolean(notification.is_read);
-          if (readMap[notification.email_id] === undefined) {
-            readMap[notification.email_id] = isRead;
-          } else {
-            readMap[notification.email_id] =
-              readMap[notification.email_id] && isRead;
-          }
-        });
-      }
+    if (!response.ok) {
+      setEmailsError(await readApiError(response, "Impossibile caricare le email."));
+      setEmailsLoading(false);
+      return;
     }
 
+    const payload = (await response.json()) as EmailsApiResponse;
+    const emailRows = payload.emails || [];
+    const readMap = payload.readMap || {};
     setEmails(emailRows);
     setEmailReadById(readMap);
     await refreshSummary(contactId, false);
@@ -1069,11 +1044,9 @@ export default function CrmApp() {
     setEmailReadById((prev) => ({ ...prev, [emailId]: true }));
     const selectedRow = emails.find((email) => email.id === emailId);
     if (selectedRow?.direction !== "inbound") return;
-    await supabase
-      .from("notifications")
-      .update({ is_read: true })
-      .eq("email_id", emailId)
-      .eq("type", "email_received");
+    await fetch(`/api/emails/${emailId}/read`, {
+      method: "POST",
+    }).catch(() => null);
   };
 
   const getReplyTarget = () => {

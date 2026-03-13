@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { supabase } from "@/lib/supabaseClient";
 
 type TodoPriority = "alta" | "media" | "continuativo" | "bassa";
 
@@ -15,6 +14,12 @@ type TodoTask = {
   notes: string | null;
   due_date: string | null;
   contact_id: string | null;
+};
+
+type TodoApiResponse = {
+  tasks?: TodoTask[];
+  task?: TodoTask;
+  error?: string;
 };
 
 const CALENDAR_STORAGE_KEY = "fixed_schedule_week_v1";
@@ -133,10 +138,38 @@ const isCalendarDayKey = (value: string): value is CalendarDayKey =>
     (option) => option.key === value
   );
 
+const readApiError = async (response: Response, fallback: string) => {
+  const payload = (await response.json().catch(() => null)) as
+    | TodoApiResponse
+    | null;
+  return payload?.error?.trim() || fallback;
+};
+
 const fetchTasks = async () => {
-  return supabase.from("todo_tasks").select("*").order("created_at", {
-    ascending: false,
-  });
+  const response = await fetch("/api/todo", {
+    method: "GET",
+    cache: "no-store",
+  }).catch(() => null);
+
+  if (!response) {
+    return {
+      data: null as TodoTask[] | null,
+      error: "Impossibile caricare i task. Il server non risponde.",
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      data: null as TodoTask[] | null,
+      error: await readApiError(response, "Impossibile caricare i task."),
+    };
+  }
+
+  const payload = (await response.json()) as TodoApiResponse;
+  return {
+    data: payload.tasks || [],
+    error: null,
+  };
 };
 
 const sortTasks = (a: TodoTask, b: TodoTask) => {
@@ -773,13 +806,11 @@ export default function TodoBoard() {
       const { data, error: fetchError } = await fetchTasks();
       if (!active) return;
       if (fetchError) {
-        setError(
-          "Impossibile caricare i task. Verifica la migration `todo_tasks`."
-        );
+        setError(fetchError);
         setLoading(false);
         return;
       }
-      setTasks(((data as TodoTask[]) || []).sort(sortTasks));
+      setTasks((data || []).sort(sortTasks));
       setLoading(false);
     };
     void run();
@@ -798,11 +829,11 @@ export default function TodoBoard() {
     setError(null);
     const { data, error: fetchError } = await fetchTasks();
     if (fetchError) {
-      setError("Impossibile aggiornare i task.");
+      setError(fetchError);
       setRefreshing(false);
       return;
     }
-    setTasks(((data as TodoTask[]) || []).sort(sortTasks));
+    setTasks((data || []).sort(sortTasks));
     setRefreshing(false);
   };
 
@@ -818,9 +849,10 @@ export default function TodoBoard() {
     setError(null);
     const dbPriority =
       draft.priority === "continuativo" ? "bassa" : draft.priority;
-    const { data, error: insertError } = await supabase
-      .from("todo_tasks")
-      .insert({
+    const response = await fetch("/api/todo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         title: cleanTitle,
         priority: dbPriority,
         is_done: false,
@@ -834,17 +866,23 @@ export default function TodoBoard() {
         ),
         due_date: null,
         contact_id: null,
-      })
-      .select("*")
-      .single();
+      }),
+    }).catch(() => null);
 
-    if (insertError) {
-      setError("Impossibile creare il task. Riprova.");
+    if (!response) {
+      setError("Impossibile creare il task. Il server non risponde.");
       setAdding(false);
       return;
     }
 
-    const created = data as TodoTask;
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile creare il task."));
+      setAdding(false);
+      return;
+    }
+
+    const payload = (await response.json()) as TodoApiResponse;
+    const created = payload.task as TodoTask;
     setTasks((prev) => [created, ...prev].sort(sortTasks));
     setDraft(emptyDraft);
     setAdding(false);
@@ -856,20 +894,26 @@ export default function TodoBoard() {
     setUpdatingById((prev) => ({ ...prev, [task.id]: true }));
     setError(null);
 
-    const { data, error: updateError } = await supabase
-      .from("todo_tasks")
-      .update({ is_done: !task.is_done })
-      .eq("id", task.id)
-      .select("*")
-      .single();
+    const response = await fetch(`/api/todo/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_done: !task.is_done }),
+    }).catch(() => null);
 
-    if (updateError) {
-      setError("Impossibile aggiornare il task.");
+    if (!response) {
+      setError("Impossibile aggiornare il task. Il server non risponde.");
       setUpdatingById((prev) => ({ ...prev, [task.id]: false }));
       return;
     }
 
-    const updated = data as TodoTask;
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile aggiornare il task."));
+      setUpdatingById((prev) => ({ ...prev, [task.id]: false }));
+      return;
+    }
+
+    const payload = (await response.json()) as TodoApiResponse;
+    const updated = payload.task as TodoTask;
     setTasks((prev) =>
       prev.map((item) => (item.id === task.id ? updated : item)).sort(sortTasks)
     );
@@ -919,9 +963,10 @@ export default function TodoBoard() {
 
     const dbPriority =
       editDraft.priority === "continuativo" ? "bassa" : editDraft.priority;
-    const { data, error: updateError } = await supabase
-      .from("todo_tasks")
-      .update({
+    const response = await fetch(`/api/todo/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         title: cleanTitle,
         priority: dbPriority,
         notes: buildTaskMeta(
@@ -932,18 +977,23 @@ export default function TodoBoard() {
           editDraft.scheduleByDay,
           editDraft.priority
         ),
-      })
-      .eq("id", taskId)
-      .select("*")
-      .single();
+      }),
+    }).catch(() => null);
 
-    if (updateError) {
-      setError("Impossibile salvare le modifiche.");
+    if (!response) {
+      setError("Impossibile salvare le modifiche. Il server non risponde.");
       setUpdatingById((prev) => ({ ...prev, [taskId]: false }));
       return;
     }
 
-    const updated = data as TodoTask;
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile salvare le modifiche."));
+      setUpdatingById((prev) => ({ ...prev, [taskId]: false }));
+      return;
+    }
+
+    const payload = (await response.json()) as TodoApiResponse;
+    const updated = payload.task as TodoTask;
     setTasks((prev) =>
       prev.map((item) => (item.id === taskId ? updated : item)).sort(sortTasks)
     );
@@ -957,13 +1007,18 @@ export default function TodoBoard() {
     setDeletingById((prev) => ({ ...prev, [taskId]: true }));
     setError(null);
 
-    const { error: deleteError } = await supabase
-      .from("todo_tasks")
-      .delete()
-      .eq("id", taskId);
+    const response = await fetch(`/api/todo/${taskId}`, {
+      method: "DELETE",
+    }).catch(() => null);
 
-    if (deleteError) {
-      setError("Impossibile eliminare il task.");
+    if (!response) {
+      setError("Impossibile eliminare il task. Il server non risponde.");
+      setDeletingById((prev) => ({ ...prev, [taskId]: false }));
+      return;
+    }
+
+    if (!response.ok) {
+      setError(await readApiError(response, "Impossibile eliminare il task."));
       setDeletingById((prev) => ({ ...prev, [taskId]: false }));
       return;
     }

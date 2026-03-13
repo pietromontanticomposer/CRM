@@ -120,7 +120,14 @@ export const verifySessionToken = async (token?: string | null) => {
 };
 
 export const normalizeNextPath = (value?: string | null) => {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+  if (
+    !value ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.startsWith("/api/") ||
+    value === "/api" ||
+    value === "/login"
+  ) {
     return "/crm";
   }
   return value;
