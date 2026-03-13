@@ -60,6 +60,8 @@ type EmailRow = {
   direction: EmailDirection;
   gmail_uid: number | null;
   message_id_header: string | null;
+  in_reply_to: string | null;
+  references: string | null;
   from_email: string | null;
   from_name: string | null;
   to_email: string | null;
@@ -419,6 +421,43 @@ const normalizeThreadSubject = (subject?: string | null) => {
   return normalized.trim() || fallback;
 };
 
+const extractMessageIds = (value?: string | null) => {
+  if (!value) return [];
+  const bracketMatches = value.match(/<[^>]+>/g);
+  const tokens =
+    bracketMatches && bracketMatches.length > 0
+      ? bracketMatches
+      : value.split(/\s+/);
+  const unique = new Set(
+    tokens
+      .map((token) => token.trim().replace(/^<|>$/g, "").toLowerCase())
+      .filter(Boolean)
+  );
+  return Array.from(unique);
+};
+
+const getEmailThreadKey = (email: Pick<
+  EmailRow,
+  "subject" | "message_id_header" | "in_reply_to" | "references"
+>) => {
+  const references = extractMessageIds(email.references);
+  if (references.length > 0) {
+    return `msg:${references[0]}`;
+  }
+
+  const replyTo = extractMessageIds(email.in_reply_to);
+  if (replyTo.length > 0) {
+    return `msg:${replyTo[0]}`;
+  }
+
+  const messageIds = extractMessageIds(email.message_id_header);
+  if (messageIds.length > 0) {
+    return `msg:${messageIds[0]}`;
+  }
+
+  return `sub:${normalizeThreadSubject(email.subject).toLowerCase()}`;
+};
+
 const getInitials = (name: string) => {
   const trimmed = name.trim();
   if (!trimmed) return "?";
@@ -676,26 +715,22 @@ export default function CrmApp() {
 
   const emailThreads = useMemo(() => {
     if (!emails.length) return [];
-    const grouped = new Map<
-      string,
-      { key: string; subject: string; messages: EmailRow[] }
-    >();
+    const grouped = new Map<string, EmailRow[]>();
 
     emails.forEach((email) => {
-      const subject = normalizeThreadSubject(email.subject);
-      const key = subject.toLowerCase();
+      const key = getEmailThreadKey(email);
       if (!grouped.has(key)) {
-        grouped.set(key, { key, subject, messages: [] });
+        grouped.set(key, []);
       }
-      grouped.get(key)!.messages.push(email);
+      grouped.get(key)!.push(email);
     });
 
-    const threads = Array.from(grouped.values()).map((thread) => {
-      thread.messages.sort(
+    const threads = Array.from(grouped.entries()).map(([key, messages]) => {
+      const sortedMessages = [...messages].sort(
         (a, b) => getEmailTimestamp(b) - getEmailTimestamp(a)
       );
-      const latest = thread.messages[0] ?? null;
-      const unreadCount = thread.messages.reduce((acc, message) => {
+      const latest = sortedMessages[0] ?? null;
+      const unreadCount = sortedMessages.reduce((acc, message) => {
         if (
           message.direction === "inbound" &&
           !(emailReadById[message.id] ?? true)
@@ -705,10 +740,12 @@ export default function CrmApp() {
         return acc;
       }, 0);
       return {
-        ...thread,
+        key,
+        subject: normalizeThreadSubject(latest?.subject),
+        messages: sortedMessages,
         latestAt: latest?.received_at ?? latest?.created_at ?? null,
         unreadCount,
-        total: thread.messages.length,
+        total: sortedMessages.length,
       };
     });
 
@@ -1049,8 +1086,21 @@ export default function CrmApp() {
     }).catch(() => null);
   };
 
+  const selectedThreadKey = selectedEmail ? getEmailThreadKey(selectedEmail) : null;
+
   const getReplyTarget = () => {
     if (selectedEmail?.direction === "inbound") return selectedEmail;
+    if (selectedThreadKey) {
+      return (
+        emails
+          .filter(
+            (email) =>
+              email.direction === "inbound" &&
+              getEmailThreadKey(email) === selectedThreadKey
+          )
+          .sort((a, b) => getEmailTimestamp(b) - getEmailTimestamp(a))[0] || null
+      );
+    }
     return emails.find((email) => email.direction === "inbound") || null;
   };
 
@@ -1073,6 +1123,7 @@ export default function CrmApp() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        contactId: selected.id,
         to: selected.email.trim(),
         subject: emailSubject.trim() || undefined,
         text: emailBody.trim() || undefined,
@@ -1819,9 +1870,8 @@ export default function CrmApp() {
         </div>
 
         {selectedEmail &&
-          openThreads[
-            normalizeThreadSubject(selectedEmail.subject).toLowerCase()
-          ] && (
+          selectedThreadKey &&
+          openThreads[selectedThreadKey] && (
             <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3">
               <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 Dettaglio email

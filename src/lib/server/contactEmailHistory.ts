@@ -3,11 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type EmailHistoryRow = {
   id: string;
   contact_id?: string | null;
+  direction?: "inbound" | "outbound" | null;
   from_email?: string | null;
   to_email?: string | null;
   received_at?: string | null;
   created_at?: string | null;
+  raw?: Record<string, unknown> | null;
 };
+
+const MAX_CONTACT_HISTORY_RECIPIENTS = 5;
 
 const extractEmails = (value?: string | null) => {
   if (!value) return [];
@@ -27,16 +31,55 @@ const getTimestamp = (value?: string | null) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
-const matchesAddresses = (
-  row: Pick<EmailHistoryRow, "from_email" | "to_email">,
-  addresses: Set<string>
-) => {
-  const rowAddresses = [
+const extractRawEmails = (value: unknown) => {
+  if (typeof value === "string") {
+    return extractEmails(value);
+  }
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const unique = new Set<string>();
+  value.forEach((item) => {
+    if (typeof item !== "string") return;
+    extractEmails(item).forEach((address) => unique.add(address));
+  });
+  return Array.from(unique);
+};
+
+const getParticipantAddresses = (row: EmailHistoryRow) => {
+  const raw = row.raw && typeof row.raw === "object" ? row.raw : null;
+  const unique = new Set([
     ...extractEmails(row.from_email),
     ...extractEmails(row.to_email),
-  ];
+    ...extractRawEmails(raw?.cc),
+    ...extractRawEmails(raw?.bcc),
+    ...extractRawEmails(raw?.to),
+  ]);
+  return Array.from(unique);
+};
+
+const getRecipientAddresses = (row: EmailHistoryRow) => {
+  const raw = row.raw && typeof row.raw === "object" ? row.raw : null;
+  const unique = new Set([
+    ...extractEmails(row.to_email),
+    ...extractRawEmails(raw?.cc),
+    ...extractRawEmails(raw?.bcc),
+  ]);
+  return Array.from(unique);
+};
+
+const matchesAddresses = (
+  row: EmailHistoryRow,
+  addresses: Set<string>
+) => {
+  const rowAddresses = getParticipantAddresses(row);
   return rowAddresses.some((address) => addresses.has(address));
 };
+
+const isBulkOutboundEmail = (row: EmailHistoryRow) =>
+  row.direction === "outbound" &&
+  getRecipientAddresses(row).length > MAX_CONTACT_HISTORY_RECIPIENTS;
 
 export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
   supabase: SupabaseClient,
@@ -62,8 +105,19 @@ export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
   const linkedData = ((linkedRows ?? []) as unknown) as TRow[];
 
   const addresses = extractEmails(emailText);
+  const addressSet = new Set(addresses);
+  const shouldIncludeRow = (row: TRow) => {
+    if (isBulkOutboundEmail(row)) {
+      return false;
+    }
+    if (!addressSet.size) {
+      return true;
+    }
+    return matchesAddresses(row, addressSet);
+  };
+
   if (!addresses.length) {
-    return { data: linkedData, error: null };
+    return { data: linkedData.filter(shouldIncludeRow), error: null };
   }
 
   const fallbackFilter = addresses
@@ -85,16 +139,15 @@ export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
     return { data: null as TRow[] | null, error: unlinkedError };
   }
 
-  const addressSet = new Set(addresses);
   const merged = new Map<string, TRow>();
   const unlinkedData = ((unlinkedRows ?? []) as unknown) as TRow[];
 
-  linkedData.forEach((row) => {
+  linkedData.filter(shouldIncludeRow).forEach((row) => {
     merged.set(row.id, row);
   });
 
   unlinkedData
-    .filter((row) => matchesAddresses(row, addressSet))
+    .filter(shouldIncludeRow)
     .forEach((row) => {
       merged.set(row.id, row);
     });

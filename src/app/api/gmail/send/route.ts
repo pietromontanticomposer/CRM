@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type SendPayload = {
+  contactId?: string;
   to?: string;
   subject?: string;
   text?: string;
@@ -260,11 +261,19 @@ export async function POST(request: Request) {
     headers,
   });
 
+  const explicitContactId =
+    typeof payload.contactId === "string" && payload.contactId.trim().length > 0
+      ? payload.contactId.trim()
+      : null;
   const recipientAddresses = extractEmails(payload.to);
-  const matchedContactIds = await findContactIdsFromAddresses(
-    recipientAddresses.length ? recipientAddresses : [payload.to]
-  );
-  const contactId = matchedContactIds[0] ?? null;
+  const matchedContactIds = explicitContactId
+    ? []
+    : await findContactIdsFromAddresses(
+      recipientAddresses.length ? recipientAddresses : [payload.to]
+    );
+  const contactId =
+    explicitContactId ??
+    (matchedContactIds.length === 1 ? matchedContactIds[0] : null);
   const now = new Date().toISOString();
 
   const { data: insertedEmail } = await supabase
@@ -298,10 +307,13 @@ export async function POST(request: Request) {
     });
   }
 
-  if (matchedContactIds.length) {
-    for (const matchedId of matchedContactIds) {
-      await updateContactAfterOutbound(matchedId, now);
-    }
+  const outboundContactIds = explicitContactId
+    ? [explicitContactId]
+    : matchedContactIds.length === 1
+      ? matchedContactIds
+      : [];
+  for (const matchedId of outboundContactIds) {
+    await updateContactAfterOutbound(matchedId, now);
   }
 
   return NextResponse.json({ ok: true, messageId: info.messageId });

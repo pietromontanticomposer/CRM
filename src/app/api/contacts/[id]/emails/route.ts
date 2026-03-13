@@ -15,6 +15,8 @@ type ContactEmailRow = {
   direction: "inbound" | "outbound" | null;
   gmail_uid: number | null;
   message_id_header: string | null;
+  in_reply_to: string | null;
+  references: string | null;
   from_email: string | null;
   from_name: string | null;
   to_email: string | null;
@@ -60,7 +62,7 @@ export async function GET(request: Request, context: RouteContext) {
         contactId: id,
         emailText: emailParam,
         select:
-          "id, contact_id, direction, gmail_uid, message_id_header, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at, raw",
+          "id, contact_id, direction, gmail_uid, message_id_header, in_reply_to, references, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at, raw",
         limit: 400,
       }
     );

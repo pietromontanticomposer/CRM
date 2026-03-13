@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 400;
+const MAX_CONTACT_HISTORY_RECIPIENTS = 5;
 
 type ParsedAddress = {
   address?: string;
@@ -54,7 +55,7 @@ const normalizeEmail = (value?: string | null) => {
   return trimmed.length ? trimmed : null;
 };
 
-const uniqueEmails = (values: string[]) => {
+const uniqueEmails = (values: Array<string | null | undefined>) => {
   const unique = new Set<string>();
   values.forEach((value) => {
     const normalized = normalizeEmail(value);
@@ -217,6 +218,29 @@ const buildRecipientList = (
   return recipients;
 };
 
+const shouldLinkContact = ({
+  contactId,
+  fromEmail,
+  recipients,
+  requestedAddresses,
+  isOutbound,
+}: {
+  contactId: string | null;
+  fromEmail: string | null;
+  recipients: string[];
+  requestedAddresses: Set<string>;
+  isOutbound: boolean;
+}) => {
+  if (!contactId) return false;
+  if (isOutbound && recipients.length > MAX_CONTACT_HISTORY_RECIPIENTS) {
+    return false;
+  }
+
+  return uniqueEmails([fromEmail, ...recipients]).some((address) =>
+    requestedAddresses.has(address)
+  );
+};
+
 const parsePayload = async (request: Request) => {
   try {
     const body = (await request.json()) as {
@@ -323,6 +347,7 @@ const updateContactAfterOutbound = async (
 export async function POST(request: Request) {
   const { emails, limit, contactId } = await parsePayload(request);
   const cleaned = uniqueEmails(emails);
+  const requestedAddressSet = new Set(cleaned);
   if (!cleaned.length) {
     return NextResponse.json({ ok: false, error: "Missing emails" }, { status: 400 });
   }
@@ -381,7 +406,7 @@ export async function POST(request: Request) {
         const supabase = getSupabase();
         const { data: existing } = await supabase
           .from("emails")
-          .select("id, contact_id, raw")
+          .select("id, contact_id, from_email, to_email, raw")
           .eq("gmail_uid", message.uid)
           .maybeSingle();
 
@@ -404,10 +429,23 @@ export async function POST(request: Request) {
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
         const direction = isOutbound ? "outbound" : "inbound";
+        const linkedContactId = shouldLinkContact({
+          contactId,
+          fromEmail,
+          recipients,
+          requestedAddresses: requestedAddressSet,
+          isOutbound,
+        })
+          ? contactId
+          : null;
 
         if (existing) {
           const shouldUpdateContact =
-            !existing.contact_id && Boolean(contactId);
+            !existing.contact_id && Boolean(linkedContactId);
+          const shouldUpdateFrom = !existing.from_email && Boolean(fromEmail);
+          const shouldUpdateTo =
+            Boolean(recipientsDisplay) &&
+            existing.to_email !== recipientsDisplay;
           const existingRaw =
             existing.raw && typeof existing.raw === "object"
               ? (existing.raw as Record<string, unknown>)
@@ -426,13 +464,20 @@ export async function POST(request: Request) {
           const shouldUpdateAttachments =
             attachmentsMeta.length > 0 && !hasUrls;
 
-          if (shouldUpdateContact || shouldUpdateAttachments) {
+          if (
+            shouldUpdateContact ||
+            shouldUpdateFrom ||
+            shouldUpdateTo ||
+            shouldUpdateAttachments
+          ) {
             await supabase
               .from("emails")
               .update({
                 contact_id: shouldUpdateContact
-                  ? contactId
+                  ? linkedContactId
                   : existing.contact_id,
+                from_email: shouldUpdateFrom ? fromEmail : existing.from_email,
+                to_email: shouldUpdateTo ? recipientsDisplay : existing.to_email,
                 ...(shouldUpdateAttachments
                   ? {
                       raw: {
@@ -448,17 +493,14 @@ export async function POST(request: Request) {
               .eq("id", existing.id);
             updated += 1;
           }
-          if (direction === "outbound") {
-            const outboundContactId = contactId || existing.contact_id;
-            if (outboundContactId) {
-              await updateContactAfterOutbound(outboundContactId, parsed.date);
-            }
+          if (direction === "outbound" && linkedContactId) {
+            await updateContactAfterOutbound(linkedContactId, parsed.date);
           }
           continue;
         }
 
         const { error } = await supabase.from("emails").insert({
-          contact_id: contactId,
+          contact_id: linkedContactId,
           direction,
           gmail_uid: message.uid,
           message_id_header: parsed.messageId,
@@ -485,8 +527,8 @@ export async function POST(request: Request) {
           console.error("Backfill insert error", error);
           continue;
         }
-        if (direction === "outbound" && contactId) {
-          await updateContactAfterOutbound(contactId, parsed.date);
+        if (direction === "outbound" && linkedContactId) {
+          await updateContactAfterOutbound(linkedContactId, parsed.date);
         }
         inserted += 1;
       }

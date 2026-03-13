@@ -266,6 +266,8 @@ const getFollowUpDays = () => {
   return Math.max(1, Math.floor(raw));
 };
 
+const MAX_CONTACT_HISTORY_RECIPIENTS = 5;
+
 const shouldSkipFollowUp = (status?: string | null) =>
   status === "Chiuso" || status === "Non interessato";
 
@@ -535,7 +537,11 @@ export const runSync = async (request: Request) => {
               )
             )
           : await findContactIdsFromAddresses([fromEmail]);
-        const contactId = matchedContactIds[0] ?? null;
+        const canLinkContact = isOutbound
+          ? recipients.length <= MAX_CONTACT_HISTORY_RECIPIENTS &&
+            matchedContactIds.length === 1
+          : matchedContactIds.length === 1;
+        const contactId = canLinkContact ? (matchedContactIds[0] ?? null) : null;
         const direction = isOutbound ? "outbound" : "inbound";
 
         if (existing) {
