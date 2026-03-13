@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 import { simpleParser, type AddressObject } from "mailparser";
 import { createClient } from "@supabase/supabase-js";
+import {
+  buildKnownContactAddresses,
+  extractMessageIds,
+  normalizeEmail,
+  uniqueEmails,
+} from "@/lib/server/emailMatching";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_LIMIT = 200;
 const MAX_LIMIT = 400;
-const MAX_CONTACT_HISTORY_RECIPIENTS = 5;
 
 type ParsedAddress = {
   address?: string;
@@ -48,21 +53,6 @@ const getSupabase = () =>
   createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-
-const normalizeEmail = (value?: string | null) => {
-  if (!value) return null;
-  const trimmed = value.trim().toLowerCase();
-  return trimmed.length ? trimmed : null;
-};
-
-const uniqueEmails = (values: Array<string | null | undefined>) => {
-  const unique = new Set<string>();
-  values.forEach((value) => {
-    const normalized = normalizeEmail(value);
-    if (normalized) unique.add(normalized);
-  });
-  return Array.from(unique);
-};
 
 const parseAddressArray = (list?: AddressObject | AddressObject[]) => {
   if (!list) return [];
@@ -223,21 +213,78 @@ const shouldLinkContact = ({
   fromEmail,
   recipients,
   requestedAddresses,
-  isOutbound,
 }: {
   contactId: string | null;
   fromEmail: string | null;
   recipients: string[];
   requestedAddresses: Set<string>;
-  isOutbound: boolean;
 }) => {
   if (!contactId) return false;
-  if (isOutbound && recipients.length > MAX_CONTACT_HISTORY_RECIPIENTS) {
-    return false;
-  }
 
   return uniqueEmails([fromEmail, ...recipients]).some((address) =>
     requestedAddresses.has(address)
+  );
+};
+
+const buildMessageIdVariants = (values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values
+        .flatMap((value) => extractMessageIds(value))
+        .flatMap((id) => [id, `<${id}>`])
+    )
+  );
+
+const findThreadContactIds = async (
+  messageIdValues: Array<string | null | undefined>
+) => {
+  const messageIds = buildMessageIdVariants(messageIdValues);
+  if (!messageIds.length) return [];
+
+  const supabase = getSupabase();
+  const found = new Set<string>();
+  const chunkSize = 50;
+
+  for (let index = 0; index < messageIds.length; index += chunkSize) {
+    const chunk = messageIds.slice(index, index + chunkSize);
+    const { data } = await supabase
+      .from("emails")
+      .select("contact_id")
+      .in("message_id_header", chunk)
+      .not("contact_id", "is", null)
+      .limit(2000);
+
+    data?.forEach((row) => {
+      if (row.contact_id) found.add(row.contact_id);
+    });
+  }
+
+  return Array.from(found);
+};
+
+const getKnownSearchAddresses = async (
+  contactId: string | null,
+  seedAddresses: string[]
+) => {
+  if (!contactId) return seedAddresses;
+
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from("emails")
+    .select("direction, from_email, to_email, raw")
+    .eq("contact_id", contactId)
+    .order("received_at", { ascending: false })
+    .limit(800);
+
+  return buildKnownContactAddresses(
+    seedAddresses,
+    ((data ?? []) as unknown) as Array<{
+      direction: "inbound" | "outbound" | null;
+      from_email: string | null;
+      to_email: string | null;
+      raw: Record<string, unknown> | null;
+    }>,
+    process.env.GMAIL_USER
   );
 };
 
@@ -247,16 +294,25 @@ const parsePayload = async (request: Request) => {
       emails?: string[];
       limit?: number;
       contactId?: string;
+      beforeUid?: number;
     };
     const emails = Array.isArray(body?.emails) ? body.emails : [];
     const limit = Number(body?.limit ?? DEFAULT_LIMIT);
+    const beforeUid = Number(body?.beforeUid ?? 0);
     return {
       emails,
       limit: Math.max(1, Math.min(MAX_LIMIT, Number.isFinite(limit) ? limit : DEFAULT_LIMIT)),
       contactId: body?.contactId ?? null,
+      beforeUid:
+        Number.isFinite(beforeUid) && beforeUid > 0 ? beforeUid : null,
     };
   } catch {
-    return { emails: [], limit: DEFAULT_LIMIT, contactId: null };
+    return {
+      emails: [],
+      limit: DEFAULT_LIMIT,
+      contactId: null,
+      beforeUid: null,
+    };
   }
 };
 
@@ -345,15 +401,16 @@ const updateContactAfterOutbound = async (
 };
 
 export async function POST(request: Request) {
-  const { emails, limit, contactId } = await parsePayload(request);
+  const { emails, limit, contactId, beforeUid } = await parsePayload(request);
   const cleaned = uniqueEmails(emails);
-  const requestedAddressSet = new Set(cleaned);
   if (!cleaned.length) {
     return NextResponse.json({ ok: false, error: "Missing emails" }, { status: 400 });
   }
 
   const user = getEnv("GMAIL_USER");
   const pass = getEnv("GMAIL_APP_PASSWORD");
+  const searchAddresses = await getKnownSearchAddresses(contactId, cleaned);
+  const requestedAddressSet = new Set(searchAddresses);
   const client = new ImapFlow({
     host: "imap.gmail.com",
     port: 993,
@@ -378,7 +435,7 @@ export async function POST(request: Request) {
 
     const lock = await client.getMailboxLock(mailboxPath);
     try {
-      const orQueries = cleaned.flatMap((address) => [
+      const orQueries = searchAddresses.flatMap((address) => [
         { from: address },
         { to: address },
         { cc: address },
@@ -388,12 +445,21 @@ export async function POST(request: Request) {
         orQueries.length === 1 ? orQueries[0] : { or: orQueries };
 
       const allUids = await client.search(query, { uid: true });
-      const uidList = Array.isArray(allUids) ? allUids : [];
+      const uidList = (Array.isArray(allUids) ? allUids : []).filter(
+        (uid) => !beforeUid || uid < beforeUid
+      );
       if (!uidList.length) {
-        return NextResponse.json({ ok: true, processed: 0, inserted: 0, updated: 0 });
+        return NextResponse.json({
+          ok: true,
+          processed: 0,
+          inserted: 0,
+          updated: 0,
+          nextCursor: null,
+        });
       }
 
       const slice = uidList.slice(-limit);
+      const nextCursor = uidList.length > slice.length ? slice[0] : null;
 
       for await (const message of client.fetch(
         slice,
@@ -429,13 +495,16 @@ export async function POST(request: Request) {
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
         const direction = isOutbound ? "outbound" : "inbound";
+        const threadContactIds = await findThreadContactIds([
+          parsed.inReplyTo,
+          parsed.references,
+        ]);
         const linkedContactId = shouldLinkContact({
           contactId,
           fromEmail,
           recipients,
           requestedAddresses: requestedAddressSet,
-          isOutbound,
-        })
+        }) || threadContactIds.includes(contactId ?? "")
           ? contactId
           : null;
 
@@ -532,6 +601,14 @@ export async function POST(request: Request) {
         }
         inserted += 1;
       }
+
+      return NextResponse.json({
+        ok: true,
+        processed,
+        inserted,
+        updated,
+        nextCursor,
+      });
     } finally {
       lock.release();
     }
@@ -542,5 +619,11 @@ export async function POST(request: Request) {
     await client.logout().catch(() => undefined);
   }
 
-  return NextResponse.json({ ok: true, processed, inserted, updated });
+  return NextResponse.json({
+    ok: true,
+    processed,
+    inserted,
+    updated,
+    nextCursor: null,
+  });
 }

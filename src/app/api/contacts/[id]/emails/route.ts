@@ -63,7 +63,7 @@ export async function GET(request: Request, context: RouteContext) {
         emailText: emailParam,
         select:
           "id, contact_id, direction, gmail_uid, message_id_header, in_reply_to, references, from_email, from_name, to_email, subject, text_body, html_body, received_at, created_at, raw",
-        limit: 400,
+        limit: 2000,
       }
     );
 

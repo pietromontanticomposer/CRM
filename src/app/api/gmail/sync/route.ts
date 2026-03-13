@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { ImapFlow } from "imapflow";
 import { simpleParser, type AddressObject } from "mailparser";
 import { createClient } from "@supabase/supabase-js";
+import {
+  extractEmails,
+  extractMessageIds,
+  normalizeEmail,
+  rowMatchesAddresses,
+  uniqueEmails,
+} from "@/lib/server/emailMatching";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -240,12 +247,6 @@ const setLastUid = async (uid: number) => {
   });
 };
 
-const normalizeEmail = (value?: string | null) => {
-  if (!value) return null;
-  const trimmed = value.trim().toLowerCase();
-  return trimmed.length ? trimmed : null;
-};
-
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -265,8 +266,6 @@ const getFollowUpDays = () => {
   if (!Number.isFinite(raw)) return 10;
   return Math.max(1, Math.floor(raw));
 };
-
-const MAX_CONTACT_HISTORY_RECIPIENTS = 5;
 
 const shouldSkipFollowUp = (status?: string | null) =>
   status === "Chiuso" || status === "Non interessato";
@@ -332,15 +331,6 @@ const updateContactAfterOutbound = async (
     .eq("id", contactId);
 };
 
-const uniqueEmails = (values: Array<string | null | undefined>) => {
-  const unique = new Set<string>();
-  for (const value of values) {
-    const normalized = normalizeEmail(value);
-    if (normalized) unique.add(normalized);
-  }
-  return Array.from(unique);
-};
-
 const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const buildRecipientList = (
@@ -369,20 +359,80 @@ const findContactIdsFromAddresses = async (
   if (!candidates.length) return [];
   const supabase = getSupabase();
   const found = new Set<string>();
+  const addressSet = new Set(candidates);
   const chunkSize = 25;
 
   for (let index = 0; index < candidates.length; index += chunkSize) {
     const chunk = candidates.slice(index, index + chunkSize);
-    const filter = chunk
+    const contactFilter = chunk
       .map((email) => `email.ilike.%${escapeIlike(email)}%`)
       .join(",");
-    const { data } = await supabase
+    const { data: contactRows } = await supabase
       .from("contacts")
-      .select("id")
-      .or(filter)
+      .select("id, email")
+      .or(contactFilter)
       .limit(2000);
+
+    contactRows?.forEach((row) => {
+      const exactContactEmails = extractEmails(row.email);
+      if (row.id && exactContactEmails.some((email) => addressSet.has(email))) {
+        found.add(row.id);
+      }
+    });
+
+    const emailFilter = chunk
+      .flatMap((email) => [
+        `from_email.ilike.%${escapeIlike(email)}%`,
+        `to_email.ilike.%${escapeIlike(email)}%`,
+      ])
+      .join(",");
+    const { data: linkedEmailRows } = await supabase
+      .from("emails")
+      .select("contact_id, direction, from_email, to_email, raw")
+      .not("contact_id", "is", null)
+      .or(emailFilter)
+      .limit(2000);
+
+    linkedEmailRows?.forEach((row) => {
+      if (row.contact_id && rowMatchesAddresses(row, addressSet)) {
+        found.add(row.contact_id);
+      }
+    });
+  }
+
+  return Array.from(found);
+};
+
+const buildMessageIdVariants = (values: Array<string | null | undefined>) =>
+  Array.from(
+    new Set(
+      values
+        .flatMap((value) => extractMessageIds(value))
+        .flatMap((id) => [id, `<${id}>`])
+    )
+  );
+
+const findContactIdsFromThread = async (
+  values: Array<string | null | undefined>
+) => {
+  const messageIds = buildMessageIdVariants(values);
+  if (!messageIds.length) return [];
+
+  const supabase = getSupabase();
+  const found = new Set<string>();
+  const chunkSize = 50;
+
+  for (let index = 0; index < messageIds.length; index += chunkSize) {
+    const chunk = messageIds.slice(index, index + chunkSize);
+    const { data } = await supabase
+      .from("emails")
+      .select("contact_id")
+      .in("message_id_header", chunk)
+      .not("contact_id", "is", null)
+      .limit(2000);
+
     data?.forEach((row) => {
-      if (row.id) found.add(row.id);
+      if (row.contact_id) found.add(row.contact_id);
     });
   }
 
@@ -530,18 +580,25 @@ export const runSync = async (request: Request) => {
 
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
-        const matchedContactIds = isOutbound
+        const threadMatchedContactIds = await findContactIdsFromThread([
+          parsed.inReplyTo,
+          parsed.references,
+        ]);
+        const addressMatchedContactIds = isOutbound
           ? await findContactIdsFromAddresses(
               recipients.filter(
                 (address) => normalizeEmail(address) !== normalizeEmail(user)
               )
             )
           : await findContactIdsFromAddresses([fromEmail]);
-        const canLinkContact = isOutbound
-          ? recipients.length <= MAX_CONTACT_HISTORY_RECIPIENTS &&
-            matchedContactIds.length === 1
-          : matchedContactIds.length === 1;
-        const contactId = canLinkContact ? (matchedContactIds[0] ?? null) : null;
+        const matchedContactIds =
+          threadMatchedContactIds.length === 1
+            ? threadMatchedContactIds
+            : addressMatchedContactIds.length === 1
+              ? addressMatchedContactIds
+              : [];
+        const contactId =
+          matchedContactIds.length === 1 ? (matchedContactIds[0] ?? null) : null;
         const direction = isOutbound ? "outbound" : "inbound";
 
         if (existing) {

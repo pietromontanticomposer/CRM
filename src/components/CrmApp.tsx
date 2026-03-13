@@ -11,7 +11,7 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
-type ContactFolder = "Tutte" | Status;
+type ContactFolder = "Tutte" | "Follow-up" | Status;
 const NEW_CONTACT_STATUS_OPTIONS = ["Da contattare", "Già contattato"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
@@ -173,6 +173,15 @@ const toDateKey = (value?: string | null) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString().slice(0, 10);
+};
+
+const isOpenFollowUpContact = (contact: Contact, today: string) => {
+  if (contact.status === "Chiuso" || contact.status === "Non interessato") {
+    return false;
+  }
+  const nextActionDate = toDateKey(contact.next_action_at);
+  if (!nextActionDate) return false;
+  return nextActionDate <= today;
 };
 
 const extractEmails = (value?: string | null) => {
@@ -663,6 +672,11 @@ export default function CrmApp() {
     );
   }, [contacts]);
 
+  const followUpCount = useMemo(() => {
+    const today = getTodayDateInputValue();
+    return contacts.filter((contact) => isOpenFollowUpContact(contact, today)).length;
+  }, [contacts]);
+
   const searchedContacts = useMemo(() => {
     const query = contactSearch.trim().toLowerCase();
     if (!query) return contacts;
@@ -681,6 +695,12 @@ export default function CrmApp() {
   }, [contacts, contactSearch]);
 
   const filteredContacts = useMemo(() => {
+    if (contactFolder === "Follow-up") {
+      const today = getTodayDateInputValue();
+      return searchedContacts.filter((contact) =>
+        isOpenFollowUpContact(contact, today)
+      );
+    }
     if (contactFolder === "Tutte") return searchedContacts;
     return searchedContacts.filter((contact) => contact.status === contactFolder);
   }, [searchedContacts, contactFolder]);
@@ -1249,29 +1269,55 @@ export default function CrmApp() {
 
   useEffect(() => {
     if (!selected || emailsLoading) return;
-    if (emails.length > 0) return;
-    const emailList = extractEmails(selected.email);
+    const selectedId = selected.id;
+    const selectedEmail = selected.email;
+    const emailList = extractEmails(selectedEmail);
     if (!emailList.length) return;
-    if (backfillByContact[selected.id]) return;
+    if (backfillByContact[selectedId]) return;
 
-    setBackfillByContact((prev) => ({ ...prev, [selected.id]: "pending" }));
+    setBackfillByContact((prev) => ({ ...prev, [selectedId]: "pending" }));
+    let cancelled = false;
 
     const run = async () => {
       try {
-        const response = await fetch("/api/gmail/backfill-contact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            emails: emailList,
-            contactId: selected.id,
-            limit: 200,
-          }),
-        });
-        if (!response.ok) return;
-        await loadEmails(selected.id, selected.email);
+        let beforeUid: number | null = null;
+        let batchCount = 0;
+
+        while (!cancelled && batchCount < 20) {
+          const response = await fetch("/api/gmail/backfill-contact", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              emails: emailList,
+              contactId: selectedId,
+              limit: 400,
+              beforeUid,
+            }),
+          });
+          if (!response.ok) return;
+
+          const payload = (await response.json()) as {
+            nextCursor?: number | null;
+          };
+          const nextCursor =
+            typeof payload?.nextCursor === "number" && payload.nextCursor > 0
+              ? payload.nextCursor
+              : null;
+
+          batchCount += 1;
+          if (!nextCursor) {
+            break;
+          }
+          beforeUid = nextCursor;
+        }
+
+        if (cancelled) return;
+        await loadEmails(selectedId, selectedEmail);
+        if (cancelled) return;
         const refreshedContacts = await loadContacts({ silent: true });
+        if (cancelled) return;
         const refreshedSelected = refreshedContacts.find(
-          (contact) => contact.id === selected.id
+          (contact) => contact.id === selectedId
         );
         if (refreshedSelected) {
           setDraft(buildDraft(refreshedSelected));
@@ -1279,13 +1325,24 @@ export default function CrmApp() {
       } catch (error) {
         console.error(error);
       } finally {
-        setBackfillByContact((prev) => ({ ...prev, [selected.id]: "done" }));
+        setBackfillByContact((prev) => {
+          const next = { ...prev };
+          if (cancelled) {
+            delete next[selectedId];
+          } else {
+            next[selectedId] = "done";
+          }
+          return next;
+        });
       }
     };
 
     void run();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, selected?.email, emailsLoading, emails.length]);
+  }, [selected?.id, selected?.email, emailsLoading]);
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
@@ -2286,6 +2343,18 @@ export default function CrmApp() {
               >
                 Tutte
                 <span className="ml-1 text-[10px] opacity-80">{contacts.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setContactFolder("Follow-up")}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                  contactFolder === "Follow-up"
+                    ? "border-amber-400/40 bg-amber-500/10 text-amber-100"
+                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                }`}
+              >
+                Follow-up
+                <span className="ml-1 text-[10px] opacity-80">{followUpCount}</span>
               </button>
               {STATUS_OPTIONS.map((status) => (
                 <button
