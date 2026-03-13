@@ -2101,8 +2101,8 @@ export default function CrmApp() {
         </div>
       </header>
 
-      <main className="relative mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[340px_1fr]">
-        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg">
+      <main className="relative mx-auto grid w-full max-w-7xl gap-8 lg:items-start lg:grid-cols-[340px_1fr]">
+        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100vh-3rem)] lg:flex-col lg:overflow-hidden">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
           </h2>
@@ -2288,134 +2288,136 @@ export default function CrmApp() {
             )}
           </div>
 
-          <div className="mt-8 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-            <span>Contatti</span>
-            <span>
-              {contactSearch.trim()
-                ? `${filteredContacts.length} / ${contacts.length}`
-                : contacts.length}
-            </span>
-          </div>
+          <div className="mt-8 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              <span>Contatti</span>
+              <span>
+                {contactSearch.trim()
+                  ? `${filteredContacts.length} / ${contacts.length}`
+                  : contacts.length}
+              </span>
+            </div>
 
-          <div className="mt-3">
-            <input
-              placeholder="Cerca contatto (nome, email, produzione...)"
-              value={contactSearch}
-              onChange={(event) => setContactSearch(event.target.value)}
-            />
-          </div>
+            <div className="mt-3">
+              <input
+                placeholder="Cerca contatto (nome, email, produzione...)"
+                value={contactSearch}
+                onChange={(event) => setContactSearch(event.target.value)}
+              />
+            </div>
 
-          <div className="mt-4 grid gap-3">
-            {loading && (
-              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                Caricamento...
-              </div>
-            )}
-            {!loading && !error && contacts.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                Nessun contatto ancora. Aggiungi il primo.
-              </div>
-            )}
-            {!loading &&
-              !error &&
-              contacts.length > 0 &&
-              filteredContacts.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                Nessun risultato per “{contactSearch.trim()}”.
-              </div>
-            )}
-            {!loading &&
-              filteredContacts.length > 0 &&
-              STATUS_OPTIONS.map((status) => {
-                const group = filteredContactsByStatus[status] ?? [];
-                return (
-                  <details
-                    key={status}
-                    open={openContactGroups[status]}
-                    onToggle={(event) => {
-                      const isOpen = (event.target as HTMLDetailsElement).open;
-                      setOpenContactGroups((prev) => ({
-                        ...prev,
-                        [status]: isOpen,
-                      }));
-                    }}
-                    className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-3"
-                  >
-                    <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                      <span>{status}</span>
-                      <span className="rounded-full bg-[var(--panel-strong)] px-2 py-0.5 text-[11px]">
-                        {group.length}
-                      </span>
-                    </summary>
-                    <div className="mt-3 grid gap-3">
-                      {group.length === 0 && (
-                        <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
-                          Nessun contatto in questa cartella.
-                        </div>
-                      )}
-                      {group.map((contact) => {
-                        const isSelected = contact.id === selectedId;
-                        return (
-                          <div key={contact.id} className="grid gap-3">
-                            <button
-                              onClick={() => handleSelectContact(contact)}
-                              className={`perf-card flex w-full flex-col gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-1 hover:shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] ${
-                                isSelected
-                                  ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                                  : "border-[var(--line)] bg-[var(--panel)]"
-                              } ${
-                                contact.status === "Chiuso"
-                                  ? "opacity-70 hover:opacity-100"
-                                  : ""
-                              }`}
-                            >
-                              <div className="flex min-w-0 items-center justify-between gap-2">
-                                <div className="flex min-w-0 flex-1 items-center gap-3">
-                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-semibold text-[var(--accent)]">
-                                    {getInitials(getDisplayName(contact))}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold">
-                                      {getDisplayName(contact)}
-                                    </div>
-                                    <div className="truncate text-xs text-[var(--muted)]">
-                                      {[contact.role, contact.company]
-                                        .filter(Boolean)
-                                        .join(" · ") || "—"}
-                                    </div>
-                                  </div>
-                                </div>
-                                <span
-                                  className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
-                                >
-                                  {contact.status}
-                                </span>
-                              </div>
-                              <div className="break-words text-xs text-[var(--muted)]">
-                                {contact.status === "Chiuso" ? (
-                                  <>Chiuso · contattare via telefono</>
-                                ) : contact.status === "Non interessato" ? (
-                                  <>Non interessato · non ricontattare</>
-                                ) : !contact.last_action_at ? (
-                                  <>Prossima azione: Da contattare</>
-                                ) : (
-                                  <>
-                                    Prossima azione:{" "}
-                                    {formatDate(contact.next_action_at)}
-                                    {contact.next_action_note
-                                      ? ` · ${contact.next_action_note}`
-                                      : ""}
-                                  </>
-                                )}
-                              </div>
-                            </button>
+            <div className="mt-4 grid gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+              {loading && (
+                <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
+                  Caricamento...
+                </div>
+              )}
+              {!loading && !error && contacts.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
+                  Nessun contatto ancora. Aggiungi il primo.
+                </div>
+              )}
+              {!loading &&
+                !error &&
+                contacts.length > 0 &&
+                filteredContacts.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
+                  Nessun risultato per “{contactSearch.trim()}”.
+                </div>
+              )}
+              {!loading &&
+                filteredContacts.length > 0 &&
+                STATUS_OPTIONS.map((status) => {
+                  const group = filteredContactsByStatus[status] ?? [];
+                  return (
+                    <details
+                      key={status}
+                      open={openContactGroups[status]}
+                      onToggle={(event) => {
+                        const isOpen = (event.target as HTMLDetailsElement).open;
+                        setOpenContactGroups((prev) => ({
+                          ...prev,
+                          [status]: isOpen,
+                        }));
+                      }}
+                      className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-3"
+                    >
+                      <summary className="flex cursor-pointer items-center justify-between gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
+                        <span>{status}</span>
+                        <span className="rounded-full bg-[var(--panel-strong)] px-2 py-0.5 text-[11px]">
+                          {group.length}
+                        </span>
+                      </summary>
+                      <div className="mt-3 grid gap-3">
+                        {group.length === 0 && (
+                          <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
+                            Nessun contatto in questa cartella.
                           </div>
-                        );
-                      })}
-                    </div>
-                  </details>
-                );
-              })}
+                        )}
+                        {group.map((contact) => {
+                          const isSelected = contact.id === selectedId;
+                          return (
+                            <div key={contact.id} className="grid gap-3">
+                              <button
+                                onClick={() => handleSelectContact(contact)}
+                                className={`perf-card flex w-full flex-col gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-1 hover:shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] ${
+                                  isSelected
+                                    ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                                    : "border-[var(--line)] bg-[var(--panel)]"
+                                } ${
+                                  contact.status === "Chiuso"
+                                    ? "opacity-70 hover:opacity-100"
+                                    : ""
+                                }`}
+                              >
+                                <div className="flex min-w-0 items-center justify-between gap-2">
+                                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-semibold text-[var(--accent)]">
+                                      {getInitials(getDisplayName(contact))}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="truncate text-sm font-semibold">
+                                        {getDisplayName(contact)}
+                                      </div>
+                                      <div className="truncate text-xs text-[var(--muted)]">
+                                        {[contact.role, contact.company]
+                                          .filter(Boolean)
+                                          .join(" · ") || "—"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
+                                  >
+                                    {contact.status}
+                                  </span>
+                                </div>
+                                <div className="break-words text-xs text-[var(--muted)]">
+                                  {contact.status === "Chiuso" ? (
+                                    <>Chiuso · contattare via telefono</>
+                                  ) : contact.status === "Non interessato" ? (
+                                    <>Non interessato · non ricontattare</>
+                                  ) : !contact.last_action_at ? (
+                                    <>Prossima azione: Da contattare</>
+                                  ) : (
+                                    <>
+                                      Prossima azione:{" "}
+                                      {formatDate(contact.next_action_at)}
+                                      {contact.next_action_note
+                                        ? ` · ${contact.next_action_note}`
+                                        : ""}
+                                    </>
+                                  )}
+                                </div>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  );
+                })}
+            </div>
           </div>
         </section>
 
