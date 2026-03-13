@@ -1,5 +1,6 @@
 import Link from "next/link";
 import TodoBoard from "@/components/TodoBoard";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function TodoPage() {
   return (
@@ -11,6 +12,11 @@ export default function TodoPage() {
         >
           ← Home
         </Link>
+      </div>
+      <div className="pointer-events-none fixed right-4 top-4 z-50 sm:right-8 sm:top-6">
+        <div className="pointer-events-auto">
+          <LogoutButton />
+        </div>
       </div>
       <TodoBoard />
     </div>

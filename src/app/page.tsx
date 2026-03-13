@@ -1,8 +1,14 @@
 import Link from "next/link";
+import LogoutButton from "@/components/LogoutButton";
 
 export default function Home() {
   return (
     <div className="relative min-h-screen overflow-hidden px-6 pb-16 pt-14 sm:px-10">
+      <div className="pointer-events-none fixed right-4 top-4 z-50 sm:right-8 sm:top-6">
+        <div className="pointer-events-auto">
+          <LogoutButton />
+        </div>
+      </div>
       <main className="mx-auto grid w-full max-w-5xl gap-8">
         <header className="text-center sm:text-left">
           <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
