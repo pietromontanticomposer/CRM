@@ -8,6 +8,12 @@ import {
   normalizeEmail,
   uniqueEmails,
 } from "@/lib/server/emailMatching";
+import {
+  SECOND_FOLLOW_UP_DAYS,
+  buildAutomaticFollowUpNote,
+  getAutomaticFollowUpStage,
+  isKeepInTouchNote,
+} from "@/lib/followUp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -346,7 +352,7 @@ const updateContactAfterOutbound = async (
   const supabase = getSupabase();
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id, status, last_action_at, next_action_at")
+    .select("id, status, last_action_at, next_action_at, next_action_note")
     .eq("id", contactId)
     .maybeSingle();
 
@@ -358,28 +364,13 @@ const updateContactAfterOutbound = async (
     contact.status === "Da contattare" ? "Già contattato" : contact.status;
   const shouldPromoteStatus = promotedStatus !== contact.status;
   const followUpDays = getFollowUpDays();
-  const { data: firstOutboundEmail } = await supabase
-    .from("emails")
-    .select("received_at")
-    .eq("contact_id", contactId)
-    .eq("direction", "outbound")
-    .not("received_at", "is", null)
-    .order("received_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const firstOutboundDate =
-    parseDateValue(firstOutboundEmail?.received_at) ?? sentDate;
-  const followUpDateOnly = toDateOnly(addDays(firstOutboundDate, followUpDays));
   const lastActionDate = parseDateValue(contact.last_action_at);
   const nextActionDate = parseDateValue(contact.next_action_at);
+  const nextActionDateOnly = nextActionDate ? toDateOnly(nextActionDate) : null;
+  const automaticFollowUpStage = getAutomaticFollowUpStage(contact.next_action_note);
+  const keepInTouch = isKeepInTouchNote(contact.next_action_note);
   const shouldRefreshLastAction =
     !lastActionDate || toDateOnly(lastActionDate) < sentDateOnly;
-  const shouldRefreshFollowUp =
-    (nextActionDate ? toDateOnly(nextActionDate) : null) !== followUpDateOnly;
-
-  if (!shouldPromoteStatus && !shouldRefreshLastAction && !shouldRefreshFollowUp) {
-    return;
-  }
 
   const updatePayload: Record<string, unknown> = {};
   if (shouldPromoteStatus) {
@@ -389,9 +380,25 @@ const updateContactAfterOutbound = async (
     updatePayload.last_action_at = sentDateOnly;
     updatePayload.last_action_note = "Email inviata (backfill Gmail)";
   }
-  if (shouldRefreshFollowUp) {
-    updatePayload.next_action_at = followUpDateOnly;
-    updatePayload.next_action_note = `Follow-up automatico (${followUpDays} giorni)`;
+  if (!keepInTouch && automaticFollowUpStage === 1 && nextActionDateOnly) {
+    if (nextActionDateOnly <= sentDateOnly) {
+      updatePayload.next_action_at = toDateOnly(
+        addDays(sentDate, SECOND_FOLLOW_UP_DAYS)
+      );
+      updatePayload.next_action_note = buildAutomaticFollowUpNote(2, followUpDays);
+    }
+  } else if (!keepInTouch && automaticFollowUpStage === 2 && nextActionDateOnly) {
+    if (nextActionDateOnly <= sentDateOnly) {
+      updatePayload.next_action_at = null;
+      updatePayload.next_action_note = null;
+    }
+  } else if (!keepInTouch && !automaticFollowUpStage && !nextActionDateOnly) {
+    updatePayload.next_action_at = toDateOnly(addDays(sentDate, followUpDays));
+    updatePayload.next_action_note = buildAutomaticFollowUpNote(1, followUpDays);
+  }
+
+  if (!Object.keys(updatePayload).length) {
+    return;
   }
 
   await supabase

@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
+import {
+  KEEP_IN_TOUCH_MONTHS,
+  KEEP_IN_TOUCH_NOTE,
+  isKeepInTouchNote,
+} from "@/lib/followUp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const REMINDER_RECIPIENT = "pietromontanticomposer@gmail.com";
-const KEEP_IN_TOUCH_MONTHS = 2;
-const KEEP_IN_TOUCH_NOTE = `Mantenere in contatto (automatico ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`;
 
 const getEnv = (key: string) => {
   const value = process.env[key];
@@ -54,9 +57,6 @@ const addMonthsToDateOnly = (dateOnly: string, months: number) => {
   const day = `${parsed.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
-
-const isKeepInTouchNote = (value?: string | null) =>
-  value?.trim() === KEEP_IN_TOUCH_NOTE;
 
 const getSmtpConfig = () => {
   const host =

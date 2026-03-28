@@ -1,6 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  KEEP_IN_TOUCH_MONTHS,
+  KEEP_IN_TOUCH_NOTE,
+  SECOND_FOLLOW_UP_DAYS,
+  buildAutomaticFollowUpNote,
+  getAutomaticFollowUpStage,
+  isKeepInTouchNote,
+} from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
   "Da contattare",
@@ -94,6 +102,8 @@ type SummaryState = {
   rateLimited?: boolean;
 };
 
+type ComposePreset = "custom" | "first_follow_up";
+
 const emptyNewContact: NewContact = {
   name: "",
   email: "",
@@ -151,9 +161,6 @@ const getTodayDateInputValue = () => {
   return `${year}-${month}-${day}`;
 };
 
-const KEEP_IN_TOUCH_MONTHS = 2;
-const KEEP_IN_TOUCH_NOTE = `Mantenere in contatto (automatico ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`;
-
 const addMonthsToDateInputValue = (dateInput: string, months: number) => {
   const parsed = new Date(`${dateInput}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return dateInput;
@@ -164,8 +171,15 @@ const addMonthsToDateInputValue = (dateInput: string, months: number) => {
   return `${year}-${month}-${day}`;
 };
 
-const isKeepInTouchNote = (value?: string | null) =>
-  value?.trim() === KEEP_IN_TOUCH_NOTE;
+const addDaysToDateInputValue = (dateInput: string, days: number) => {
+  const parsed = new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateInput;
+  parsed.setDate(parsed.getDate() + days);
+  const year = parsed.getFullYear();
+  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+  const day = `${parsed.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
@@ -519,6 +533,33 @@ const normalizeThreadSubject = (subject?: string | null) => {
   return normalized.trim() || fallback;
 };
 
+const buildReplySubject = (subject?: string | null, fallback?: string | null) => {
+  const base = subject?.trim() || fallback?.trim() || "";
+  if (!base) return "";
+  return /^re:/i.test(base) ? base : `Re: ${base}`;
+};
+
+const FIRST_FOLLOW_UP_SUBJECT = "Il tuo lavoro";
+const DEFAULT_FIRST_FOLLOW_UP_DAYS = 10;
+
+const buildFirstFollowUpBody = (contactName?: string | null) => {
+  const name = contactName?.trim();
+  const greeting = name ? `Salve ${name},` : "Salve,";
+  return [
+    greeting,
+    "",
+    "le scrivo per fare un follow-up al mio messaggio precedente riguardo a una possibile collaborazione.",
+    "",
+    "Sarebbe interessato a scambiare due parole per capire se potremmo essere un buon match creativo? Se sì, sono disponibile per una breve chiamata settimana prossima: lunedì, martedì o mercoledì alle 16:30.",
+    "",
+    "Se può essere utile per farsi un'idea sono disponibile a preparare uno sketch su una sua scena, senza nessun impegno.",
+    "",
+    "Un saluto,",
+    "Pietro Montanti",
+    "pietromontanti.com",
+  ].join("\n");
+};
+
 const extractMessageIds = (value?: string | null) => {
   if (!value) return [];
   const bracketMatches = value.match(/<[^>]+>/g);
@@ -675,6 +716,7 @@ export default function CrmApp() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [emailPreset, setEmailPreset] = useState<ComposePreset>("custom");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -966,7 +1008,7 @@ export default function CrmApp() {
       setSummary(null);
       setSummaryLoading(false);
       setSummaryError(null);
-      return;
+      return [] as EmailRow[];
     }
 
     const requestId = emailRequestIdRef.current + 1;
@@ -1008,7 +1050,7 @@ export default function CrmApp() {
         setEmailsError("Impossibile caricare le email. Il server non risponde.");
       }
       setEmailsLoading(false);
-      return;
+      return [] as EmailRow[];
     }
 
     if (!response.ok) {
@@ -1019,7 +1061,7 @@ export default function CrmApp() {
         );
       }
       setEmailsLoading(false);
-      return;
+      return [] as EmailRow[];
     }
 
     const payload = (await response.json()) as EmailsApiResponse;
@@ -1029,6 +1071,7 @@ export default function CrmApp() {
     setEmails(emailRows);
     setEmailReadById(readMap);
     setEmailsLoading(false);
+    return emailRows;
   };
 
   const runBackfillForContact = async (
@@ -1162,15 +1205,28 @@ export default function CrmApp() {
 
     const today = getTodayDateInputValue();
     const keepWarm = isKeepInTouchNote(contact.next_action_note);
+    const automaticFollowUpStage = getAutomaticFollowUpStage(
+      contact.next_action_note
+    );
     const updatePayload: Record<string, unknown> = {
       last_action_at: today,
       last_action_note: keepWarm
         ? "Ricontattato (mantenimento attivo)"
-        : "Ricontattato",
+        : automaticFollowUpStage === 1
+          ? "Primo follow-up completato"
+          : automaticFollowUpStage === 2
+            ? "Secondo e ultimo follow-up completato"
+            : "Ricontattato",
       next_action_at: keepWarm
         ? addMonthsToDateInputValue(today, KEEP_IN_TOUCH_MONTHS)
+        : automaticFollowUpStage === 1
+          ? addDaysToDateInputValue(today, SECOND_FOLLOW_UP_DAYS)
         : null,
-      next_action_note: keepWarm ? KEEP_IN_TOUCH_NOTE : null,
+      next_action_note: keepWarm
+        ? KEEP_IN_TOUCH_NOTE
+        : automaticFollowUpStage === 1
+          ? buildAutomaticFollowUpNote(2, DEFAULT_FIRST_FOLLOW_UP_DAYS)
+          : null,
     };
 
     const response = await fetch(`/api/contacts/${contact.id}`, {
@@ -1210,7 +1266,11 @@ export default function CrmApp() {
     setFollowUpMessage(
       keepWarm
         ? `Ricontattato: prossimo promemoria tra ${KEEP_IN_TOUCH_MONTHS} mesi.`
-        : "Ricontattato registrato."
+        : automaticFollowUpStage === 1
+          ? `Primo follow-up registrato: il secondo e ultimo tornera tra ${SECOND_FOLLOW_UP_DAYS} giorni.`
+          : automaticFollowUpStage === 2
+            ? "Secondo e ultimo follow-up registrato."
+            : "Ricontattato registrato."
     );
     setFollowUpActionByContact((prev) => {
       const next = { ...prev };
@@ -1422,20 +1482,32 @@ export default function CrmApp() {
     return emails.find((email) => email.direction === "inbound") || null;
   };
 
+  const handleComposePresetChange = (preset: ComposePreset) => {
+    setEmailPreset(preset);
+    if (preset !== "first_follow_up") return;
+    setEmailSubject(FIRST_FOLLOW_UP_SUBJECT);
+    setEmailBody(buildFirstFollowUpBody(selected?.name));
+  };
+
   const handleSendEmail = async () => {
     if (!selected?.email?.trim()) {
       setEmailsError("Aggiungi un'email al contatto per poter rispondere.");
       return;
     }
 
-    if (!emailSubject.trim() && !emailBody.trim()) {
+    const replyTarget = getReplyTarget();
+    const resolvedSubject = replyTarget
+      ? buildReplySubject(replyTarget.subject, emailSubject)
+      : emailSubject.trim();
+    const resolvedBody = emailBody.trim();
+
+    if (!resolvedSubject && !resolvedBody) {
       setEmailsError("Scrivi almeno un oggetto o un messaggio.");
       return;
     }
 
     setSendingEmail(true);
     setEmailsError(null);
-    const replyTarget = getReplyTarget();
 
     const response = await fetch("/api/gmail/send", {
       method: "POST",
@@ -1443,8 +1515,8 @@ export default function CrmApp() {
       body: JSON.stringify({
         contactId: selected.id,
         to: selected.email.trim(),
-        subject: emailSubject.trim() || undefined,
-        text: emailBody.trim() || undefined,
+        subject: resolvedSubject || undefined,
+        text: resolvedBody || undefined,
         replyToEmailId: replyTarget?.id ?? undefined,
       }),
     });
@@ -1455,9 +1527,22 @@ export default function CrmApp() {
       return;
     }
 
+    const responsePayload = (await response.json().catch(() => null)) as
+      | { messageId?: string }
+      | null;
+
+    setEmailPreset("custom");
     setEmailSubject("");
     setEmailBody("");
-    await loadEmails(selected.id, selected.email);
+    const refreshedEmails = await loadEmails(selected.id, selected.email);
+    const sentEmail = responsePayload?.messageId
+      ? refreshedEmails?.find(
+          (email) => email.message_id_header === responsePayload.messageId
+        )
+      : null;
+    if (sentEmail?.id) {
+      setSelectedEmailId(sentEmail.id);
+    }
     const refreshedContacts = await loadContacts({ silent: true });
     const refreshedSelected = refreshedContacts.find(
       (contact) => contact.id === selected.id
@@ -2118,11 +2203,26 @@ export default function CrmApp() {
           <div className="mt-2 text-xs text-[var(--muted)]">
             A: {selected.email || "—"}
           </div>
+          <select
+            className="mt-3 w-full"
+            value={emailPreset}
+            onChange={(event) =>
+              handleComposePresetChange(event.target.value as ComposePreset)
+            }
+          >
+            <option value="custom">Personalizzato</option>
+            <option value="first_follow_up">Primo follow-up</option>
+          </select>
           <input
             className="mt-3 w-full"
             placeholder="Oggetto"
-            value={emailSubject}
+            value={
+              getReplyTarget()
+                ? buildReplySubject(getReplyTarget()?.subject, emailSubject)
+                : emailSubject
+            }
             onChange={(event) => setEmailSubject(event.target.value)}
+            readOnly={Boolean(getReplyTarget())}
           />
           <textarea
             className="mt-3 w-full"

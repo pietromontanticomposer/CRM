@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import {
+  SECOND_FOLLOW_UP_DAYS,
+  buildAutomaticFollowUpNote,
+  getAutomaticFollowUpStage,
+  isKeepInTouchNote,
+} from "@/lib/followUp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,6 +96,56 @@ const buildReferencesHeader = (references?: string | null, messageId?: string) =
   return unique.join(" ");
 };
 
+const getRecord = (value: unknown) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+};
+
+const getOptionalString = (value: unknown) => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const getHeaderValue = (raw: unknown, names: string[]) => {
+  const record = getRecord(raw);
+  if (!record) return null;
+
+  for (const name of names) {
+    const direct = getOptionalString(record[name]);
+    if (direct) return direct;
+  }
+
+  const headers = Array.isArray(record.Headers)
+    ? record.Headers
+    : Array.isArray(record.headers)
+      ? record.headers
+      : [];
+
+  for (const header of headers) {
+    const headerRecord = getRecord(header);
+    if (!headerRecord) continue;
+    const headerName = getOptionalString(headerRecord.Name ?? headerRecord.name);
+    if (!headerName) continue;
+    if (!names.some((name) => headerName.toLowerCase() === name.toLowerCase())) {
+      continue;
+    }
+    const value = getOptionalString(headerRecord.Value ?? headerRecord.value);
+    if (value) return value;
+  }
+
+  return null;
+};
+
+const buildReplySubject = (
+  threadSubject?: string | null,
+  requestedSubject?: string | null
+) => {
+  const base = threadSubject?.trim() || requestedSubject?.trim() || "";
+  if (!base) return "";
+  return /^re:/i.test(base) ? base : `Re: ${base}`;
+};
+
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -120,7 +176,7 @@ const updateContactAfterOutbound = async (
   const supabase = getSupabase();
   const { data: contact } = await supabase
     .from("contacts")
-    .select("id, status, last_action_at, next_action_at")
+    .select("id, status, last_action_at, next_action_at, next_action_note")
     .eq("id", contactId)
     .maybeSingle();
 
@@ -132,28 +188,13 @@ const updateContactAfterOutbound = async (
     contact.status === "Da contattare" ? "Già contattato" : contact.status;
   const shouldPromoteStatus = promotedStatus !== contact.status;
   const followUpDays = getFollowUpDays();
-  const { data: firstOutboundEmail } = await supabase
-    .from("emails")
-    .select("received_at")
-    .eq("contact_id", contactId)
-    .eq("direction", "outbound")
-    .not("received_at", "is", null)
-    .order("received_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  const firstOutboundDate =
-    parseDateValue(firstOutboundEmail?.received_at) ?? sentDate;
-  const followUpIso = toDateOnly(addDays(firstOutboundDate, followUpDays));
   const lastActionDate = parseDateValue(contact.last_action_at);
   const nextActionDate = parseDateValue(contact.next_action_at);
+  const nextActionDateOnly = nextActionDate ? toDateOnly(nextActionDate) : null;
+  const automaticFollowUpStage = getAutomaticFollowUpStage(contact.next_action_note);
+  const keepInTouch = isKeepInTouchNote(contact.next_action_note);
   const shouldRefreshLastAction =
     !lastActionDate || toDateOnly(lastActionDate) < sentDateOnly;
-  const shouldRefreshFollowUp =
-    (nextActionDate ? toDateOnly(nextActionDate) : null) !== followUpIso;
-
-  if (!shouldPromoteStatus && !shouldRefreshLastAction && !shouldRefreshFollowUp) {
-    return;
-  }
 
   const updatePayload: Record<string, unknown> = {};
   if (shouldPromoteStatus) {
@@ -163,9 +204,25 @@ const updateContactAfterOutbound = async (
     updatePayload.last_action_at = sentDateOnly;
     updatePayload.last_action_note = "Email inviata dal CRM";
   }
-  if (shouldRefreshFollowUp) {
-    updatePayload.next_action_at = followUpIso;
-    updatePayload.next_action_note = `Follow-up automatico (${followUpDays} giorni)`;
+  if (!keepInTouch && automaticFollowUpStage === 1 && nextActionDateOnly) {
+    if (nextActionDateOnly <= sentDateOnly) {
+      updatePayload.next_action_at = toDateOnly(
+        addDays(sentDate, SECOND_FOLLOW_UP_DAYS)
+      );
+      updatePayload.next_action_note = buildAutomaticFollowUpNote(2, followUpDays);
+    }
+  } else if (!keepInTouch && automaticFollowUpStage === 2 && nextActionDateOnly) {
+    if (nextActionDateOnly <= sentDateOnly) {
+      updatePayload.next_action_at = null;
+      updatePayload.next_action_note = null;
+    }
+  } else if (!keepInTouch && !automaticFollowUpStage && !nextActionDateOnly) {
+    updatePayload.next_action_at = toDateOnly(addDays(sentDate, followUpDays));
+    updatePayload.next_action_note = buildAutomaticFollowUpNote(1, followUpDays);
+  }
+
+  if (!Object.keys(updatePayload).length) {
+    return;
   }
 
   await supabase
@@ -215,22 +272,30 @@ export async function POST(request: Request) {
   if (payload.replyToEmailId) {
     const { data } = await supabase
       .from("emails")
-      .select("message_id_header, references, subject")
+      .select("message_id_header, references, subject, raw")
       .eq("id", payload.replyToEmailId)
       .maybeSingle();
 
-    replyMessageId = data?.message_id_header ?? null;
+    replyMessageId =
+      data?.message_id_header ??
+      getHeaderValue(data?.raw, [
+        "Message-ID",
+        "Message-Id",
+        "MessageID",
+        "messageId",
+      ]) ??
+      null;
     replyReferences = buildReferencesHeader(
-      data?.references ?? null,
+      data?.references ?? getHeaderValue(data?.raw, ["References", "references"]),
       replyMessageId ?? undefined
     );
-    replySubject = data?.subject ?? null;
+    replySubject =
+      data?.subject ?? getHeaderValue(data?.raw, ["Subject", "subject"]);
   }
 
-  let subject = payload.subject?.trim() || replySubject || "";
-  if (payload.replyToEmailId && subject && !/^re:/i.test(subject)) {
-    subject = `Re: ${subject}`;
-  }
+  const subject = payload.replyToEmailId
+    ? buildReplySubject(replySubject, payload.subject)
+    : payload.subject?.trim() || "";
 
   const smtpConfig = getSmtpConfig();
   const transport = smtpConfig
@@ -276,7 +341,7 @@ export async function POST(request: Request) {
     (matchedContactIds.length === 1 ? matchedContactIds[0] : null);
   const now = new Date().toISOString();
 
-  const { data: insertedEmail } = await supabase
+  const { data: insertedEmail, error: insertedEmailError } = await supabase
     .from("emails")
     .insert({
       contact_id: contactId,
@@ -292,10 +357,21 @@ export async function POST(request: Request) {
       text_body: payload.text ?? null,
       html_body: payload.html ?? null,
       received_at: now,
-      raw: { messageId: info.messageId ?? null },
+      raw: {
+        messageId: info.messageId ?? null,
+        to: extractEmails(payload.to),
+      },
     })
     .select("id")
     .single();
+
+  if (insertedEmailError) {
+    console.error("POST /api/gmail/send insert failed", insertedEmailError);
+    return NextResponse.json(
+      { ok: false, error: "Impossibile salvare l'email inviata." },
+      { status: 500 }
+    );
+  }
 
   if (insertedEmail?.id) {
     await supabase.from("notifications").insert({
