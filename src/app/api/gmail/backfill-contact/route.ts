@@ -13,6 +13,7 @@ import {
   buildAutomaticFollowUpNote,
   getAutomaticFollowUpStage,
   isKeepInTouchNote,
+  toFollowUpDateOnly,
 } from "@/lib/followUp";
 
 export const runtime = "nodejs";
@@ -328,8 +329,6 @@ const addDays = (date: Date, days: number) => {
   return next;
 };
 
-const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
-
 const parseDateValue = (value?: string | null) => {
   if (!value) return null;
   const date = new Date(value);
@@ -359,18 +358,20 @@ const updateContactAfterOutbound = async (
   if (!contact || shouldSkipFollowUp(contact.status)) return;
 
   const sentDate = parseDateValue(sentAt) ?? new Date();
-  const sentDateOnly = toDateOnly(sentDate);
+  const sentDateOnly = toFollowUpDateOnly(sentDate);
   const promotedStatus =
     contact.status === "Da contattare" ? "Già contattato" : contact.status;
   const shouldPromoteStatus = promotedStatus !== contact.status;
   const followUpDays = getFollowUpDays();
   const lastActionDate = parseDateValue(contact.last_action_at);
   const nextActionDate = parseDateValue(contact.next_action_at);
-  const nextActionDateOnly = nextActionDate ? toDateOnly(nextActionDate) : null;
+  const nextActionDateOnly = nextActionDate
+    ? toFollowUpDateOnly(nextActionDate)
+    : null;
   const automaticFollowUpStage = getAutomaticFollowUpStage(contact.next_action_note);
   const keepInTouch = isKeepInTouchNote(contact.next_action_note);
   const shouldRefreshLastAction =
-    !lastActionDate || toDateOnly(lastActionDate) < sentDateOnly;
+    !lastActionDate || toFollowUpDateOnly(lastActionDate) < sentDateOnly;
 
   const updatePayload: Record<string, unknown> = {};
   if (shouldPromoteStatus) {
@@ -382,7 +383,7 @@ const updateContactAfterOutbound = async (
   }
   if (!keepInTouch && automaticFollowUpStage === 1 && nextActionDateOnly) {
     if (nextActionDateOnly <= sentDateOnly) {
-      updatePayload.next_action_at = toDateOnly(
+      updatePayload.next_action_at = toFollowUpDateOnly(
         addDays(sentDate, SECOND_FOLLOW_UP_DAYS)
       );
       updatePayload.next_action_note = buildAutomaticFollowUpNote(2, followUpDays);
@@ -393,7 +394,9 @@ const updateContactAfterOutbound = async (
       updatePayload.next_action_note = null;
     }
   } else if (!keepInTouch && !automaticFollowUpStage && !nextActionDateOnly) {
-    updatePayload.next_action_at = toDateOnly(addDays(sentDate, followUpDays));
+    updatePayload.next_action_at = toFollowUpDateOnly(
+      addDays(sentDate, followUpDays)
+    );
     updatePayload.next_action_note = buildAutomaticFollowUpNote(1, followUpDays);
   }
 

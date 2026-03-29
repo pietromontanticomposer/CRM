@@ -2203,16 +2203,29 @@ export default function CrmApp() {
           <div className="mt-2 text-xs text-[var(--muted)]">
             A: {selected.email || "—"}
           </div>
+          <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+            Template Email
+          </div>
           <select
-            className="mt-3 w-full"
+            className="mt-2 w-full"
             value={emailPreset}
             onChange={(event) =>
               handleComposePresetChange(event.target.value as ComposePreset)
             }
           >
-            <option value="custom">Personalizzato</option>
-            <option value="first_follow_up">Primo follow-up</option>
+            <option value="custom">Nessun template</option>
+            <option value="first_follow_up">
+              Primo follow-up · Il tuo lavoro
+            </option>
           </select>
+          {emailPreset === "first_follow_up" && (
+            <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+              Template primo follow-up caricato.
+              {getReplyTarget()
+                ? " L'oggetto resta quello del thread per non aprire una mail nuova."
+                : ` Oggetto preset: ${FIRST_FOLLOW_UP_SUBJECT}.`}
+            </div>
+          )}
           <input
             className="mt-3 w-full"
             placeholder="Oggetto"
