@@ -102,7 +102,10 @@ type SummaryState = {
   rateLimited?: boolean;
 };
 
-type ComposePreset = "custom" | "first_follow_up";
+type ComposePreset =
+  | "custom"
+  | "first_follow_up_tu"
+  | "first_follow_up_lei";
 
 const emptyNewContact: NewContact = {
   name: "",
@@ -542,9 +545,13 @@ const buildReplySubject = (subject?: string | null, fallback?: string | null) =>
 const FIRST_FOLLOW_UP_SUBJECT = "Il tuo lavoro";
 const DEFAULT_FIRST_FOLLOW_UP_DAYS = 10;
 
-const buildFirstFollowUpBody = (contactName?: string | null) => {
+const buildFirstFollowUpGreeting = (contactName?: string | null) => {
   const name = contactName?.trim();
-  const greeting = name ? `Salve ${name},` : "Salve,";
+  return name ? `${name},` : null;
+};
+
+const buildFirstFollowUpBodyLei = (contactName?: string | null) => {
+  const greeting = buildFirstFollowUpGreeting(contactName);
   return [
     greeting,
     "",
@@ -557,7 +564,28 @@ const buildFirstFollowUpBody = (contactName?: string | null) => {
     "Un saluto,",
     "Pietro Montanti",
     "pietromontanti.com",
-  ].join("\n");
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+};
+
+const buildFirstFollowUpBodyTu = (contactName?: string | null) => {
+  const greeting = buildFirstFollowUpGreeting(contactName);
+  return [
+    greeting,
+    "",
+    "ti scrivo per fare un follow-up al mio messaggio precedente riguardo a una possibile collaborazione.",
+    "",
+    "Ti andrebbe di scambiare due parole per capire se potremmo essere un buon match creativo? Se sì, sono disponibile per una breve chiamata settimana prossima: lunedì, martedì o mercoledì alle 16:30.",
+    "",
+    "Se ti può essere utile per farti un'idea, posso preparare uno sketch su una tua scena, senza nessun impegno.",
+    "",
+    "Un saluto,",
+    "Pietro Montanti",
+    "pietromontanti.com",
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
 };
 
 const extractMessageIds = (value?: string | null) => {
@@ -1484,9 +1512,13 @@ export default function CrmApp() {
 
   const handleComposePresetChange = (preset: ComposePreset) => {
     setEmailPreset(preset);
-    if (preset !== "first_follow_up") return;
+    if (preset === "custom") return;
     setEmailSubject(FIRST_FOLLOW_UP_SUBJECT);
-    setEmailBody(buildFirstFollowUpBody(selected?.name));
+    setEmailBody(
+      preset === "first_follow_up_tu"
+        ? buildFirstFollowUpBodyTu(selected?.name)
+        : buildFirstFollowUpBodyLei(selected?.name)
+    );
   };
 
   const handleSendEmail = async () => {
@@ -2214,13 +2246,17 @@ export default function CrmApp() {
             }
           >
             <option value="custom">Nessun template</option>
-            <option value="first_follow_up">
-              Primo follow-up · Il tuo lavoro
+            <option value="first_follow_up_tu">
+              Primo follow-up · tu
+            </option>
+            <option value="first_follow_up_lei">
+              Primo follow-up · lei
             </option>
           </select>
-          {emailPreset === "first_follow_up" && (
+          {emailPreset !== "custom" && (
             <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              Template primo follow-up caricato.
+              Template primo follow-up caricato (
+              {emailPreset === "first_follow_up_tu" ? "tu" : "lei"}).
               {getReplyTarget()
                 ? " L'oggetto resta quello del thread per non aprire una mail nuova."
                 : ` Oggetto preset: ${FIRST_FOLLOW_UP_SUBJECT}.`}
