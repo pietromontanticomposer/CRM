@@ -66,6 +66,16 @@ const formatError = (error: unknown) => {
   }
 };
 
+const getCronSecretFromRequest = (request: Request) => {
+  const headerSecret = request.headers.get("x-cron-secret");
+  if (headerSecret && headerSecret.trim().length > 0) return headerSecret.trim();
+  const authHeader = request.headers.get("authorization");
+  if (authHeader && /^Bearer\s+/i.test(authHeader)) {
+    return authHeader.replace(/^Bearer\s+/i, "").trim();
+  }
+  return null;
+};
+
 const getSupabase = () =>
   createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -488,7 +498,7 @@ const insertNotification = async (payload: {
 };
 
 export const runSync = async (request: Request) => {
-  const cronSecret = request.headers.get("x-cron-secret");
+  const cronSecret = getCronSecretFromRequest(request);
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
