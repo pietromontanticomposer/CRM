@@ -1403,6 +1403,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   const handleSelectEmail = async (emailId: string) => {
+    if (selectedEmailId === emailId) {
+      setSelectedEmailId(null);
+      return;
+    }
+
     setSelectedEmailId(emailId);
     setEmailReadById((prev) => ({ ...prev, [emailId]: true }));
     const selectedRow = emails.find((email) => email.id === emailId);
