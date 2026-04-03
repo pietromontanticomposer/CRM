@@ -107,6 +107,8 @@ type ComposePreset =
   | "first_follow_up_tu"
   | "first_follow_up_lei";
 
+export type CrmTheme = "light" | "dark";
+
 const emptyNewContact: NewContact = {
   name: "",
   email: "",
@@ -115,13 +117,43 @@ const emptyNewContact: NewContact = {
   status: "Da contattare",
 };
 
-const statusStyles: Record<Status, string> = {
-  "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
-  "Già contattato": "bg-sky-500/15 text-sky-200 border-sky-400/30",
-  "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
-  "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
-  "Chiuso": "bg-zinc-500/20 text-zinc-200 border-zinc-400/30",
+const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
+  dark: {
+    "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
+    "Già contattato": "bg-sky-500/15 text-sky-200 border-sky-400/30",
+    "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
+    "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
+    "Chiuso": "bg-zinc-500/20 text-zinc-200 border-zinc-400/30",
+  },
+  light: {
+    "Da contattare": "border-amber-300 bg-amber-50 text-amber-800",
+    "Già contattato": "border-sky-300 bg-sky-50 text-sky-800",
+    "Interessato": "border-emerald-300 bg-emerald-50 text-emerald-800",
+    "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
+    "Chiuso": "border-zinc-300 bg-zinc-100 text-zinc-700",
+  },
 };
+
+const toneStylesByTheme = {
+  dark: {
+    error: "border-red-500/40 bg-red-500/10 text-red-200",
+    warning: "border-amber-400/40 bg-amber-500/10 text-amber-200",
+    success: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
+    danger: "border-rose-400/40 bg-rose-500/10 text-rose-200",
+    inbound: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
+    outbound: "border-amber-400/40 bg-amber-500/10 text-amber-200",
+    keepInTouch: "border-cyan-400/40 bg-cyan-500/10 text-cyan-100",
+  },
+  light: {
+    error: "border-red-300 bg-red-50 text-red-700",
+    warning: "border-amber-300 bg-amber-50 text-amber-800",
+    success: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    danger: "border-rose-300 bg-rose-50 text-rose-800",
+    inbound: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    outbound: "border-amber-300 bg-amber-50 text-amber-800",
+    keepInTouch: "border-cyan-300 bg-cyan-50 text-cyan-800",
+  },
+} as const;
 
 const formatDate = (value?: string | null) => {
   if (!value) return "—";
@@ -720,7 +752,7 @@ const parseSummary = (value?: string | null) => {
   }
 };
 
-export default function CrmApp() {
+export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -763,6 +795,16 @@ export default function CrmApp() {
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
   const emailRequestIdRef = useRef(0);
   const summaryRequestIdRef = useRef(0);
+  const statusStyles = statusStylesByTheme[theme];
+  const toneStyles = toneStylesByTheme[theme];
+  const deleteButtonClass =
+    theme === "light"
+      ? "rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-60"
+      : "rounded-full border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400/70 hover:bg-red-500/10 disabled:opacity-60";
+  const keepInTouchButtonClass =
+    theme === "light"
+      ? "rounded-full border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:opacity-60"
+      : "rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-60";
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
   const conversationRefreshing = Boolean(
@@ -1398,8 +1440,8 @@ export default function CrmApp() {
           <span
             className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
               selectedEmail.direction === "inbound"
-                ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
-                : "border-amber-400/40 bg-amber-500/10 text-amber-200"
+                ? toneStyles.inbound
+                : toneStyles.outbound
             }`}
           >
             {selectedEmail.direction === "inbound" ? "Ricevuta" : "Inviata"}
@@ -1776,12 +1818,16 @@ export default function CrmApp() {
 
         <div className="mt-4 grid gap-5">
           {draft.status === "Chiuso" && (
-            <div className="rounded-2xl border border-rose-400/40 bg-rose-500/15 px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-rose-100 shadow-sm">
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.danger}`}
+            >
               Contattare solo via telefono
             </div>
           )}
           {draft.status === "Non interessato" && (
-            <div className="rounded-2xl border border-amber-400/40 bg-amber-500/15 px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] text-amber-100 shadow-sm">
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.warning}`}
+            >
               Non interessato · non ricontattare
             </div>
           )}
@@ -1985,7 +2031,7 @@ export default function CrmApp() {
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="rounded-full border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400/70 hover:bg-red-500/10 disabled:opacity-60"
+              className={deleteButtonClass}
             >
               {deleting ? "Elimino..." : "Elimina contatto"}
             </button>
@@ -2061,7 +2107,9 @@ export default function CrmApp() {
             </div>
 
             {summaryError && (
-              <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              <div
+                className={`mt-3 rounded-xl border px-3 py-2 text-xs ${toneStyles.error}`}
+              >
                 {summaryError}
               </div>
             )}
@@ -2082,7 +2130,9 @@ export default function CrmApp() {
                       </div>
                     )}
                     {summary.rateLimited && (
-                      <div className="rounded-full border border-amber-400/40 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                      <div
+                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${toneStyles.warning}`}
+                      >
                         Quota AI esaurita · mostrato ultimo riassunto disponibile
                       </div>
                     )}
@@ -2165,8 +2215,8 @@ export default function CrmApp() {
                       email.direction === "inbound" ? "Ricevuta" : "Inviata";
                     const directionStyle =
                       email.direction === "inbound"
-                        ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-200"
-                        : "border-amber-400/40 bg-amber-500/10 text-amber-200";
+                        ? toneStyles.inbound
+                        : toneStyles.outbound;
                     return (
                       <div key={email.id} className="grid gap-2">
                         <button
@@ -2254,7 +2304,9 @@ export default function CrmApp() {
             </option>
           </select>
           {emailPreset !== "custom" && (
-            <div className="mt-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            <div
+              className={`mt-2 rounded-xl border px-3 py-2 text-xs ${toneStyles.warning}`}
+            >
               Template primo follow-up caricato (
               {emailPreset === "first_follow_up_tu" ? "tu" : "lei"}).
               {getReplyTarget()
@@ -2281,7 +2333,9 @@ export default function CrmApp() {
             onChange={(event) => setEmailBody(event.target.value)}
           />
           {emailsError && (
-            <div className="mt-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            <div
+              className={`mt-3 rounded-xl border px-3 py-2 text-xs ${toneStyles.error}`}
+            >
               {emailsError}
             </div>
           )}
@@ -2343,7 +2397,9 @@ export default function CrmApp() {
           </div>
         )}
         {error && (
-          <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100 shadow-sm">
+          <div
+            className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${toneStyles.error}`}
+          >
             {error}
           </div>
         )}
@@ -2429,7 +2485,9 @@ export default function CrmApp() {
             </button>
           </form>
           {addError && (
-            <div className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-200">
+            <div
+              className={`mt-3 rounded-2xl border px-4 py-2 text-xs ${toneStyles.error}`}
+            >
               {addError}
             </div>
           )}
@@ -2444,10 +2502,14 @@ export default function CrmApp() {
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-              <span className="rounded-full border border-rose-400/40 bg-rose-500/10 px-2 py-0.5 font-semibold text-rose-200">
+              <span
+                className={`rounded-full border px-2 py-0.5 font-semibold ${toneStyles.danger}`}
+              >
                 In ritardo: {followUpSummary.overdue.length}
               </span>
-              <span className="rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-200">
+              <span
+                className={`rounded-full border px-2 py-0.5 font-semibold ${toneStyles.warning}`}
+              >
                 Oggi: {followUpSummary.dueToday.length}
               </span>
             </div>
@@ -2456,7 +2518,9 @@ export default function CrmApp() {
               email inviata).
             </p>
             {followUpMessage && (
-              <div className="mt-3 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
+              <div
+                className={`mt-3 rounded-xl border px-3 py-2 text-xs ${toneStyles.success}`}
+              >
                 {followUpMessage}
               </div>
             )}
@@ -2470,14 +2534,12 @@ export default function CrmApp() {
                   ...followUpSummary.overdue.map((contact) => ({
                     contact,
                     label: "In ritardo",
-                    tone:
-                      "border-rose-400/40 bg-rose-500/10 text-rose-200" as const,
+                    tone: toneStyles.danger,
                   })),
                   ...followUpSummary.dueToday.map((contact) => ({
                     contact,
                     label: "Oggi",
-                    tone:
-                      "border-amber-400/40 bg-amber-500/10 text-amber-200" as const,
+                    tone: toneStyles.warning,
                   })),
                 ]
                   .slice(0, 8)
@@ -2508,7 +2570,9 @@ export default function CrmApp() {
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             {keepWarm && (
-                              <span className="rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneStyles.keepInTouch}`}
+                              >
                                 ogni 2 mesi
                               </span>
                             )}
@@ -2535,7 +2599,7 @@ export default function CrmApp() {
                             type="button"
                             onClick={() => enableKeepInTouch(contact)}
                             disabled={Boolean(pending)}
-                            className="rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-60"
+                            className={keepInTouchButtonClass}
                           >
                             {pending === "keepwarm"
                               ? "Imposto..."
@@ -2577,7 +2641,7 @@ export default function CrmApp() {
                 onClick={() => setContactFolder("Follow-up")}
                 className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
                   contactFolder === "Follow-up"
-                    ? "border-amber-400/40 bg-amber-500/10 text-amber-100"
+                    ? toneStyles.warning
                     : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
                 }`}
               >

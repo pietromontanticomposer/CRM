@@ -11,6 +11,7 @@
   --accent-strong: #3b6fd1;
   --line: #243246;
   --accent-soft: #1c2b46;
+  --field-shadow: 0 1px 0 rgba(15, 23, 42, 0.5);
 }
 
 /* Performance helpers */
@@ -61,7 +62,7 @@ textarea {
   padding: 0.55rem 0.75rem;
   width: 100%;
   min-width: 0;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.5);
+  box-shadow: var(--field-shadow);
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease,
@@ -106,4 +107,24 @@ summary::-webkit-details-marker {
 .email-html a {
   color: var(--accent);
   text-decoration: underline;
+}
+
+.crm-light-theme {
+  --bg: #f6f8fc;
+  --bg-soft: #eef3fb;
+  --panel: #ffffff;
+  --panel-strong: #f3f6fb;
+  --ink: #152033;
+  --muted: #5f6f84;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --line: #d8e1ee;
+  --accent-soft: #dbeafe;
+  --field-shadow: 0 1px 0 rgba(148, 163, 184, 0.28);
+  background:
+    radial-gradient(960px 420px at 8% -8%, rgba(37, 99, 235, 0.16) 0%, transparent 58%),
+    radial-gradient(760px 340px at 92% 4%, rgba(16, 185, 129, 0.1) 0%, transparent 55%),
+    linear-gradient(180deg, #fbfcff 0%, #f1f5fb 100%);
+  color: var(--ink);
+  color-scheme: light;
 }
