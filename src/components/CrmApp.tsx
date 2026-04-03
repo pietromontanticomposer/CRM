@@ -771,7 +771,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [emailReadById, setEmailReadById] = useState<Record<string, boolean>>(
     {}
   );
-  const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
   const [summary, setSummary] = useState<SummaryState | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -981,57 +980,17 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     };
   }, [contacts]);
 
-  const emailThreads = useMemo(() => {
-    if (!emails.length) return [];
-    const grouped = new Map<string, EmailRow[]>();
-
-    emails.forEach((email) => {
-      const key = getEmailThreadKey(email);
-      if (!grouped.has(key)) {
-        grouped.set(key, []);
-      }
-      grouped.get(key)!.push(email);
-    });
-
-    const threads = Array.from(grouped.entries()).map(([key, messages]) => {
-      const sortedMessages = [...messages].sort(
-        (a, b) => getEmailTimestamp(b) - getEmailTimestamp(a)
-      );
-      const latest = sortedMessages[0] ?? null;
-      const unreadCount = sortedMessages.reduce((acc, message) => {
-        if (
-          message.direction === "inbound" &&
-          !(emailReadById[message.id] ?? true)
-        ) {
-          return acc + 1;
-        }
-        return acc;
-      }, 0);
-      return {
-        key,
-        subject: normalizeThreadSubject(latest?.subject),
-        messages: sortedMessages,
-        latestAt: latest?.received_at ?? latest?.created_at ?? null,
-        unreadCount,
-        total: sortedMessages.length,
-      };
-    });
-
-    threads.sort(
-      (a, b) => getTimestamp(b.latestAt) - getTimestamp(a.latestAt)
-    );
-
-    return threads;
-  }, [emails, emailReadById]);
+  const visibleEmails = useMemo(
+    () =>
+      [...emails].sort((a, b) => getEmailTimestamp(b) - getEmailTimestamp(a)),
+    [emails]
+  );
 
   const summaryMeta = useMemo(() => {
-    if (!emails.length) return null;
-    const sorted = [...emails].sort(
-      (a, b) => getEmailTimestamp(b) - getEmailTimestamp(a)
-    );
+    if (!visibleEmails.length) return null;
     const lastActivity =
-      sorted[0]?.received_at ?? sorted[0]?.created_at ?? null;
-    const unreadCount = sorted.reduce((acc, email) => {
+      visibleEmails[0]?.received_at ?? visibleEmails[0]?.created_at ?? null;
+    const unreadCount = visibleEmails.reduce((acc, email) => {
       if (
         email.direction === "inbound" &&
         !(emailReadById[email.id] ?? true)
@@ -1044,18 +1003,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     return {
       lastActivity,
       unreadCount,
-      threadCount: emailThreads.length,
+      threadCount: new Set(visibleEmails.map((email) => getEmailThreadKey(email)))
+        .size,
     };
-  }, [emails, emailReadById, emailThreads.length]);
-
-  useEffect(() => {
-    if (!emailThreads.length) {
-      if (Object.keys(openThreads).length) {
-        setOpenThreads({});
-      }
-      return;
-    }
-  }, [emailThreads, openThreads]);
+  }, [visibleEmails, emailReadById]);
 
   const loadContacts = async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -1111,7 +1062,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       setEmails([]);
       setSelectedEmailId(null);
       setEmailReadById({});
-      setOpenThreads({});
       setEmailsLoading(false);
       setEmailsError(null);
       setSummary(null);
@@ -1128,7 +1078,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       setEmails([]);
       setSelectedEmailId(null);
       setEmailReadById({});
-      setOpenThreads({});
       setSummary(null);
       setSummaryLoading(false);
       setSummaryError(null);
@@ -2209,132 +2158,66 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         )}
 
         <div className="grid gap-3">
-          {emailThreads.map((thread) => (
-            <details
-              key={thread.key}
-              className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] shadow-sm"
-              open={openThreads[thread.key] ?? false}
-              onToggle={(event) => {
-                const isOpen = (event.currentTarget as HTMLDetailsElement).open;
-                setOpenThreads((prev) => ({
-                  ...prev,
-                  [thread.key]: isOpen,
-                }));
-                if (isOpen) {
-                  const isSelectedInThread = selectedEmailId
-                    ? thread.messages.some((message) => message.id === selectedEmailId)
-                    : false;
-                  if (!isSelectedInThread) {
-                    setSelectedEmailId(thread.messages[0]?.id ?? null);
-                  }
-                }
-                if (!isOpen && selectedEmailId) {
-                  const isSelectedInThread = thread.messages.some(
-                    (message) => message.id === selectedEmailId
-                  );
-                  if (isSelectedInThread) {
-                    setSelectedEmailId(null);
-                  }
-                }
-              }}
-            >
-              <summary className="cursor-pointer list-none">
-                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="break-words text-sm font-semibold text-[var(--ink)]">
-                      {thread.subject}
-                    </div>
-                    <div className="mt-1 text-xs text-[var(--muted)]">
-                      Ultima attivita {formatDateTime(thread.latestAt)}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2 text-xs">
-                    <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--muted)]">
-                      {thread.total} messaggi
-                    </span>
-                    {thread.unreadCount > 0 && (
-                      <span className="rounded-full border border-[var(--accent)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--accent)]">
-                        {thread.unreadCount} non letti
+          {visibleEmails.map((email) => {
+            const isSelected = email.id === selectedEmailId;
+            const address =
+              email.direction === "inbound"
+                ? email.from_email
+                : getRecipientSummary(email.to_email);
+            const preview = getEmailExcerpt(email);
+            const isRead = emailReadById[email.id] ?? true;
+            const directionLabel =
+              email.direction === "inbound" ? "Ricevuta" : "Inviata";
+            const directionStyle =
+              email.direction === "inbound"
+                ? toneStyles.inbound
+                : toneStyles.outbound;
+
+            return (
+              <div key={email.id} className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectEmail(email.id)}
+                  className={`perf-card rounded-2xl border px-4 py-3 text-left transition ${
+                    isSelected
+                      ? "border-[var(--accent)] bg-[var(--panel-strong)]"
+                      : isRead
+                        ? "border-[var(--line)] bg-[var(--panel)]"
+                        : "border-[var(--accent)] bg-[var(--panel-strong)]"
+                  }`}
+                >
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {!isRead && (
+                        <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
+                      )}
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
+                      >
+                        {directionLabel}
                       </span>
-                    )}
+                      <span className="min-w-0 break-all">
+                        {email.direction === "inbound" ? "Da" : "A"}{" "}
+                        {address || "—"}
+                      </span>
+                    </span>
+                    <span>{formatDateTime(email.received_at ?? email.created_at)}</span>
                   </div>
-                </div>
-              </summary>
-              <div className="border-t border-[var(--line)] px-4 py-3">
-                <div className="grid gap-2">
-                  {thread.messages.map((email) => {
-                    const isSelected = email.id === selectedEmailId;
-                    const address =
-                      email.direction === "inbound"
-                        ? email.from_email
-                        : getRecipientSummary(email.to_email);
-                    const preview = getEmailExcerpt(email);
-                    const isRead = emailReadById[email.id] ?? true;
-                    const directionLabel =
-                      email.direction === "inbound" ? "Ricevuta" : "Inviata";
-                    const directionStyle =
-                      email.direction === "inbound"
-                        ? toneStyles.inbound
-                        : toneStyles.outbound;
-                    return (
-                      <div key={email.id} className="grid gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectEmail(email.id)}
-                          className={`perf-card rounded-xl border px-3 py-2 text-left transition ${
-                            isSelected
-                              ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                              : isRead
-                                ? "border-[var(--line)] bg-[var(--panel)]"
-                                : "border-[var(--accent)] bg-[var(--panel-strong)]"
-                          }`}
-                        >
-                          <div className="flex min-w-0 items-center justify-between gap-2 text-xs text-[var(--muted)]">
-                            <span className="flex min-w-0 items-center gap-2">
-                              {!isRead && (
-                                <span className="h-2 w-2 rounded-full bg-[var(--accent)]" />
-                              )}
-                              <span className="min-w-0 break-all">
-                                {email.direction === "inbound" ? "Da" : "A"}{" "}
-                                {address || "—"}
-                              </span>
-                            </span>
-                            <span className="flex shrink-0 items-center gap-2">
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${directionStyle}`}
-                              >
-                                {directionLabel}
-                              </span>
-                              <span>
-                                {formatDateTime(
-                                  email.received_at ?? email.created_at
-                                )}
-                              </span>
-                            </span>
-                          </div>
-                          <div
-                            className={`mt-1 break-words text-sm text-[var(--ink)] ${
-                              isRead ? "font-semibold" : "font-bold"
-                            }`}
-                          >
-                            {email.subject || "Senza oggetto"}
-                          </div>
-                          <div className="mt-1 break-words text-xs text-[var(--muted)]">
-                            {preview.length > 180
-                              ? `${preview.slice(0, 180)}…`
-                              : preview}
-                          </div>
-                        </button>
-                        {isSelected &&
-                          selectedEmail?.id === email.id &&
-                          renderSelectedEmailDetail()}
-                      </div>
-                    );
-                  })}
-                </div>
+                  <div
+                    className={`mt-2 break-words text-sm text-[var(--ink)] ${
+                      isRead ? "font-semibold" : "font-bold"
+                    }`}
+                  >
+                    {email.subject || "Senza oggetto"}
+                  </div>
+                  <div className="mt-1 break-words text-xs text-[var(--muted)]">
+                    {preview.length > 220 ? `${preview.slice(0, 220)}…` : preview}
+                  </div>
+                </button>
+                {isSelected && selectedEmail?.id === email.id && renderSelectedEmailDetail()}
               </div>
-            </details>
-          ))}
+            );
+          })}
         </div>
 
         <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-3">
