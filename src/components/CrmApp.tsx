@@ -2399,7 +2399,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-10 sm:px-10">
+    <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-6 sm:px-10">
       <header className="relative mx-auto mb-10 flex w-full max-w-7xl flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -2660,6 +2660,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
+            <div className="lg:sticky lg:top-0 lg:z-10 lg:-mx-5 lg:border-b lg:border-[var(--line)] lg:bg-[var(--panel)] lg:px-5 lg:pb-4">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
@@ -2717,6 +2718,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 value={contactSearch}
                 onChange={(event) => setContactSearch(event.target.value)}
               />
+            </div>
             </div>
 
             <div className="mt-4 grid gap-3">
