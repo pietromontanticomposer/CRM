@@ -2360,7 +2360,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden px-6 pb-16 pt-10 sm:px-10">
+    <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-10 sm:px-10">
       <header className="relative mx-auto mb-10 flex w-full max-w-7xl flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -2418,8 +2418,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         </div>
       </header>
 
-      <main className="relative mx-auto grid w-full max-w-7xl gap-8 lg:items-start lg:grid-cols-[340px_1fr]">
-        <section className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-3">
+      <main className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 lg:grid lg:grid-cols-[340px_1fr] lg:items-start">
+        <section className="min-w-0 flex-1 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-3">
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
           </h2>
