@@ -793,6 +793,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     Record<string, "recontacted" | "keepwarm">
   >({});
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
+  const [mobileSidebarMinHeight, setMobileSidebarMinHeight] = useState<
+    number | null
+  >(null);
+  const headerRef = useRef<HTMLElement | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const emailRequestIdRef = useRef(0);
   const summaryRequestIdRef = useRef(0);
   const statusStyles = statusStylesByTheme[theme];
@@ -826,6 +831,40 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     );
     return sanitizeHtml(withInline);
   }, [selectedEmail?.html_body, selectedEmailAttachments, selectedEmail?.id]);
+
+  useEffect(() => {
+    const updateSidebarMinHeight = () => {
+      if (!sidebarRef.current) return;
+      if (window.innerWidth >= 1024) {
+        setMobileSidebarMinHeight(null);
+        return;
+      }
+
+      const { top } = sidebarRef.current.getBoundingClientRect();
+      const nextHeight = Math.max(Math.round(window.innerHeight - top), 0);
+      setMobileSidebarMinHeight((current) =>
+        current === nextHeight ? current : nextHeight
+      );
+    };
+
+    const frameId = window.requestAnimationFrame(updateSidebarMinHeight);
+    window.addEventListener("resize", updateSidebarMinHeight);
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => updateSidebarMinHeight());
+
+    if (observer && headerRef.current) {
+      observer.observe(headerRef.current);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", updateSidebarMinHeight);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!selected || !selectedEmail) return;
@@ -2361,7 +2400,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-10 sm:px-10">
-      <header className="relative mx-auto mb-10 flex w-full max-w-7xl flex-col gap-4">
+      <header
+        ref={headerRef}
+        className="relative mx-auto mb-10 flex w-full max-w-7xl flex-col gap-4"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -2419,7 +2461,15 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       </header>
 
       <main className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 lg:grid lg:grid-cols-[340px_1fr] lg:items-start">
-        <section className="min-w-0 flex-1 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-3">
+        <section
+          ref={sidebarRef}
+          style={
+            mobileSidebarMinHeight
+              ? { minHeight: `${mobileSidebarMinHeight}px` }
+              : undefined
+          }
+          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-3"
+        >
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
           </h2>
