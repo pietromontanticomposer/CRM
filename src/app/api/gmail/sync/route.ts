@@ -548,6 +548,8 @@ export const runSync = async (request: Request) => {
           ok: true,
           processed: 0,
           last_uid: maxUid,
+          has_more: false,
+          remaining: 0,
           range: null,
         });
       }
@@ -555,6 +557,7 @@ export const runSync = async (request: Request) => {
       const batch = uids.slice(0, maxPerRun);
       const startUid = batch[0];
       const endUid = batch[batch.length - 1];
+      const remaining = Math.max(uids.length - batch.length, 0);
 
       step = "fetch messages";
       for await (const message of client.fetch(
@@ -729,6 +732,8 @@ export const runSync = async (request: Request) => {
         ok: true,
         processed,
         last_uid: maxUid,
+        has_more: remaining > 0,
+        remaining,
         range: { start: startUid, end: endUid },
       });
     } finally {

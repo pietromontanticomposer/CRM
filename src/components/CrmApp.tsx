@@ -1671,25 +1671,41 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setSyncing(true);
     setSyncMessage(null);
 
-    const response = await fetch("/api/gmail/sync-now", { method: "POST" });
-    const payload = await response.json().catch(() => ({}));
+    let totalProcessed = 0;
+    let loopCount = 0;
+    let hasMore = false;
+    const maxSyncPasses = 100;
 
-    if (!response.ok) {
-      setSyncMessage(payload?.error || "Sync fallita. Riprova.");
-      setSyncing(false);
-      return;
+    while (loopCount < maxSyncPasses) {
+      const response = await fetch("/api/gmail/sync-now", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setSyncMessage(payload?.error || "Sync fallita. Riprova.");
+        setSyncing(false);
+        return;
+      }
+
+      if (typeof payload?.processed === "number") {
+        totalProcessed += payload.processed;
+      }
+
+      hasMore = Boolean(payload?.has_more);
+      loopCount += 1;
+
+      if (!hasMore) {
+        break;
+      }
     }
 
     setLastSyncAt(new Date());
-    if (typeof payload?.processed === "number") {
-      setSyncMessage(
-        payload.processed > 0
-          ? `Sync completata (${payload.processed} nuove).`
+    setSyncMessage(
+      hasMore
+        ? `Sync parziale: importate ${totalProcessed} mail, ci sono ancora arretrati da recuperare.`
+        : totalProcessed > 0
+          ? `Sync completata (${totalProcessed} nuove).`
           : "Sync completata (nessuna nuova)."
-      );
-    } else {
-      setSyncMessage("Sync completata.");
-    }
+    );
     const refreshedContacts = await loadContacts({ silent: true });
     const refreshedSelected = selected
       ? refreshedContacts.find((contact) => contact.id === selected.id)
@@ -1698,6 +1714,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       setDraft(buildDraft(refreshedSelected));
     }
     if (selected) {
+      await runBackfillForContact(
+        selected.id,
+        refreshedSelected?.email ?? selected.email
+      );
       await loadEmails(selected.id, refreshedSelected?.email ?? selected.email);
     }
     setSyncing(false);
