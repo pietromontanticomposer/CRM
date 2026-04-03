@@ -104,7 +104,7 @@ const buildBody = (
   return lines.join("\n").trim();
 };
 
-export async function POST(request: Request) {
+const handleReminderRun = async (request: Request) => {
   const cronSecret = getCronSecretFromRequest(request);
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });
@@ -204,4 +204,12 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, sent });
+};
+
+export async function GET(request: Request) {
+  return handleReminderRun(request);
+}
+
+export async function POST(request: Request) {
+  return handleReminderRun(request);
 }

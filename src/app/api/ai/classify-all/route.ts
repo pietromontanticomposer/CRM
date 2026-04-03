@@ -53,6 +53,16 @@ const getSupabase = () =>
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+const getCronSecretFromRequest = (request: Request) => {
+  const headerSecret = request.headers.get("x-cron-secret");
+  if (headerSecret && headerSecret.trim().length > 0) return headerSecret.trim();
+  const authHeader = request.headers.get("authorization");
+  if (authHeader && /^Bearer\s+/i.test(authHeader)) {
+    return authHeader.replace(/^Bearer\s+/i, "").trim();
+  }
+  return null;
+};
+
 const parseBatchSize = () => {
   const raw = Number(process.env.AI_CLASSIFY_BATCH ?? DEFAULT_BATCH_SIZE);
   if (!Number.isFinite(raw)) return DEFAULT_BATCH_SIZE;
@@ -385,8 +395,8 @@ const setCursor = async (
     );
 };
 
-export async function POST(request: Request) {
-  const cronSecret = request.headers.get("x-cron-secret");
+const handleClassifyAll = async (request: Request) => {
+  const cronSecret = getCronSecretFromRequest(request);
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
@@ -470,4 +480,12 @@ export async function POST(request: Request) {
     next_offset: missingTable || rateLimited ? null : nextOffset,
     rate_limited: rateLimited,
   });
+};
+
+export async function GET(request: Request) {
+  return handleClassifyAll(request);
+}
+
+export async function POST(request: Request) {
+  return handleClassifyAll(request);
 }

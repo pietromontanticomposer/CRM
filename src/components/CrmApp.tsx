@@ -134,6 +134,8 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   },
 };
 
+const QUICK_RECONTACT_DAYS = [7, 10, 15, 30] as const;
+
 const toneStylesByTheme = {
   dark: {
     error: "border-red-500/40 bg-red-500/10 text-red-200",
@@ -215,6 +217,9 @@ const addDaysToDateInputValue = (dateInput: string, days: number) => {
   const day = `${parsed.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+const buildRecontactReminderNote = (days: number) =>
+  `Ricontattare tra ${days} giorni`;
 
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
@@ -1812,6 +1817,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
   const renderContactDetails = (contactId: string) => {
     if (!selected || !draft || selected.id !== contactId) return null;
+    const remindersDisabled =
+      draft.status === "Chiuso" || draft.status === "Non interessato";
 
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-sm">
@@ -1982,10 +1989,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               <input
                 type="date"
                 value={draft.next_action_at ?? ""}
-                disabled={
-                  draft.status === "Chiuso" ||
-                  draft.status === "Non interessato"
-                }
+                disabled={remindersDisabled}
                 onChange={(event) =>
                   setDraft((prev) =>
                     prev
@@ -1997,14 +2001,44 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             </div>
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                Ricontatta tra
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_RECONTACT_DAYS.map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    disabled={remindersDisabled}
+                    onClick={() => {
+                      const today = getTodayDateInputValue();
+                      setDraft((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              next_action_at: addDaysToDateInputValue(
+                                today,
+                                days
+                              ),
+                              next_action_note:
+                                buildRecontactReminderNote(days),
+                            }
+                          : prev
+                      );
+                    }}
+                    className="rounded-full border border-[var(--accent)] px-3 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {days} gg
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 Nota prossima azione
               </label>
               <input
                 value={draft.next_action_note ?? ""}
-                disabled={
-                  draft.status === "Chiuso" ||
-                  draft.status === "Non interessato"
-                }
+                disabled={remindersDisabled}
                 onChange={(event) =>
                   setDraft((prev) =>
                     prev
@@ -2012,7 +2046,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       : prev
                   )
                 }
-                placeholder="Follow-up tra 7 giorni"
+                placeholder="Ricontattare tra 7 giorni"
               />
             </div>
           </div>
