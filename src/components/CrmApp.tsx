@@ -2460,7 +2460,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         </div>
       </header>
 
-      <main className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 lg:grid lg:grid-cols-[340px_1fr] lg:items-start">
+      <main className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 lg:grid lg:grid-cols-[340px_1fr]">
         <section
           ref={sidebarRef}
           style={
@@ -2468,7 +2468,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               ? { minHeight: `${mobileSidebarMinHeight}px` }
               : undefined
           }
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-3"
+          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:pr-3"
         >
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
