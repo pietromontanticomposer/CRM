@@ -135,6 +135,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
 };
 
 const QUICK_RECONTACT_DAYS = [7, 10, 15, 30] as const;
+const TWO_COLUMN_LAYOUT_MIN_WIDTH = 768;
 
 const toneStylesByTheme = {
   dark: {
@@ -837,7 +838,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
   useEffect(() => {
     const updateSidebarHeight = () => {
-      if (window.innerWidth < 1024 || !contentSectionRef.current) {
+      if (
+        window.innerWidth < TWO_COLUMN_LAYOUT_MIN_WIDTH ||
+        !contentSectionRef.current
+      ) {
         setDesktopSidebarHeight(null);
         return;
       }
@@ -871,7 +875,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, []);
 
   useEffect(() => {
-    if (!selectedId || !contentSectionRef.current || window.innerWidth >= 1024) {
+    if (
+      !selectedId ||
+      !contentSectionRef.current ||
+      window.innerWidth >= TWO_COLUMN_LAYOUT_MIN_WIDTH
+    ) {
       return;
     }
 
@@ -2416,16 +2424,14 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         </div>
       </header>
 
-      <main className="relative mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 lg:grid lg:grid-cols-[340px_1fr]">
+      <main className="relative mx-auto grid w-full max-w-7xl flex-1 gap-6 md:grid-cols-[minmax(280px,320px)_minmax(0,1fr)] lg:gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
         <section
           style={
             desktopSidebarHeight
               ? { height: `${desktopSidebarHeight}px` }
               : undefined
           }
-          className={`min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:overflow-y-auto lg:pr-3 ${
-            selected ? "order-2 lg:order-1" : "order-1"
-          }`}
+          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg md:overflow-y-auto md:pr-3"
         >
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
@@ -2621,7 +2627,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
-            <div className="lg:sticky lg:top-0 lg:z-10 lg:-mx-5 lg:border-b lg:border-[var(--line)] lg:bg-[var(--panel)] lg:px-5 lg:pb-4">
+            <div className="md:sticky md:top-0 md:z-10 md:-mx-5 md:border-b md:border-[var(--line)] md:bg-[var(--panel)] md:px-5 md:pb-4">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
@@ -2768,9 +2774,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
         <section
           ref={contentSectionRef}
-          className={`min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg ${
-            selected ? "order-1 lg:order-2" : "order-2"
-          }`}
+          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg"
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
