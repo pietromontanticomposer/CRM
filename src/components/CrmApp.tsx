@@ -871,6 +871,23 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, []);
 
   useEffect(() => {
+    if (!selectedId || !contentSectionRef.current || window.innerWidth >= 1024) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      contentSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [selectedId]);
+
+  useEffect(() => {
     if (!selected || !selectedEmail) return;
     const emailId = selectedEmail.id;
     if (ensuredAttachments[emailId]) return;
@@ -2406,7 +2423,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               ? { height: `${desktopSidebarHeight}px` }
               : undefined
           }
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:overflow-y-auto lg:pr-3"
+          className={`min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg lg:overflow-y-auto lg:pr-3 ${
+            selected ? "order-2 lg:order-1" : "order-1"
+          }`}
         >
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
@@ -2749,7 +2768,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
         <section
           ref={contentSectionRef}
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg"
+          className={`min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg ${
+            selected ? "order-1 lg:order-2" : "order-2"
+          }`}
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
