@@ -1991,10 +1991,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   <button
                     type="button"
                     onClick={() => setDraft((prev) => prev ? { ...prev, status: "Risposta ricevuta" } : prev)}
-                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
+                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${statusStylesByTheme[theme]["Risposta ricevuta"]} ${
                       draft.status === "Risposta ricevuta"
-                        ? "border-amber-500 bg-amber-500 text-white shadow-sm"
-                        : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:text-amber-500"
+                        ? "shadow-md scale-[1.02] ring-1 ring-current"
+                        : "opacity-50 hover:opacity-100 hover:scale-[1.01]"
                     }`}
                   >
                     Generico / In attesa di gestione
@@ -2021,10 +2021,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                 : prev
                             )
                           }
-                          className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
+                          className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
                             isActive
-                              ? `${baseStyles} shadow-sm scale-[1.02]`
-                              : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--ink)]"
+                              ? "shadow-md scale-[1.02] ring-1 ring-current"
+                              : "opacity-50 hover:opacity-100 hover:scale-[1.01]"
                           }`}
                         >
                           ↳ {status}
