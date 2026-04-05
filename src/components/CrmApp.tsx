@@ -21,7 +21,6 @@ const STATUS_OPTIONS = [
   "In attesa",
   "Risposta ricevuta",
   "Non interessato",
-  "Rimanere in contatto",
   "Call prenotata",
 ] as const;
 
@@ -29,7 +28,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Auto follow-up impostato", "In attesa"],
-  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Rimanere in contatto", "Call prenotata"],
+  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -139,7 +138,6 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
-    "Rimanere in contatto": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   },
   light: {
@@ -147,7 +145,6 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "In attesa": "border-sky-300 bg-sky-50 text-sky-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
-    "Rimanere in contatto": "border-orange-300 bg-orange-50 text-orange-800",
     "Call prenotata": "border-emerald-300 bg-emerald-50 text-emerald-800",
   },
 };
@@ -239,7 +236,7 @@ const addDaysToDateInputValue = (dateInput: string, days: number) => {
 };
 
 const buildRecontactReminderNote = (days: number) =>
-  `Rimanere in contatto tra ${days} giorni`;
+  `Risposta ricevuta - ricontattare tra ${days} giorni`;
 
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
@@ -1523,7 +1520,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           body: JSON.stringify({
             last_action_at: today,
             last_action_note: "Mantenimento rapporto inviato",
-            status: "Rimanere in contatto",
           }),
         });
 
@@ -1547,7 +1543,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           body: JSON.stringify({
             next_action_at: scheduledDate,
             next_action_note: buildMaintainRapportNote(days),
-            status: "Rimanere in contatto",
           }),
         });
 
@@ -2090,38 +2085,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             >
                               ↳ {status}
                             </button>
-
-                            {status === "Rimanere in contatto" && isActive && (
-                              <div className="flex flex-wrap items-center gap-3 pl-4 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                <div className="flex flex-wrap gap-2">
-                                  {QUICK_RECONTACT_DAYS.map((days) => (
-                                    <button
-                                      key={days}
-                                      type="button"
-                                      onClick={() => {
-                                        const today = getTodayDateInputValue();
-                                        setDraft((prev) =>
-                                          prev
-                                            ? {
-                                                ...prev,
-                                                next_action_at: addDaysToDateInputValue(
-                                                  today,
-                                                  days
-                                                ),
-                                                next_action_note:
-                                                  buildRecontactReminderNote(days),
-                                              }
-                                            : prev
-                                        );
-                                      }}
-                                      className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
-                                    >
-                                      {days}g
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
                           </div>
                         );
                       })}

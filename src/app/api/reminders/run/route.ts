@@ -320,7 +320,6 @@ const handleReminderRun = async (request: Request) => {
           next_action_note: buildMaintainRapportNote(0),
           last_action_at: today,
           last_action_note: "Mantenimento rapporto inviato",
-          status: "Rimanere in contatto",
         })
         .eq("id", contact.id);
 
