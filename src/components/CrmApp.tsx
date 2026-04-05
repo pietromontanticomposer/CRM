@@ -1952,69 +1952,80 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="grid gap-3">
-            <div className="grid gap-4">
+            <div className="grid gap-6">
               <div className="grid gap-2">
-                <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Stato Principale
+                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Stato Iniziale
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {["Auto follow impostato", "Risposta ricevuta"].map((status) => {
-                    const isActive = draft.status === status;
-                    return (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => setDraft((prev) => prev ? { ...prev, status: status as Status } : prev)}
-                        className={`rounded-full border px-4 py-2 text-[11px] font-bold transition ${
-                          isActive
-                            ? statusStylesByTheme[theme][status as Status].replace("border-", "border-2 border-") + " ring-2 ring-offset-2 ring-offset-[var(--panel)] ring-current shadow-md"
-                            : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--muted)]"
-                        }`}
-                      >
-                        {status}
-                      </button>
-                    );
-                  })}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setDraft((prev) => prev ? { ...prev, status: "Auto follow impostato" } : prev)}
+                  className={`w-full rounded-2xl border px-4 py-3 text-xs font-bold transition ${
+                    draft.status === "Auto follow impostato"
+                      ? "border-blue-600 bg-blue-600 text-white shadow-md scale-[1.02]"
+                      : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-blue-400"
+                  }`}
+                >
+                  Auto follow impostato
+                </button>
               </div>
 
-              <div className="grid gap-2 pl-4 border-l-2 border-[var(--line)] ml-2">
-                <label className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)] flex items-center gap-1">
-                  <span>↳</span> Dopo Risposta (Sotto-etichette)
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {["Non interessato", "Ricontattare", "Call prenotata"].map((status) => {
-                    const isActive = draft.status === status;
-                    return (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() =>
-                          setDraft((prev) =>
-                            prev
-                              ? {
-                                  ...prev,
-                                  status: status as Status,
-                                  ...(status === "Non interessato"
-                                    ? {
-                                        next_action_at: "",
-                                        next_action_note: "",
-                                      }
-                                    : {}),
-                                }
-                              : prev
-                          )
-                        }
-                        className={`rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
-                          isActive
-                            ? statusStylesByTheme[theme][status as Status].replace("border-", "border-2 border-") + " shadow-sm"
-                            : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--muted)] opacity-80"
-                        }`}
-                      >
-                        ↳ {status}
-                      </button>
-                    );
-                  })}
+              <div className="rounded-3xl border-2 border-amber-200 bg-amber-50/30 p-4 dark:border-amber-900/30 dark:bg-amber-950/10">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  <label className="text-[11px] font-black uppercase tracking-[0.15em] text-amber-700 dark:text-amber-500">
+                    Risposta Ricevuta
+                  </label>
+                </div>
+                
+                <div className="grid gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDraft((prev) => prev ? { ...prev, status: "Risposta ricevuta" } : prev)}
+                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
+                      draft.status === "Risposta ricevuta"
+                        ? "border-amber-500 bg-amber-500 text-white shadow-sm"
+                        : "border-amber-200 bg-white text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-zinc-900 dark:text-amber-400"
+                    }`}
+                  >
+                    Generico / In attesa di gestione
+                  </button>
+                  
+                  <div className="mt-2 grid grid-cols-1 gap-2 border-t border-amber-200 pt-3 dark:border-amber-900/50">
+                    <p className="text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Seleziona esito:</p>
+                    {["Non interessato", "Ricontattare", "Call prenotata"].map((status) => {
+                      const isActive = draft.status === status;
+                      let activeClass = "";
+                      if (status === "Non interessato") activeClass = "border-rose-500 bg-rose-500 text-white";
+                      if (status === "Ricontattare") activeClass = "border-orange-500 bg-orange-500 text-white";
+                      if (status === "Call prenotata") activeClass = "border-emerald-500 bg-emerald-500 text-white";
+
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() =>
+                            setDraft((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    status: status as Status,
+                                    ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
+                                  }
+                                : prev
+                            )
+                          }
+                          className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
+                            isActive
+                              ? activeClass + " shadow-sm scale-[1.02]"
+                              : "border-[var(--line)] bg-white text-[var(--muted)] hover:border-[var(--ink)] dark:bg-zinc-900"
+                          }`}
+                        >
+                          ↳ {status}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2711,7 +2722,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
-            <div className="sticky top-0 z-30 -mx-5 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-4 pb-4">
+            <div className="sticky top-[-24px] z-30 -mx-6 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-6 pt-6 pb-4">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
