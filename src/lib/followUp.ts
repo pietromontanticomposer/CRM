@@ -99,7 +99,7 @@ Pietro`;
   const defaultSignature = `
 <div style="margin-top: 15px; font-family: Helvetica, Arial, sans-serif; color: #333; line-height: 1.4;">
   <div style="font-weight: bold; font-size: 14px; color: #111;">Pietro Montanti</div>
-  <div style="font-size: 12px;">Multi Instrumentalist, Composer for TV & Theatre</div>
+  <div style="font-size: 12px;">Composer for TV & Theatre</div>
   <div style="font-size: 12px;">3515172560</div>
   <div style="font-size: 12px;">P.IVA: 04593080239</div>
   <div style="font-size: 12px;">Via Mulino Turri 9c, Negrar (VR)</div>
