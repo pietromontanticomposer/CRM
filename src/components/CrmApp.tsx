@@ -2124,16 +2124,23 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                          disabled={remindersDisabled}
                          onClick={() => {
                            const today = getTodayDateInputValue();
-                           setDraft((prev) =>
-                             prev
-                               ? {
-                                   ...prev,
-                                   status: "Auto follow impostato",
-                                   next_action_at: addDaysToDateInputValue(today, 10),
-                                   next_action_note: AUTO_FOLLOW_UP_1_NOTE,
-                                 }
-                               : prev
-                           );
+                           setDraft((prev) => {
+                             if (!prev) return prev;
+                             if (isAutoFollowUpActive) {
+                               return {
+                                 ...prev,
+                                 status: prev.status === "Auto follow impostato" ? "Primo contatto inviato" : prev.status,
+                                 next_action_at: "",
+                                 next_action_note: "",
+                               };
+                             }
+                             return {
+                               ...prev,
+                               status: "Auto follow impostato",
+                               next_action_at: addDaysToDateInputValue(today, 10),
+                               next_action_note: AUTO_FOLLOW_UP_1_NOTE,
+                             };
+                           });
                          }}
                          className={`rounded-full border px-3 py-1 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                            isAutoFollowUpActive
