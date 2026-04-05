@@ -2067,6 +2067,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         const isActive = draft.status === status;
                         const baseStyles = statusStylesByTheme[theme][status as Status];
 
+                        const isMantRapporto = status === "Mantenimento rapporto";
+
                         return (
                           <div key={status} className="grid gap-2">
                             <button
@@ -2082,11 +2084,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                     : prev
                                 )
                               }
-                              className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
+                              className={`rounded-xl border px-4 py-2 text-left text-xs font-bold ${baseStyles} ${
                                 isActive
                                   ? "shadow-md scale-[1.02] ring-1 ring-current"
                                   : "opacity-40 hover:opacity-100 hover:scale-[1.01]"
-                              }`}
+                              }${isMantRapporto && isActive ? " auto-follow-pulse" : " transition-all"}`}
                             >
                               ↳ {status}
                             </button>
@@ -2866,12 +2868,16 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   </span>
                 </button>
                 <div className="ml-2 grid gap-1.5 border-l-2 border-amber-500/20 pl-3">
-                  {STATUS_GROUPS["Risposta ricevuta"].map((status) => (
+                  {STATUS_GROUPS["Risposta ricevuta"].map((status) => {
+                    const isMantRapporto = status === "Mantenimento rapporto";
+                    return (
                     <button
                       key={status}
                       type="button"
                       onClick={() => setContactFolder(status)}
-                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
+                        isMantRapporto ? "auto-follow-pulse " : "transition "
+                      }${
                         contactFolder === status
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
@@ -2882,7 +2888,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         {counts[status] ?? 0}
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -2946,7 +2953,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" ? " auto-follow-pulse" : ""}`}
+                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" || contact.status === "Mantenimento rapporto" ? " auto-follow-pulse" : ""}`}
                           >
                             {contact.status}
                           </span>
