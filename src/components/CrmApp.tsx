@@ -2004,10 +2004,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     <p className="text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Seleziona esito:</p>
                     {["Non interessato", "Ricontattare", "Call prenotata"].map((status) => {
                       const isActive = draft.status === status;
-                      let activeClass = "";
-                      if (status === "Non interessato") activeClass = "border-rose-500 bg-rose-500 text-white";
-                      if (status === "Ricontattare") activeClass = "border-orange-500 bg-orange-500 text-white";
-                      if (status === "Call prenotata") activeClass = "border-emerald-500 bg-emerald-500 text-white";
+                      const baseStyles = statusStylesByTheme[theme][status as Status];
 
                       return (
                         <button
@@ -2026,7 +2023,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           }
                           className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
                             isActive
-                              ? activeClass + " shadow-sm scale-[1.02]"
+                              ? `${baseStyles} shadow-sm scale-[1.02]`
                               : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--ink)]"
                           }`}
                         >
