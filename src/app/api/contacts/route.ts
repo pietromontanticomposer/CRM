@@ -118,28 +118,37 @@ export async function GET() {
       );
     }
 
-    const { data: inboundEmails, error: inboundEmailsError } = await supabase
+    const { data: contactEmails, error: emailsError } = await supabase
       .from("emails")
-      .select("contact_id, received_at, created_at")
-      .eq("direction", "inbound")
+      .select("contact_id, direction, received_at, created_at")
       .not("contact_id", "is", null);
 
-    if (inboundEmailsError) {
-      console.error("GET /api/contacts inbound email fetch failed", inboundEmailsError);
+    if (emailsError) {
+      console.error("GET /api/contacts emails fetch failed", emailsError);
       return NextResponse.json(
-        { error: getErrorMessage(inboundEmailsError, "Impossibile caricare i contatti.") },
+        { error: getErrorMessage(emailsError, "Impossibile caricare i contatti.") },
         { status: 500 }
       );
     }
 
     const lastInboundAtByContactId = new Map<string, string>();
-    (inboundEmails ?? []).forEach((row) => {
+    const lastOutboundAtByContactId = new Map<string, string>();
+
+    (contactEmails ?? []).forEach((row) => {
       if (!row.contact_id) return;
       const candidate = row.received_at ?? row.created_at ?? null;
       if (!candidate) return;
-      const current = lastInboundAtByContactId.get(row.contact_id);
-      if (getTimestamp(candidate) > getTimestamp(current)) {
-        lastInboundAtByContactId.set(row.contact_id, candidate);
+      
+      if (row.direction === "inbound") {
+        const current = lastInboundAtByContactId.get(row.contact_id);
+        if (getTimestamp(candidate) > getTimestamp(current)) {
+          lastInboundAtByContactId.set(row.contact_id, candidate);
+        }
+      } else if (row.direction === "outbound") {
+        const current = lastOutboundAtByContactId.get(row.contact_id);
+        if (getTimestamp(candidate) > getTimestamp(current)) {
+          lastOutboundAtByContactId.set(row.contact_id, candidate);
+        }
       }
     });
 
@@ -149,10 +158,12 @@ export async function GET() {
     ).map((contact) => ({
       ...contact,
       last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
+      last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
       activity_at: (() => {
         const candidates = [
           contact.updated_at,
           lastInboundAtByContactId.get(contact.id) ?? null,
+          lastOutboundAtByContactId.get(contact.id) ?? null,
           contact.created_at,
         ];
         let best: string | null = null;

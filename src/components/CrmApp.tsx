@@ -21,7 +21,7 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
-type ContactFolder = "Tutte" | "Follow-up" | Status;
+type ContactFolder = "Tutte" | "Follow-up" | "In attesa di risposta" | Status;
 const NEW_CONTACT_STATUS_OPTIONS = ["Da contattare", "Già contattato"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
@@ -40,6 +40,7 @@ type Contact = {
   created_at: string;
   updated_at: string;
   last_inbound_email_at?: string | null;
+  last_outbound_email_at?: string | null;
   activity_at?: string | null;
 };
 
@@ -933,7 +934,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, [selectedEmail?.id, selectedEmailAttachments, selected?.id]);
 
   const counts = useMemo(() => {
-    return STATUS_OPTIONS.reduce(
+    const baseCounts = STATUS_OPTIONS.reduce(
       (acc, status) => {
         acc[status] = contacts.filter((contact) => contact.status === status)
           .length;
@@ -941,6 +942,14 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       },
       {} as Record<Status, number>
     );
+
+    const waitingCount = contacts.filter((contact) => {
+      const lastInbound = getTimestamp(contact.last_inbound_email_at);
+      const lastOutbound = getTimestamp(contact.last_outbound_email_at);
+      return lastOutbound > lastInbound;
+    }).length;
+
+    return { ...baseCounts, "In attesa di risposta": waitingCount };
   }, [contacts]);
 
   const followUpCount = useMemo(() => {
@@ -971,6 +980,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       return searchedContacts.filter((contact) =>
         isOpenFollowUpContact(contact, today)
       );
+    }
+    if (contactFolder === "In attesa di risposta") {
+      return searchedContacts.filter((contact) => {
+        const lastInbound = getTimestamp(contact.last_inbound_email_at);
+        const lastOutbound = getTimestamp(contact.last_outbound_email_at);
+        return lastOutbound > lastInbound;
+      });
     }
     if (contactFolder === "Tutte") return searchedContacts;
     return searchedContacts.filter((contact) => contact.status === contactFolder);
@@ -2683,8 +2699,21 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               >
                 Follow-up
                 <span className="ml-1 text-[10px] opacity-80">{followUpCount}</span>
-              </button>
-              {STATUS_OPTIONS.map((status) => (
+                </button>
+                <button
+                type="button"
+                onClick={() => setContactFolder("In attesa di risposta")}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                  contactFolder === "In attesa di risposta"
+                    ? toneStyles.outbound
+                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                }`}
+                >
+                In attesa di risposta
+                <span className="ml-1 text-[10px] opacity-80">{counts["In attesa di risposta"] ?? 0}</span>
+                </button>
+                {STATUS_OPTIONS.map((status) => (
+
                 <button
                   key={status}
                   type="button"
