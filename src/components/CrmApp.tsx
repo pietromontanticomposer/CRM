@@ -29,7 +29,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Auto follow-up impostato", "In attesa"],
-  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Mantenimento rapporto", "Call prenotata"],
+  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata", "Mantenimento rapporto"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
