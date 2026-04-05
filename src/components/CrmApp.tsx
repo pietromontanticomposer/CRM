@@ -1865,7 +1865,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="sticky top-[-17px] z-20 -mx-4 -mt-4 mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] bg-[var(--panel-strong)] px-4 pt-4 pb-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--muted)]">
               Scheda
@@ -1953,17 +1953,20 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
           <div className="grid gap-3">
             <div className="grid gap-6">
-              <div className="grid gap-2">
-                <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Stato Iniziale
-                </label>
+              <div className="rounded-3xl border-2 border-blue-200 bg-blue-50/30 p-4 dark:border-blue-900/30 dark:bg-blue-950/10">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="h-2 w-2 rounded-full bg-blue-500" />
+                  <label className="text-[11px] font-black uppercase tracking-[0.15em] text-blue-700 dark:text-blue-500">
+                    Stato Iniziale
+                  </label>
+                </div>
                 <button
                   type="button"
                   onClick={() => setDraft((prev) => prev ? { ...prev, status: "Auto follow impostato" } : prev)}
-                  className={`w-full rounded-2xl border px-4 py-3 text-xs font-bold transition ${
+                  className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
                     draft.status === "Auto follow impostato"
-                      ? "border-blue-600 bg-blue-600 text-white shadow-md scale-[1.02]"
-                      : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-blue-400"
+                      ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                      : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50 dark:bg-zinc-900 dark:text-blue-400"
                   }`}
                 >
                   Auto follow impostato
@@ -2461,9 +2464,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-6 sm:px-10">
-      <header className="relative mx-auto mb-10 flex w-full max-w-7xl flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-0 sm:px-10">
+      <header className="sticky top-0 z-40 -mx-6 mb-10 flex w-full flex-col gap-4 bg-[var(--bg)]/80 px-6 py-6 backdrop-blur-md sm:-mx-10 sm:px-10">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
               CRM personale
@@ -2722,7 +2725,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
-            <div className="sticky top-[-24px] z-30 -mx-6 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-6 pt-6 pb-4">
+            <div className="sticky top-[-21px] z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-5 pb-4">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
