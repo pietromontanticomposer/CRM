@@ -953,27 +953,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, []);
 
   useEffect(() => {
-    if (
-      !selectedId ||
-      !contentSectionRef.current ||
-      window.innerWidth >= TWO_COLUMN_LAYOUT_MIN_WIDTH
-    ) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      contentSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [selectedId]);
-
-  useEffect(() => {
     if (!selected || !selectedEmail) return;
     const emailId = selectedEmail.id;
     if (ensuredAttachments[emailId]) return;
@@ -1372,9 +1351,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   const handleSelectContact = (contact: Contact) => {
+    const scrollY = window.scrollY;
     const shouldResetConversation = selectedId !== contact.id;
     setSelectedId(contact.id);
     setDraft(buildDraft(contact));
+    requestAnimationFrame(() => window.scrollTo(0, scrollY));
     void loadEmails(contact.id, contact.email, {
       resetConversation: shouldResetConversation,
     });
