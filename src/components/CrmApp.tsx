@@ -2721,13 +2721,15 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       key={status}
                       type="button"
                       onClick={() => setContactFolder(status)}
-                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
+                        isAutoFollowUp ? "" : "transition "
+                      }${
                         isSelected
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
                       }`}
                       style={isAutoFollowUp ? {
-                        animation: "autoFollowPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                        animation: "autoFollowPulse 2s ease-in-out infinite",
                       } : undefined}
                     >
                       <span>{status}</span>
