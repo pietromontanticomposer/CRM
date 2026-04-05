@@ -2696,9 +2696,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 <div
                   key={status}
                   className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}${
-                    status === "Mantenimento rapporto" && contactFolder === status
-                      ? " maintain-rapport-pulse"
-                      : ""
+                    status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""
                   }`}
                 >
                   <span>{status}</span>
@@ -3002,6 +3000,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </button>
                 <div className="ml-2 grid gap-1.5 border-l-2 border-amber-500/20 pl-3">
                   {STATUS_GROUPS["Risposta ricevuta"].map((status) => {
+                    const isMaintainRapport = status === "Mantenimento rapporto";
                     return (
                     <button
                       key={status}
@@ -3011,11 +3010,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         contactFolder === status
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
-                      }${
-                        status === "Mantenimento rapporto" && contactFolder === status
-                          ? " maintain-rapport-pulse"
-                          : ""
-                      }`}
+                      }${isMaintainRapport ? " maintain-rapport-pulse" : ""}`}
                     >
                       <span>{status}</span>
                       <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
