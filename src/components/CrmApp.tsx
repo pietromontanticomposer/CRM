@@ -1941,10 +1941,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           isActive
                             ? "border-indigo-600 bg-indigo-600 text-white shadow-sm scale-[1.02]"
                             : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 opacity-60 hover:opacity-100"
-                        }${isAutoFollowUp && isActive ? "" : " transition-all"}`}
-                        style={isAutoFollowUp && isActive ? {
-                          animation: "autoFollowPulse 2s ease-in-out infinite",
-                        } : undefined}
+                        }${isAutoFollowUp && isActive ? " auto-follow-pulse" : " transition-all"}`}
                       >
                         ↳ {status}
                       </button>
@@ -1956,7 +1953,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               {/* Gruppo: Risposta ricevuta */}
               <div className="rounded-3xl border-2 border-amber-200 bg-amber-50/30 p-4 dark:border-amber-900/30 dark:bg-amber-950/10">
                 <div className="flex items-center gap-2 mb-4">
-                  <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                  <div className="h-2 w-2 rounded-full bg-amber-500" />
                   <label className="text-[11px] font-black uppercase tracking-[0.15em] text-amber-700 dark:text-amber-500">
                     Risposta Ricevuta
                   </label>
@@ -2093,7 +2090,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   Nota prossima azione
                 </label>
                 {(draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE) && (
-                  <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white animate-pulse">
+                  <span className="rounded bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white auto-follow-pulse">
                     AUTOMATICO
                   </span>
                 )}
@@ -2726,15 +2723,12 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       type="button"
                       onClick={() => setContactFolder(status)}
                       className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
-                        isAutoFollowUp ? "" : "transition "
+                        isAutoFollowUp ? "auto-follow-pulse " : "transition "
                       }${
                         isSelected
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
                       }`}
-                      style={isAutoFollowUp ? {
-                        animation: "autoFollowPulse 2s ease-in-out infinite",
-                      } : undefined}
                     >
                       <span>{status}</span>
                       <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
@@ -2842,14 +2836,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
+                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" ? " auto-follow-pulse" : ""}`}
                           >
-                            {contact.status === "Auto follow-up impostato" && (
-                              <span className="relative mr-1.5 inline-flex h-2 w-2 align-middle">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
-                              </span>
-                            )}
                             {contact.status}
                           </span>
                         </div>
@@ -2882,7 +2870,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 {selected ? "Dettagli" : "Seleziona"}
               </p>
               <h2 className="break-words text-2xl font-semibold">
