@@ -2,7 +2,6 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import nodemailer from "nodemailer";
-import fs from "fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env.local") });
@@ -24,16 +23,15 @@ Fammi sapere cosa ti è più comodo.
 A presto,
 Pietro`;
 
-  // Use cid:firma_pietro for the local test to be 100% sure it shows
   const defaultSignature = `
-<div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
-  <div style="font-weight: bold; font-size: 16px;">Pietro Montanti</div>
-  <div style="font-size: 14px;">Multi Instrumentalist, Composer for TV & Theatre</div>
-  <div style="font-size: 14px;">3515172560</div>
-  <div style="font-size: 14px;">P.IVA: 04593080239</div>
-  <div style="font-size: 14px;">Via Mulino Turri 9c, Negrar (VR)</div>
-  <div style="margin-top: 20px;">
-    <img src="cid:firma_pietro" alt="Pietro Montanti" width="450" style="display: block; max-width: 100%; height: auto;">
+<div style="margin-top: 10px; font-family: Helvetica, Arial, sans-serif; color: #444; line-height: 1.2;">
+  <div style="font-weight: bold; font-size: 13px; color: #111;">Pietro Montanti</div>
+  <div style="font-size: 10px;">Multi Instrumentalist, Composer for TV & Theatre</div>
+  <div style="font-size: 10px;">3515172560</div>
+  <div style="font-size: 10px;">P.IVA: 04593080239</div>
+  <div style="font-size: 10px;">Via Mulino Turri 9c, Negrar (VR)</div>
+  <div style="margin-top: 10px;">
+    <img src="cid:firma_pietro" alt="Pietro Montanti" width="220" style="display: block; max-width: 100%; height: auto;">
   </div>
 </div>`;
 
@@ -69,7 +67,7 @@ async function sendTest() {
   const info = await transport.sendMail({
     from: process.env.GMAIL_USER,
     to: testEmail,
-    subject: "TEST FINALE FIRMA: " + emailContent.subject,
+    subject: "TEST VERO: " + emailContent.subject,
     text: emailContent.body,
     html: emailContent.html,
     attachments: [{
