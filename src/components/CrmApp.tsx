@@ -64,6 +64,7 @@ type Contact = {
   last_inbound_email_at?: string | null;
   last_outbound_email_at?: string | null;
   activity_at?: string | null;
+  language?: "it" | "en" | null;
 };
 
 type DraftContact = Omit<Contact, "created_at" | "updated_at">;
@@ -707,6 +708,15 @@ const getDisplayName = (contact: Pick<Contact, "name" | "company" | "email">) =>
   contact.company?.trim() ||
   contact.email?.trim() ||
   "Senza nome";
+
+const getStatusLabel = (status: string) =>
+  status === "Attiva auto follow-up" ? "Auto follow-up attivato" : status;
+
+const getLanguageFlag = (language?: Contact["language"]) => {
+  if (language === "it") return "🇮🇹";
+  if (language === "en") return "🇬🇧";
+  return null;
+};
 
 const getContactActivityTimestamp = (contact: Contact) =>
   Math.max(
@@ -2111,7 +2121,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 opacity-60 hover:opacity-100"
                         }${isAutoFollowUp && isActive ? " auto-follow-pulse" : " transition-all"}`}
                       >
-                        ↳ {status}
+                        ↳ {getStatusLabel(status)}
                       </button>
                     );
                   })}
@@ -2186,7 +2196,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                   : ""
                               }`}
                             >
-                              ↳ {status}
+                              ↳ {getStatusLabel(status)}
                             </button>
                           </div>
                         );
@@ -2698,7 +2708,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   key={status}
                   className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
                 >
-                  <span>{status}</span>
+                  <span>{getStatusLabel(status)}</span>
                   <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
                     {counts[status] ?? 0}
                   </span>
@@ -2723,7 +2733,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""
                   }`}
                 >
-                  <span>{status}</span>
+                  <span>{getStatusLabel(status)}</span>
                   <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
                     {counts[status] ?? 0}
                   </span>
@@ -2796,7 +2806,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             >
               {NEW_CONTACT_STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {getStatusLabel(status)}
                 </option>
               ))}
             </select>
@@ -2997,7 +3007,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
                       }`}
                     >
-                      <span>{status}</span>
+                      <span>{getStatusLabel(status)}</span>
                       <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
                         {counts[status] ?? 0}
                       </span>
@@ -3036,7 +3046,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
                       }${isMaintainRapport ? " maintain-rapport-pulse" : ""}`}
                     >
-                      <span>{status}</span>
+                      <span>{getStatusLabel(status)}</span>
                       <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
                         {counts[status] ?? 0}
                       </span>
@@ -3096,8 +3106,19 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                               {getInitials(getDisplayName(contact))}
                             </div>
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold">
-                                {getDisplayName(contact)}
+                              <div className="flex min-w-0 items-center gap-1">
+                                <span className="truncate text-sm font-semibold">
+                                  {getDisplayName(contact)}
+                                </span>
+                                {getLanguageFlag(contact.language) && (
+                                  <span
+                                    className="shrink-0 text-sm"
+                                    title={contact.language === "it" ? "Italiano" : "English"}
+                                    aria-label={contact.language === "it" ? "Italiano" : "English"}
+                                  >
+                                    {getLanguageFlag(contact.language)}
+                                  </span>
+                                )}
                               </div>
                               <div className="truncate text-xs text-[var(--muted)]">
                                 {[contact.role, contact.company]
@@ -3109,7 +3130,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           <span
                             className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Attiva auto follow-up" ? " auto-follow-pulse" : ""}${contact.status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""}`}
                           >
-                            {contact.status}
+                            {getStatusLabel(contact.status)}
                           </span>
                         </div>
                         <div className="break-words text-xs text-[var(--muted)]">
@@ -3144,9 +3165,20 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 {selected ? "Dettagli" : "Seleziona"}
               </p>
-              <h2 className="break-words text-2xl font-semibold">
-                {selected ? getDisplayName(selected) : "Contatto"}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="break-words text-2xl font-semibold">
+                  {selected ? getDisplayName(selected) : "Contatto"}
+                </h2>
+                {selected && getLanguageFlag(selected.language) && (
+                  <span
+                    className="shrink-0 text-xl"
+                    title={selected.language === "it" ? "Italiano" : "English"}
+                    aria-label={selected.language === "it" ? "Italiano" : "English"}
+                  >
+                    {getLanguageFlag(selected.language)}
+                  </span>
+                )}
+              </div>
             </div>
             {selected && (
               <div
@@ -3156,7 +3188,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     : ""
                 }`}
               >
-                {selected.status}
+                {getStatusLabel(selected.status)}
               </div>
             )}
           </div>

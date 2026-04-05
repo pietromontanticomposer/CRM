@@ -21,6 +21,16 @@ type ContactInsert = {
   last_action_at: string | null;
 };
 
+type ContactEmailRow = {
+  contact_id: string | null;
+  direction: "inbound" | "outbound" | null;
+  received_at: string | null;
+  created_at: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+};
+
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") return "";
   return value.trim();
@@ -100,6 +110,62 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const stripHtml = (value?: string | null) =>
+  (value ?? "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const countMatches = (text: string, regexes: RegExp[]) =>
+  regexes.reduce((sum, regex) => sum + (text.match(regex)?.length ?? 0), 0);
+
+const detectLanguageFromEmail = (value?: string | null): "it" | "en" | null => {
+  const text = normalizeString(value).toLowerCase();
+  if (!text) return null;
+
+  const italianPatterns = [
+    /\bciao\b/g,
+    /\bbuongiorno\b/g,
+    /\bgrazie\b/g,
+    /\bgentile\b/g,
+    /\bcordiali saluti\b/g,
+    /\bper favore\b/g,
+    /\bsono\b/g,
+    /\bcon\b/g,
+    /\bnon\b/g,
+  ];
+  const englishPatterns = [
+    /\bhello\b/g,
+    /\bhi\b/g,
+    /\bthanks?\b/g,
+    /\bbest regards\b/g,
+    /\bkind regards\b/g,
+    /\bplease\b/g,
+    /\bi am\b/g,
+    /\bwith\b/g,
+    /\bnot\b/g,
+  ];
+
+  let italianScore = countMatches(text, italianPatterns);
+  let englishScore = countMatches(text, englishPatterns);
+
+  if (/[àèéìòù]/.test(text)) {
+    italianScore += 2;
+  }
+
+  if (italianScore === 0 && englishScore === 0) {
+    return null;
+  }
+
+  if (Math.abs(italianScore - englishScore) < 2) {
+    return null;
+  }
+
+  return italianScore > englishScore ? "it" : "en";
+};
+
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
@@ -118,7 +184,9 @@ export async function GET() {
 
     const { data: contactEmails, error: emailsError } = await supabase
       .from("emails")
-      .select("contact_id, direction, received_at, created_at")
+      .select(
+        "contact_id, direction, received_at, created_at, subject, text_body, html_body"
+      )
       .not("contact_id", "is", null);
 
     if (emailsError) {
@@ -131,21 +199,29 @@ export async function GET() {
 
     const lastInboundAtByContactId = new Map<string, string>();
     const lastOutboundAtByContactId = new Map<string, string>();
+    const latestInboundTextByContactId = new Map<string, string>();
 
     (contactEmails ?? []).forEach((row) => {
-      if (!row.contact_id) return;
-      const candidate = row.received_at ?? row.created_at ?? null;
+      const email = row as unknown as ContactEmailRow;
+      if (!email.contact_id) return;
+      const candidate = email.received_at ?? email.created_at ?? null;
       if (!candidate) return;
       
-      if (row.direction === "inbound") {
-        const current = lastInboundAtByContactId.get(row.contact_id);
+      if (email.direction === "inbound") {
+        const current = lastInboundAtByContactId.get(email.contact_id);
         if (getTimestamp(candidate) > getTimestamp(current)) {
-          lastInboundAtByContactId.set(row.contact_id, candidate);
+          lastInboundAtByContactId.set(email.contact_id, candidate);
+          latestInboundTextByContactId.set(
+            email.contact_id,
+            [email.text_body, stripHtml(email.html_body), email.subject]
+              .filter(Boolean)
+              .join(" ")
+          );
         }
-      } else if (row.direction === "outbound") {
-        const current = lastOutboundAtByContactId.get(row.contact_id);
+      } else if (email.direction === "outbound") {
+        const current = lastOutboundAtByContactId.get(email.contact_id);
         if (getTimestamp(candidate) > getTimestamp(current)) {
-          lastOutboundAtByContactId.set(row.contact_id, candidate);
+          lastOutboundAtByContactId.set(email.contact_id, candidate);
         }
       }
     });
@@ -186,6 +262,9 @@ export async function GET() {
         last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
         activity_at: best,
+        language: detectLanguageFromEmail(
+          latestInboundTextByContactId.get(contact.id) ?? null
+        ),
       };
     });
 
