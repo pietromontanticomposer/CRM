@@ -800,9 +800,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [ensuredAttachments, setEnsuredAttachments] = useState<
     Record<string, "pending" | "done">
   >({});
@@ -1691,62 +1688,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setSendingEmail(false);
   };
 
-  const handleSyncNow = async () => {
-    if (syncing) return;
-    setSyncing(true);
-    setSyncMessage(null);
-
-    let totalProcessed = 0;
-    let loopCount = 0;
-    let hasMore = false;
-    const maxSyncPasses = 100;
-
-    while (loopCount < maxSyncPasses) {
-      const response = await fetch("/api/gmail/sync-now", { method: "POST" });
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setSyncMessage(payload?.error || "Sync fallita. Riprova.");
-        setSyncing(false);
-        return;
-      }
-
-      if (typeof payload?.processed === "number") {
-        totalProcessed += payload.processed;
-      }
-
-      hasMore = Boolean(payload?.has_more);
-      loopCount += 1;
-
-      if (!hasMore) {
-        break;
-      }
-    }
-
-    setLastSyncAt(new Date());
-    setSyncMessage(
-      hasMore
-        ? `Sync parziale: importate ${totalProcessed} mail, ci sono ancora arretrati da recuperare.`
-        : totalProcessed > 0
-          ? `Sync completata (${totalProcessed} nuove).`
-          : "Sync completata (nessuna nuova)."
-    );
-    const refreshedContacts = await loadContacts({ silent: true });
-    const refreshedSelected = selected
-      ? refreshedContacts.find((contact) => contact.id === selected.id)
-      : null;
-    if (refreshedSelected) {
-      setDraft(buildDraft(refreshedSelected));
-    }
-    if (selected) {
-      await runBackfillForContact(
-        selected.id,
-        refreshedSelected?.email ?? selected.email
-      );
-      await loadEmails(selected.id, refreshedSelected?.email ?? selected.email);
-    }
-    setSyncing(false);
-  };
 
   const handleRefreshConversation = async () => {
     if (!selected || conversationRefreshing) return;
@@ -2019,25 +1960,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 
                 <div className="grid gap-2">
                   <div className="grid grid-cols-1 gap-2">
-                    {/* Pulsante generico Risposta Ricevuta */}
-                    <button
-                      type="button"
-                      onClick={() => setDraft((prev) => {
-                        if (!prev) return prev;
-                        return { ...prev, status: "Risposta ricevuta" };
-                      })}
-                      className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition mb-1 ${
-                        draft.status === "Risposta ricevuta"
-                          ? "border-amber-600 bg-amber-600 text-white shadow-sm scale-[1.02]"
-                          : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:text-amber-400 opacity-60 hover:opacity-100"
-                      }`}
-                    >
-                      ✓ Risposta ricevuta (generico)
-                    </button>
-
                     <div className="mt-1 grid gap-2 border-t border-amber-200/50 dark:border-amber-900/30 pt-3">
                       <p className="px-1 text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Specifica esito:</p>
-                      {STATUS_GROUPS["Risposta ricevuta"].map((status) => {
+                      {STATUS_GROUPS["Risposta ricevuta"]
+                        .filter(status => status !== "Risposta ricevuta")
+                        .map((status) => {
                         const isActive = draft.status === status;
                         const baseStyles = statusStylesByTheme[theme][status as Status];
 
@@ -2525,31 +2452,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               Contatti registi e produzioni
             </h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-4 py-2 text-sm text-[var(--muted)] shadow-sm">
-              Ultimo sync:{" "}
-              {lastSyncAt
-                ? lastSyncAt.toLocaleTimeString("it-IT", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : "mai"}
-            </div>
-            <button
-              type="button"
-              onClick={handleSyncNow}
-              disabled={syncing}
-              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] disabled:opacity-60"
-            >
-              {syncing ? "Sync..." : "Sync ora"}
-            </button>
-          </div>
         </div>
-        {syncMessage && (
-          <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-2 text-xs text-[var(--muted)] shadow-sm">
-            {syncMessage}
-          </div>
-        )}
         {error && (
           <div
             className={`rounded-2xl border px-4 py-3 text-sm shadow-sm ${toneStyles.error}`}
