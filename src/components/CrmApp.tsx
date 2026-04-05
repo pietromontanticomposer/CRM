@@ -2088,7 +2088,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                 isActive
                                   ? "shadow-md scale-[1.02] ring-1 ring-current"
                                   : "opacity-40 hover:opacity-100 hover:scale-[1.01]"
-                              }${isMantRapporto && isActive ? " auto-follow-pulse" : " transition-all"}`}
+                              }${isMantRapporto && isActive ? " maintain-rapport-pulse" : " transition-all"}`}
                             >
                               ↳ {status}
                             </button>
@@ -2110,7 +2110,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     Mantenimento rapporto
                   </label>
                   {isMaintainRapportNote(draft.next_action_note) && (
-                    <span className="rounded bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold text-white auto-follow-pulse">
+                    <span className="rounded bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold text-white maintain-rapport-pulse">
                       PROGRAMMATO
                     </span>
                   )}
@@ -2876,7 +2876,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       type="button"
                       onClick={() => setContactFolder(status)}
                       className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
-                        isMantRapporto ? "auto-follow-pulse " : "transition "
+                        isMantRapporto ? "maintain-rapport-pulse " : "transition "
                       }${
                         contactFolder === status
                           ? statusStyles[status]
@@ -2953,7 +2953,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" || contact.status === "Mantenimento rapporto" ? " auto-follow-pulse" : ""}`}
+                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" ? " auto-follow-pulse" : ""}${contact.status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""}`}
                           >
                             {contact.status}
                           </span>
