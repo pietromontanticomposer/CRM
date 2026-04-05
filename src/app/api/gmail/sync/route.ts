@@ -15,6 +15,7 @@ import {
   getAutomaticFollowUpStage,
   isKeepInTouchNote,
   toFollowUpDateOnly,
+  clearAutoFollowUpOnInbound,
 } from "@/lib/followUp";
 
 export const runtime = "nodejs";
@@ -623,6 +624,10 @@ export const runSync = async (request: Request) => {
         const contactId =
           matchedContactIds.length === 1 ? (matchedContactIds[0] ?? null) : null;
         const direction = isOutbound ? "outbound" : "inbound";
+
+        if (direction === "inbound" && contactId) {
+          await clearAutoFollowUpOnInbound(supabase, contactId);
+        }
 
         if (existing) {
           const shouldUpdateContact =

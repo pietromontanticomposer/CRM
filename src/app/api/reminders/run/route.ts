@@ -5,6 +5,13 @@ import {
   KEEP_IN_TOUCH_MONTHS,
   KEEP_IN_TOUCH_NOTE,
   isKeepInTouchNote,
+  getAutomaticFollowUpStage,
+  AUTO_FOLLOW_UP_1_NOTE,
+  AUTO_FOLLOW_UP_2_NOTE,
+  SECOND_FOLLOW_UP_DAYS,
+  buildAutoFollowUpEmail1,
+  buildAutoFollowUpEmail2,
+  toFollowUpDateOnly,
 } from "@/lib/followUp";
 
 export const runtime = "nodejs";
@@ -52,6 +59,16 @@ const addMonthsToDateOnly = (dateOnly: string, months: number) => {
   const parsed = new Date(`${dateOnly}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return dateOnly;
   parsed.setMonth(parsed.getMonth() + months);
+  const year = parsed.getFullYear();
+  const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
+  const day = `${parsed.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const addDaysToDateOnly = (dateOnly: string, days: number) => {
+  const parsed = new Date(`${dateOnly}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateOnly;
+  parsed.setDate(parsed.getDate() + days);
   const year = parsed.getFullYear();
   const month = `${parsed.getMonth() + 1}`.padStart(2, "0");
   const day = `${parsed.getDate()}`.padStart(2, "0");
@@ -151,36 +168,117 @@ const handleReminderRun = async (request: Request) => {
     "crm@local.test";
 
   let sent = 0;
+  const signatureHtml = getOptionalEnv("EMAIL_SIGNATURE_HTML");
+
   for (const contact of dueContacts) {
-    const body = buildBody(today, {
-      name: contact.name,
-      email: contact.email,
-      company: contact.company,
-      role: contact.role,
-      note: contact.next_action_note,
-    });
-    const subjectLabel =
-      contact.name || contact.email || "Contatto";
-    await transport.sendMail({
-      from: fromAddress,
-      to: reminderEmail,
-      subject: `Follow-up da fare: ${subjectLabel}`,
-      text: body,
-    });
+    const stage = getAutomaticFollowUpStage(contact.next_action_note);
+
+    if (stage && contact.email) {
+      // Automatic Follow-up
+      const emailContent =
+        stage === 1
+          ? buildAutoFollowUpEmail1(contact.name, signatureHtml)
+          : buildAutoFollowUpEmail2(contact.name, signatureHtml);
+
+      // Try to find the last email for threading
+      const { data: lastEmail } = await supabase
+        .from("emails")
+        .select("message_id_header, references, subject")
+        .eq("contact_id", contact.id)
+        .order("received_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const headers: Record<string, string> = {};
+      let subject = emailContent.subject;
+
+      if (lastEmail?.message_id_header) {
+        headers["In-Reply-To"] = lastEmail.message_id_header;
+        const refs = [lastEmail.references, lastEmail.message_id_header]
+          .filter(Boolean)
+          .join(" ");
+        headers["References"] = refs;
+        if (lastEmail.subject) {
+          subject = /^re:/i.test(lastEmail.subject)
+            ? lastEmail.subject
+            : `Re: ${lastEmail.subject}`;
+        }
+      }
+
+      const info = await transport.sendMail({
+        from: fromAddress,
+        to: contact.email,
+        subject,
+        text: emailContent.body,
+        html: emailContent.html,
+        headers,
+      });
+
+      // Save the sent email
+      await supabase.from("emails").insert({
+        contact_id: contact.id,
+        direction: "outbound",
+        message_id_header: info.messageId,
+        in_reply_to: lastEmail?.message_id_header || null,
+        references: headers["References"] || null,
+        from_email: fromAddress,
+        to_email: contact.email,
+        subject,
+        text_body: emailContent.body,
+        html_body: emailContent.html,
+        received_at: new Date().toISOString(),
+      });
+
+      // Update contact state
+      if (stage === 1) {
+        await supabase
+          .from("contacts")
+          .update({
+            next_action_at: addDaysToDateOnly(today, SECOND_FOLLOW_UP_DAYS),
+            next_action_note: AUTO_FOLLOW_UP_2_NOTE,
+            last_action_at: today,
+            last_action_note: "Follow-up automatico 1/2 inviato",
+          })
+          .eq("id", contact.id);
+      } else {
+        await supabase
+          .from("contacts")
+          .update({
+            next_action_at: null,
+            next_action_note: null,
+            last_action_at: today,
+            last_action_note: "Follow-up automatico 2/2 inviato (fine)",
+          })
+          .eq("id", contact.id);
+      }
+
+      await supabase.from("notifications").insert({
+        type: "email_sent",
+        contact_id: contact.id,
+        title: `Follow-up automatico inviato a ${contact.name}`,
+        body: emailContent.body.slice(0, 100) + "...",
+      });
+    } else {
+      // Manual Reminder to Pietro
+      const body = buildBody(today, {
+        name: contact.name,
+        email: contact.email,
+        company: contact.company,
+        role: contact.role,
+        note: contact.next_action_note,
+      });
+      const subjectLabel = contact.name || contact.email || "Contatto";
+      await transport.sendMail({
+        from: fromAddress,
+        to: reminderEmail,
+        subject: `Follow-up da fare: ${subjectLabel}`,
+        text: body,
+      });
+    }
     sent += 1;
   }
 
-  const notifications = dueContacts.map((contact) => ({
-    type: "followup_due",
-    contact_id: contact.id,
-    email_id: null,
-    title: `Follow-up in scadenza: ${contact.name || contact.email || "Contatto"}`,
-    body: contact.next_action_note || null,
-  }));
-  if (notifications.length) {
-    await supabase.from("notifications").insert(notifications);
-  }
-
+  // Handle Keep in Touch separately if needed (though they are usually in dueContacts)
   const keepInTouchContacts = dueContacts.filter((contact) =>
     isKeepInTouchNote(contact.next_action_note)
   );

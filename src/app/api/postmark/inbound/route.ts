@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { clearAutoFollowUpOnInbound } from "@/lib/followUp";
 
 type PostmarkAddress = {
   Email?: string;
@@ -239,6 +240,10 @@ export async function POST(request: Request) {
     if (emailError) {
       console.error("Postmark inbound: email insert failed", emailError);
       return NextResponse.json({ ok: true });
+    }
+
+    if (insertedEmail?.contact_id) {
+      await clearAutoFollowUpOnInbound(supabase, insertedEmail.contact_id);
     }
 
     if (insertedEmail?.id) {

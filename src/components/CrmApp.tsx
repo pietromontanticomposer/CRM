@@ -8,6 +8,8 @@ import {
   buildAutomaticFollowUpNote,
   getAutomaticFollowUpStage,
   isKeepInTouchNote,
+  AUTO_FOLLOW_UP_1_NOTE,
+  AUTO_FOLLOW_UP_2_NOTE,
 } from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
@@ -2051,11 +2053,31 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       );
                     }}
                     className="rounded-full border border-[var(--accent)] px-3 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {days} gg
-                  </button>
-                ))}
-              </div>
+                    >
+                    {days}g
+                    </button>
+                    ))}
+                    <button
+                    type="button"
+                    disabled={remindersDisabled}
+                    onClick={() => {
+                    const today = getTodayDateInputValue();
+                    setDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            next_action_at: addDaysToDateInputValue(today, 10),
+                            next_action_note: AUTO_FOLLOW_UP_1_NOTE,
+                          }
+                        : prev
+                    );
+                    }}
+                    className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                    Auto Follow-up (10g + 20g)
+                    </button>
+                    </div>
+
             </div>
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
