@@ -1962,7 +1962,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDraft((prev) => prev ? { ...prev, status: "Auto follow impostato" } : prev)}
+                  onClick={() => setDraft((prev) => {
+                    if (!prev) return prev;
+                    if (prev.status === "Auto follow impostato") {
+                      return { ...prev, status: "Risposta ricevuta" };
+                    }
+                    return { ...prev, status: "Auto follow impostato" };
+                  })}
                   className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
                     draft.status === "Auto follow impostato"
                       ? "border-blue-600 bg-blue-600 text-white shadow-sm"
@@ -2129,7 +2135,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                              if (isAutoFollowUpActive) {
                                return {
                                  ...prev,
-                                 status: prev.status === "Auto follow impostato" ? "Primo contatto inviato" : prev.status,
+                                 status: prev.status === "Auto follow impostato" ? "Risposta ricevuta" : prev.status,
                                  next_action_at: "",
                                  next_action_note: "",
                                };
