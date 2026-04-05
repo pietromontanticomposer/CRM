@@ -1354,7 +1354,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
     const payload = (await response.json()) as ContactsApiResponse;
     const updated = payload.contact as Contact;
+    const sy = window.scrollY;
     applyContactUpdate(updated);
+    requestAnimationFrame(() => window.scrollTo(0, sy));
     setFollowUpMessage(
       keepWarm
         ? `Ricontattato: prossimo promemoria tra ${KEEP_IN_TOUCH_MONTHS} mesi.`
@@ -1424,7 +1426,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
     const payload = (await response.json()) as ContactsApiResponse;
     const updated = payload.contact as Contact;
+    const sy = window.scrollY;
     applyContactUpdate(updated);
+    requestAnimationFrame(() => window.scrollTo(0, sy));
     setFollowUpMessage(
       `✓ Mantenimento rapporto attivato per ${contact.name ?? "contatto"}.`
     );
@@ -1991,10 +1995,12 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         key={status}
                         type="button"
                         onClick={async () => {
+                          const scrollY = window.scrollY;
                           setDraft((prev) => {
                             if (!prev) return prev;
                             return { ...prev, status: status as Status };
                           });
+                          requestAnimationFrame(() => window.scrollTo(0, scrollY));
                           if (draft?.id) {
                             const res = await fetch(`/api/contacts/${draft.id}`, {
                               method: "PATCH",
@@ -2003,7 +2009,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             });
                             if (res.ok) {
                               const payload = (await res.json()) as ContactsApiResponse;
+                              const sy = window.scrollY;
                               applyContactUpdate(payload.contact as Contact);
+                              requestAnimationFrame(() => window.scrollTo(0, sy));
                             }
                           }
                         }}
@@ -2046,6 +2054,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             <button
                               type="button"
                               onClick={async () => {
+                                const scrollY = window.scrollY;
                                 setDraft((prev) =>
                                   prev
                                     ? {
@@ -2055,6 +2064,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                       }
                                     : prev
                                 );
+                                requestAnimationFrame(() => window.scrollTo(0, scrollY));
                                 if (draft?.id) {
                                   const res = await fetch(`/api/contacts/${draft.id}`, {
                                     method: "PATCH",
@@ -2066,7 +2076,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                   });
                                   if (res.ok) {
                                     const payload = (await res.json()) as ContactsApiResponse;
+                                    const sy = window.scrollY;
                                     applyContactUpdate(payload.contact as Contact);
+                                    requestAnimationFrame(() => window.scrollTo(0, sy));
                                   }
                                 }
                               }}
