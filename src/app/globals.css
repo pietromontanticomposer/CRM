@@ -136,5 +136,5 @@ summary::-webkit-details-marker {
 }
 
 .auto-follow-pulse {
-  animation: autoFollowPulse 2s ease-in-out infinite;
+  animation: autoFollowPulse 2s ease-in-out -999999s infinite;
 }

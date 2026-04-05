@@ -8,6 +8,21 @@ export const FOLLOW_UP_TIME_ZONE = "Europe/Rome";
 export const AUTO_FOLLOW_UP_1_NOTE = "Follow-up automatico 1/2 (10 giorni)";
 export const AUTO_FOLLOW_UP_2_NOTE = `Follow-up automatico 2/2 (${SECOND_FOLLOW_UP_DAYS} giorni dal primo)`;
 
+export const MAINTAIN_RAPPORT_NOTE_PREFIX = "Mantenimento rapporto";
+export const buildMaintainRapportNote = (days: number) =>
+  days === 0
+    ? `${MAINTAIN_RAPPORT_NOTE_PREFIX} (inviato)`
+    : `${MAINTAIN_RAPPORT_NOTE_PREFIX} (${days} giorni)`;
+
+export const isMaintainRapportNote = (value?: string | null) =>
+  !!value?.trim().startsWith(MAINTAIN_RAPPORT_NOTE_PREFIX);
+
+export const getMaintainRapportDays = (value?: string | null): number | null => {
+  if (!value || !isMaintainRapportNote(value)) return null;
+  const match = value.match(/\((\d+)\s*giorni\)/);
+  return match ? Number(match[1]) : null;
+};
+
 export type AutomaticFollowUpStage = 1 | 2;
 
 const followUpDateFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -119,6 +134,33 @@ Un saluto,${finalSignature}</div>`;
   };
 };
 
+export const buildMaintainRapportEmail = (name: string, signatureHtml?: string | null) => {
+  const firstName = extractFirstName(name);
+  const text = `Ciao ${firstName}!,
+
+spero tu stia bene.
+
+È da un po' che pensavo di risentirti e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i tuoi progetti in questo periodo.
+
+Nel frattempo ho aggiornato anche il mio sito (https://www.pietromontanti.com/) e raccolto alcuni lavori recenti su SoundCloud (https://soundcloud.com/pietromontanticomposer) molti selezionati in festival internazionali quindi se ti fa piacere puoi dare un'occhiata!
+
+Un saluto,`;
+
+  const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
+
+  const html = `<div>Ciao ${firstName}!,<br><br>
+spero tu stia bene.<br><br>
+È da un po' che pensavo di risentirti e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i tuoi progetti in questo periodo.<br><br>
+Nel frattempo ho aggiornato anche il mio sito (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) e raccolto alcuni lavori recenti su <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a> molti selezionati in festival internazionali quindi se ti fa piacere puoi dare un'occhiata!<br><br>
+Un saluto,${finalSignature}</div>`;
+
+  return {
+    subject: "Il tuo lavoro",
+    body: text,
+    html: html,
+  };
+};
+
 export const handleContactInbound = async (
   supabase: any,
   contactId: string
@@ -131,11 +173,13 @@ export const handleContactInbound = async (
 
   if (contact) {
     const isAutoFollowActive = getAutomaticFollowUpStage(contact.next_action_note);
+    const isMaintainActive = isMaintainRapportNote(contact.next_action_note);
     const updates: Record<string, any> = {};
 
     // Se c'è un auto follow-up attivo o se lo stato è ancora quello iniziale o in attesa
     if (
       isAutoFollowActive ||
+      isMaintainActive ||
       contact.status === "Auto follow-up impostato" ||
       contact.status === "In attesa" ||
       contact.status === "In attesa di risposta"
@@ -143,7 +187,8 @@ export const handleContactInbound = async (
       updates.status = "Risposta ricevuta";
     }
 
-    if (isAutoFollowActive) {
+    // Cancella follow-up automatico o mantenimento rapporto se il contatto risponde
+    if (isAutoFollowActive || isMaintainActive) {
       updates.next_action_at = null;
       updates.next_action_note = null;
     }

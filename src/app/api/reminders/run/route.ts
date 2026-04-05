@@ -11,6 +11,9 @@ import {
   SECOND_FOLLOW_UP_DAYS,
   buildAutoFollowUpEmail1,
   buildAutoFollowUpEmail2,
+  buildMaintainRapportEmail,
+  isMaintainRapportNote,
+  buildMaintainRapportNote,
   toFollowUpDateOnly,
 } from "@/lib/followUp";
 
@@ -256,6 +259,75 @@ const handleReminderRun = async (request: Request) => {
         type: "email_sent",
         contact_id: contact.id,
         title: `Follow-up automatico inviato a ${contact.name}`,
+        body: emailContent.body.slice(0, 100) + "...",
+      });
+    } else if (isMaintainRapportNote(contact.next_action_note) && contact.email) {
+      // Mantenimento rapporto schedulato
+      const emailContent = buildMaintainRapportEmail(contact.name, signatureHtml);
+
+      const { data: lastEmail } = await supabase
+        .from("emails")
+        .select("message_id_header, references, subject")
+        .eq("contact_id", contact.id)
+        .order("received_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const headers: Record<string, string> = {};
+      let subject = emailContent.subject;
+
+      if (lastEmail?.message_id_header) {
+        headers["In-Reply-To"] = lastEmail.message_id_header;
+        const refs = [lastEmail.references, lastEmail.message_id_header]
+          .filter(Boolean)
+          .join(" ");
+        headers["References"] = refs;
+        if (lastEmail.subject) {
+          subject = /^re:/i.test(lastEmail.subject)
+            ? lastEmail.subject
+            : `Re: ${lastEmail.subject}`;
+        }
+      }
+
+      const info = await transport.sendMail({
+        from: fromAddress,
+        to: contact.email,
+        subject,
+        text: emailContent.body,
+        html: emailContent.html,
+        headers,
+      });
+
+      await supabase.from("emails").insert({
+        contact_id: contact.id,
+        direction: "outbound",
+        message_id_header: info.messageId,
+        in_reply_to: lastEmail?.message_id_header || null,
+        references: headers["References"] || null,
+        from_email: fromAddress,
+        from_name: null,
+        to_email: contact.email,
+        subject,
+        text_body: emailContent.body,
+        html_body: emailContent.html,
+        received_at: new Date().toISOString(),
+      });
+
+      await supabase
+        .from("contacts")
+        .update({
+          next_action_at: null,
+          next_action_note: buildMaintainRapportNote(0),
+          last_action_at: today,
+          last_action_note: "Mantenimento rapporto inviato",
+          status: "Rimanere in contatto",
+        })
+        .eq("id", contact.id);
+
+      await supabase.from("notifications").insert({
+        type: "email_sent",
+        contact_id: contact.id,
+        title: `Mantenimento rapporto inviato a ${contact.name}`,
         body: emailContent.body.slice(0, 100) + "...",
       });
     } else {

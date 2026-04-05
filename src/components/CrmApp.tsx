@@ -10,6 +10,10 @@ import {
   isKeepInTouchNote,
   AUTO_FOLLOW_UP_1_NOTE,
   AUTO_FOLLOW_UP_2_NOTE,
+  isMaintainRapportNote,
+  buildMaintainRapportNote,
+  buildMaintainRapportEmail,
+  extractFirstName,
 } from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
@@ -810,6 +814,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     Record<string, "recontacted" | "keepwarm">
   >({});
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
+  const [maintainRapportPending, setMaintainRapportPending] = useState<string | null>(null);
+  const [maintainRapportMessage, setMaintainRapportMessage] = useState<string | null>(null);
   const [desktopSidebarHeight, setDesktopSidebarHeight] = useState<
     number | null
   >(null);
@@ -1470,6 +1476,98 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     });
   };
 
+  const handleMaintainRapport = async (contact: Contact, days: number) => {
+    if (maintainRapportPending) return;
+    setMaintainRapportMessage(null);
+    const pendingKey = days === 0 ? "now" : `schedule-${days}`;
+    setMaintainRapportPending(pendingKey);
+
+    try {
+      if (days === 0) {
+        // Invio immediato: costruisci email e invia via API
+        const emailContent = buildMaintainRapportEmail(contact.name ?? "");
+
+        // Trova l'ultima email per il threading (Re:)
+        const lastEmail = emails
+          .filter((e) => e.contact_id === contact.id)
+          .sort((a, b) => (b.received_at ?? "").localeCompare(a.received_at ?? ""))[0];
+
+        const sendPayload: Record<string, unknown> = {
+          contactId: contact.id,
+          to: contact.email,
+          subject: emailContent.subject,
+          text: emailContent.body,
+          html: emailContent.html,
+        };
+        if (lastEmail?.id) {
+          sendPayload.replyToEmailId = lastEmail.id;
+        }
+
+        const sendRes = await fetch("/api/gmail/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sendPayload),
+        });
+
+        if (!sendRes.ok) {
+          setError("Impossibile inviare l'email di mantenimento rapporto.");
+          setMaintainRapportPending(null);
+          return;
+        }
+
+        // Aggiorna contatto
+        const today = getTodayDateInputValue();
+        const patchRes = await fetch(`/api/contacts/${contact.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            last_action_at: today,
+            last_action_note: "Mantenimento rapporto inviato",
+            status: "Rimanere in contatto",
+          }),
+        });
+
+        if (patchRes.ok) {
+          const payload = (await patchRes.json()) as ContactsApiResponse;
+          applyContactUpdate(payload.contact as Contact);
+        }
+
+        setMaintainRapportMessage("✓ Email di mantenimento rapporto inviata!");
+        if (contact.id && contact.email) {
+          loadEmails(contact.id, contact.email, { background: true });
+        }
+      } else {
+        // Schedulazione: imposta next_action_at + note
+        const today = getTodayDateInputValue();
+        const scheduledDate = addDaysToDateInputValue(today, days);
+
+        const patchRes = await fetch(`/api/contacts/${contact.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            next_action_at: scheduledDate,
+            next_action_note: buildMaintainRapportNote(days),
+            status: "Rimanere in contatto",
+          }),
+        });
+
+        if (!patchRes.ok) {
+          setError("Impossibile programmare il mantenimento rapporto.");
+          setMaintainRapportPending(null);
+          return;
+        }
+
+        const payload = (await patchRes.json()) as ContactsApiResponse;
+        applyContactUpdate(payload.contact as Contact);
+        setDraft(payload.contact as Contact);
+        setMaintainRapportMessage(`✓ Mantenimento rapporto programmato tra ${days} giorni.`);
+      }
+    } catch {
+      setError("Errore durante il mantenimento rapporto.");
+    }
+    setMaintainRapportPending(null);
+  };
+
   const handleSelectEmail = async (emailId: string) => {
     if (selectedEmailId === emailId) {
       setSelectedEmailId(null);
@@ -2032,6 +2130,50 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </div>
               </div>
             </div>
+
+            {/* Mantenimento rapporto */}
+            {selected && selected.email && (
+              <div className="rounded-3xl border-2 border-teal-200 bg-teal-50/30 p-4 dark:border-teal-900/30 dark:bg-teal-950/10">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-2 w-2 rounded-full bg-teal-500" />
+                  <label className="text-[11px] font-black uppercase tracking-[0.15em] text-teal-700 dark:text-teal-500">
+                    Mantenimento rapporto
+                  </label>
+                  {isMaintainRapportNote(draft.next_action_note) && (
+                    <span className="rounded bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold text-white auto-follow-pulse">
+                      PROGRAMMATO
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={!!maintainRapportPending}
+                    onClick={() => handleMaintainRapport(selected, 0)}
+                    className="rounded-full border border-teal-500 bg-teal-600 px-3 py-1.5 text-[11px] font-bold text-white transition hover:bg-teal-700 disabled:opacity-60"
+                  >
+                    {maintainRapportPending === "now" ? "Invio..." : "Invia ora"}
+                  </button>
+                  {[10, 30, 60].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      disabled={!!maintainRapportPending}
+                      onClick={() => handleMaintainRapport(selected, days)}
+                      className="rounded-full border border-teal-400 bg-teal-50/50 px-3 py-1.5 text-[10px] font-bold text-teal-700 transition hover:bg-teal-100 dark:bg-teal-950/20 dark:text-teal-400 dark:hover:bg-teal-950/40 disabled:opacity-60"
+                    >
+                      {maintainRapportPending === `schedule-${days}` ? "Programmo..." : `${days}g`}
+                    </button>
+                  ))}
+                </div>
+                {maintainRapportMessage && (
+                  <p className="mt-2 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+                    {maintainRapportMessage}
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                 Ultimo contatto
