@@ -72,14 +72,14 @@ Pietro`;
 
   // Fallback signature if none in env
   const defaultSignature = `
-<div style="margin-top: 10px; font-family: Helvetica, Arial, sans-serif; color: #444; line-height: 1.2;">
-  <div style="font-weight: bold; font-size: 13px; color: #111;">Pietro Montanti</div>
-  <div style="font-size: 10px;">Multi Instrumentalist, Composer for TV & Theatre</div>
-  <div style="font-size: 10px;">3515172560</div>
-  <div style="font-size: 10px;">P.IVA: 04593080239</div>
-  <div style="font-size: 10px;">Via Mulino Turri 9c, Negrar (VR)</div>
+<div style="margin-top: 15px; font-family: Helvetica, Arial, sans-serif; color: #333; line-height: 1.4;">
+  <div style="font-weight: bold; font-size: 14px; color: #111;">Pietro Montanti</div>
+  <div style="font-size: 12px;">Multi Instrumentalist, Composer for TV & Theatre</div>
+  <div style="font-size: 12px;">3515172560</div>
+  <div style="font-size: 12px;">P.IVA: 04593080239</div>
+  <div style="font-size: 12px;">Via Mulino Turri 9c, Negrar (VR)</div>
   <div style="margin-top: 10px;">
-    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="220" style="display: block; max-width: 100%; height: auto;">
+    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="130" style="display: block; max-width: 100%; height: auto; border-radius: 2px;">
   </div>
 </div>`;
 
@@ -110,14 +110,14 @@ Pietro`;
 
   // Fallback signature if none in env
   const defaultSignature = `
-<div style="margin-top: 10px; font-family: Helvetica, Arial, sans-serif; color: #444; line-height: 1.2;">
-  <div style="font-weight: bold; font-size: 13px; color: #111;">Pietro Montanti</div>
-  <div style="font-size: 10px;">Multi Instrumentalist, Composer for TV & Theatre</div>
-  <div style="font-size: 10px;">3515172560</div>
-  <div style="font-size: 10px;">P.IVA: 04593080239</div>
-  <div style="font-size: 10px;">Via Mulino Turri 9c, Negrar (VR)</div>
+<div style="margin-top: 15px; font-family: Helvetica, Arial, sans-serif; color: #333; line-height: 1.4;">
+  <div style="font-weight: bold; font-size: 14px; color: #111;">Pietro Montanti</div>
+  <div style="font-size: 12px;">Multi Instrumentalist, Composer for TV & Theatre</div>
+  <div style="font-size: 12px;">3515172560</div>
+  <div style="font-size: 12px;">P.IVA: 04593080239</div>
+  <div style="font-size: 12px;">Via Mulino Turri 9c, Negrar (VR)</div>
   <div style="margin-top: 10px;">
-    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="220" style="display: block; max-width: 100%; height: auto;">
+    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="130" style="display: block; max-width: 100%; height: auto; border-radius: 2px;">
   </div>
 </div>`;
 
