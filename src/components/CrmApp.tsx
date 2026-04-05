@@ -1928,6 +1928,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 <div className="grid gap-2">
                   {STATUS_GROUPS["In attesa di risposta"].map((status) => {
                     const isActive = draft.status === status;
+                    const isAutoFollowUp = status === "Auto follow-up impostato";
                     return (
                       <button
                         key={status}
@@ -1936,11 +1937,14 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           if (!prev) return prev;
                           return { ...prev, status: status as Status };
                         })}
-                        className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${
+                        className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold ${
                           isActive
                             ? "border-indigo-600 bg-indigo-600 text-white shadow-sm scale-[1.02]"
                             : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 opacity-60 hover:opacity-100"
-                        }`}
+                        }${isAutoFollowUp && isActive ? "" : " transition-all"}`}
+                        style={isAutoFollowUp && isActive ? {
+                          animation: "autoFollowPulse 2s ease-in-out infinite",
+                        } : undefined}
                       >
                         ↳ {status}
                       </button>
