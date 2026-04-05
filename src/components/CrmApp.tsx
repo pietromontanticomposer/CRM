@@ -31,7 +31,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Attiva auto follow-up", "In attesa"],
-  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata", "Mantenimento rapporto"],
+  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -2047,8 +2047,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         const isActive = draft.status === status;
                         const baseStyles = statusStylesByTheme[theme][status as Status];
 
-                        const isMantRapporto = status === "Mantenimento rapporto";
-
                         return (
                           <div key={status} className="grid gap-2">
                             <button
@@ -2082,11 +2080,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                   }
                                 }
                               }}
-                              className={`rounded-xl border px-4 py-2 text-left text-xs font-bold ${baseStyles} ${
+                              className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
                                 isActive
                                   ? "shadow-md scale-[1.02] ring-1 ring-current"
                                   : "opacity-40 hover:opacity-100 hover:scale-[1.01]"
-                              }${isMantRapporto && isActive ? " maintain-rapport-pulse" : " transition-all"}`}
+                              }`}
                             >
                               ↳ {status}
                             </button>
@@ -2631,6 +2629,14 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               ))}
             </div>
           </div>
+
+          {/* Mantenimento rapporto (standalone) */}
+          <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles["Mantenimento rapporto"]}`}>
+            <span>Mantenimento rapporto</span>
+            <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
+              {counts["Mantenimento rapporto"] ?? 0}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -2918,15 +2924,12 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </button>
                 <div className="ml-2 grid gap-1.5 border-l-2 border-amber-500/20 pl-3">
                   {STATUS_GROUPS["Risposta ricevuta"].map((status) => {
-                    const isMantRapporto = status === "Mantenimento rapporto";
                     return (
                     <button
                       key={status}
                       type="button"
                       onClick={() => setContactFolder(status)}
-                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
-                        isMantRapporto ? "maintain-rapport-pulse " : "transition "
-                      }${
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
                         contactFolder === status
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
@@ -2941,6 +2944,22 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   })}
                 </div>
               </div>
+
+              {/* Mantenimento rapporto (standalone) */}
+              <button
+                type="button"
+                onClick={() => setContactFolder("Mantenimento rapporto")}
+                className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] maintain-rapport-pulse ${
+                  contactFolder === "Mantenimento rapporto"
+                    ? "border-teal-500/50 bg-teal-500/10 text-teal-500"
+                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
+                }`}
+              >
+                <span>Mantenimento rapporto</span>
+                <span className="rounded-full bg-teal-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                  {counts["Mantenimento rapporto"] ?? 0}
+                </span>
+              </button>
             </div>
 
             <div className="mt-3">
