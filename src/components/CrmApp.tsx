@@ -1980,11 +1980,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-indigo-500" />
                   <label className="text-[11px] font-black uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-500">
-                    Stato Iniziale / In attesa
+                    In attesa di risposta
                   </label>
                 </div>
                 <div className="grid gap-2">
-                  {["Auto follow-up impostato", "In attesa di risposta"].map((status) => (
+                  {["Auto follow-up impostato", "In attesa"].map((status) => (
                     <button
                       key={status}
                       type="button"
