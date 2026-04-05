@@ -15,14 +15,14 @@ import {
 const STATUS_OPTIONS = [
   "Auto follow impostato",
   "Risposta ricevuta",
-  "Interessato",
-  "Ricontattare più avanti",
   "Non interessato",
+  "Ricontattare",
+  "Call prenotata",
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
 type ContactFolder = "Tutte" | "Follow-up" | "In attesa di risposta" | Status;
-const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow impostato", "Interessato"] as const;
+const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow impostato"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
@@ -124,16 +124,16 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
     "Auto follow impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
-    "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
-    "Ricontattare più avanti": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
+    "Ricontattare": "bg-orange-500/15 text-orange-200 border-orange-400/30",
+    "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   },
   light: {
     "Auto follow impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
-    "Interessato": "border-emerald-300 bg-emerald-50 text-emerald-800",
-    "Ricontattare più avanti": "border-orange-300 bg-orange-50 text-orange-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
+    "Ricontattare": "border-orange-300 bg-orange-50 text-orange-800",
+    "Call prenotata": "border-emerald-300 bg-emerald-50 text-emerald-800",
   },
 };
 
@@ -1952,43 +1952,70 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="grid gap-3">
-            <div className="grid gap-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Stato / Etichetta
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map((status) => {
-                  const isActive = draft.status === status;
-                  return (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() =>
-                        setDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                status: status,
-                                ...(status === "Non interessato"
-                                  ? {
-                                      next_action_at: "",
-                                      next_action_note: "",
-                                    }
-                                  : {}),
-                              }
-                            : prev
-                        )
-                      }
-                      className={`rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
-                        isActive
-                          ? statusStylesByTheme[theme][status].replace("border-", "border-2 border-") + " ring-2 ring-offset-2 ring-offset-[var(--panel)] ring-current"
-                          : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--muted)]"
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  );
-                })}
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Stato Principale
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["Auto follow impostato", "Risposta ricevuta"].map((status) => {
+                    const isActive = draft.status === status;
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => setDraft((prev) => prev ? { ...prev, status: status as Status } : prev)}
+                        className={`rounded-full border px-4 py-2 text-[11px] font-bold transition ${
+                          isActive
+                            ? statusStylesByTheme[theme][status as Status].replace("border-", "border-2 border-") + " ring-2 ring-offset-2 ring-offset-[var(--panel)] ring-current shadow-md"
+                            : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--muted)]"
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-2 pl-4 border-l-2 border-[var(--line)] ml-2">
+                <label className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)] flex items-center gap-1">
+                  <span>↳</span> Dopo Risposta (Sotto-etichette)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["Non interessato", "Ricontattare", "Call prenotata"].map((status) => {
+                    const isActive = draft.status === status;
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() =>
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  status: status as Status,
+                                  ...(status === "Non interessato"
+                                    ? {
+                                        next_action_at: "",
+                                        next_action_note: "",
+                                      }
+                                    : {}),
+                                }
+                              : prev
+                          )
+                        }
+                        className={`rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                          isActive
+                            ? statusStylesByTheme[theme][status as Status].replace("border-", "border-2 border-") + " shadow-sm"
+                            : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--muted)] opacity-80"
+                        }`}
+                      >
+                        ↳ {status}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             <div className="grid gap-2">
