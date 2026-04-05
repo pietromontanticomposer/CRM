@@ -2670,7 +2670,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
-            <div className="sticky top-0 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-4 pb-4">
+            <div className="sticky -top-5 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-9 pb-4 rounded-t-3xl">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
@@ -2722,7 +2722,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         contactFolder === status
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
-                      }`}
+                      }${status === "Auto follow-up impostato" ? " animate-pulse" : ""}`}
                     >
                       <span>{status}</span>
                       <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
@@ -2829,8 +2829,14 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" ? " animate-pulse" : ""}`}
+                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
                           >
+                            {contact.status === "Auto follow-up impostato" && (
+                              <span className="relative mr-1.5 inline-flex h-2 w-2 align-middle">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                              </span>
+                            )}
                             {contact.status}
                           </span>
                         </div>
