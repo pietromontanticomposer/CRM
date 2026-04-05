@@ -2066,32 +2066,76 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </button>
 
                             {status === "Rimanere in contatto" && isActive && (
-                              <div className="flex flex-wrap gap-2 pl-4 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                                {QUICK_RECONTACT_DAYS.map((days) => (
-                                  <button
-                                    key={days}
-                                    type="button"
-                                    onClick={() => {
-                                      const today = getTodayDateInputValue();
-                                      setDraft((prev) =>
-                                        prev
-                                          ? {
-                                              ...prev,
-                                              next_action_at: addDaysToDateInputValue(
-                                                today,
-                                                days
-                                              ),
-                                              next_action_note:
-                                                buildRecontactReminderNote(days),
-                                            }
-                                          : prev
-                                      );
-                                    }}
-                                    className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
-                                  >
-                                    {days}g
-                                  </button>
-                                ))}
+                              <div className="flex flex-wrap items-center gap-3 pl-4 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="flex flex-wrap gap-2">
+                                  {QUICK_RECONTACT_DAYS.map((days) => (
+                                    <button
+                                      key={days}
+                                      type="button"
+                                      onClick={() => {
+                                        const today = getTodayDateInputValue();
+                                        setDraft((prev) =>
+                                          prev
+                                            ? {
+                                                ...prev,
+                                                next_action_at: addDaysToDateInputValue(
+                                                  today,
+                                                  days
+                                                ),
+                                                next_action_note:
+                                                  buildRecontactReminderNote(days),
+                                              }
+                                            : prev
+                                        );
+                                      }}
+                                      className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
+                                    >
+                                      {days}g
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div className="h-4 w-px bg-amber-200 dark:bg-amber-900/50" />
+
+                                <div className="flex flex-wrap gap-2">
+                                      {(() => {
+                                       const isAutoFollowUpActive = draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || 
+                                                                    draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE;
+                                       return (
+                                         <button
+                                           type="button"
+                                           disabled={remindersDisabled}
+                                           onClick={() => {
+                                             const today = getTodayDateInputValue();
+                                             setDraft((prev) => {
+                                               if (!prev) return prev;
+                                               if (isAutoFollowUpActive) {
+                                                 return {
+                                                   ...prev,
+                                                   status: prev.status === "Auto follow-up impostato" ? "Risposta ricevuta" : prev.status,
+                                                   next_action_at: "",
+                                                   next_action_note: "",
+                                                 };
+                                               }
+                                               return {
+                                                 ...prev,
+                                                 status: "Auto follow-up impostato",
+                                                 next_action_at: addDaysToDateInputValue(today, 10),
+                                                 next_action_note: AUTO_FOLLOW_UP_1_NOTE,
+                                               };
+                                             });
+                                           }}
+                                           className={`rounded-full border px-3 py-1 text-[10px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                                             isAutoFollowUpActive
+                                               ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                                               : "border-indigo-500 text-indigo-600 hover:bg-indigo-50"
+                                           }`}
+                                         >
+                                           {isAutoFollowUpActive ? "✓ Auto Follow-up Attivo" : "Auto Follow-up (10g + 20g)"}
+                                         </button>
+                                       );
+                                     })()}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -2153,51 +2197,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   )
                 }
               />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Auto Follow-up
-              </label>
-              <div className="flex flex-wrap gap-2">
-                    {(() => {
-                     const isAutoFollowUpActive = draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || 
-                                                  draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE;
-                     return (
-                       <button
-                         type="button"
-                         disabled={remindersDisabled}
-                         onClick={() => {
-                           const today = getTodayDateInputValue();
-                           setDraft((prev) => {
-                             if (!prev) return prev;
-                             if (isAutoFollowUpActive) {
-                               return {
-                                 ...prev,
-                                 status: prev.status === "Auto follow-up impostato" ? "Risposta ricevuta" : prev.status,
-                                 next_action_at: "",
-                                 next_action_note: "",
-                               };
-                             }
-                             return {
-                               ...prev,
-                               status: "Auto follow-up impostato",
-                               next_action_at: addDaysToDateInputValue(today, 10),
-                               next_action_note: AUTO_FOLLOW_UP_1_NOTE,
-                             };
-                           });
-                         }}
-                         className={`rounded-full border px-3 py-1 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                           isAutoFollowUpActive
-                             ? "border-indigo-600 bg-indigo-600 text-white shadow-sm scale-105"
-                             : "border-indigo-500 text-indigo-600 hover:bg-indigo-50"
-                         }`}
-                       >
-                         {isAutoFollowUpActive ? "✓ Auto Follow-up Attivo" : "Auto Follow-up (10g + 20g)"}
-                       </button>
-                     );
-                   })()}
-                 </div>
-
             </div>
             <div className="grid gap-2">
               <div className="flex items-center gap-2">
