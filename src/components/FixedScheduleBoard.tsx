@@ -508,9 +508,9 @@ export default function FixedScheduleBoard() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden px-6 pb-16 pt-10 sm:px-10">
-      <header className="relative mx-auto mb-6 flex w-full max-w-6xl flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="relative min-h-screen overflow-hidden px-6 pb-16 pt-0 sm:px-10">
+      <header className="sticky top-0 z-40 -mx-6 mb-10 flex w-full flex-col gap-4 bg-[var(--bg)]/80 px-6 py-6 backdrop-blur-md sm:-mx-10 sm:px-10">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
               MODULO 03
