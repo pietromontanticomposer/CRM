@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
+import path from "path";
 import {
   KEEP_IN_TOUCH_MONTHS,
   KEEP_IN_TOUCH_NOTE,
@@ -207,6 +208,14 @@ const handleReminderRun = async (request: Request) => {
         }
       }
 
+      const sigAttach1 = emailContent.html?.includes("cid:firma_pietro")
+        ? [{
+            filename: "firma_pietro.png",
+            path: path.join(process.cwd(), "public", "firma_pietro.png"),
+            cid: "firma_pietro",
+          }]
+        : [];
+
       const info = await transport.sendMail({
         from: fromAddress,
         to: contact.email,
@@ -214,6 +223,7 @@ const handleReminderRun = async (request: Request) => {
         text: emailContent.body,
         html: emailContent.html,
         headers,
+        attachments: sigAttach1,
       });
 
       // Save the sent email
@@ -289,6 +299,14 @@ const handleReminderRun = async (request: Request) => {
         }
       }
 
+      const sigAttach2 = emailContent.html?.includes("cid:firma_pietro")
+        ? [{
+            filename: "firma_pietro.png",
+            path: path.join(process.cwd(), "public", "firma_pietro.png"),
+            cid: "firma_pietro",
+          }]
+        : [];
+
       const info = await transport.sendMail({
         from: fromAddress,
         to: contact.email,
@@ -296,6 +314,7 @@ const handleReminderRun = async (request: Request) => {
         text: emailContent.body,
         html: emailContent.html,
         headers,
+        attachments: sigAttach2,
       });
 
       await supabase.from("emails").insert({
@@ -320,6 +339,7 @@ const handleReminderRun = async (request: Request) => {
           next_action_note: buildMaintainRapportNote(0),
           last_action_at: today,
           last_action_note: "Mantenimento rapporto inviato",
+          status: "Mantenimento rapporto",
         })
         .eq("id", contact.id);
 

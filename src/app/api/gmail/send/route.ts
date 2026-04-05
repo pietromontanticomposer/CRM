@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import {
   SECOND_FOLLOW_UP_DAYS,
@@ -320,6 +321,14 @@ export async function POST(request: Request) {
     getOptionalEnv("GMAIL_USER") ||
     "crm@local.test";
 
+  const signatureAttachments = payload.html?.includes("cid:firma_pietro")
+    ? [{
+        filename: "firma_pietro.png",
+        path: path.join(process.cwd(), "public", "firma_pietro.png"),
+        cid: "firma_pietro",
+      }]
+    : [];
+
   const info = await transport.sendMail({
     from: fromAddress,
     to: payload.to,
@@ -327,6 +336,7 @@ export async function POST(request: Request) {
     text: payload.text,
     html: payload.html,
     headers,
+    attachments: signatureAttachments,
   });
 
   const explicitContactId =

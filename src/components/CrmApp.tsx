@@ -21,6 +21,7 @@ const STATUS_OPTIONS = [
   "In attesa",
   "Risposta ricevuta",
   "Non interessato",
+  "Mantenimento rapporto",
   "Call prenotata",
 ] as const;
 
@@ -28,7 +29,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Auto follow-up impostato", "In attesa"],
-  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata"],
+  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Mantenimento rapporto", "Call prenotata"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -138,6 +139,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
+    "Mantenimento rapporto": "bg-teal-500/15 text-teal-200 border-teal-400/30",
     "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   },
   light: {
@@ -145,6 +147,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "In attesa": "border-sky-300 bg-sky-50 text-sky-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
+    "Mantenimento rapporto": "border-teal-300 bg-teal-50 text-teal-800",
     "Call prenotata": "border-emerald-300 bg-emerald-50 text-emerald-800",
   },
 };
@@ -1520,6 +1523,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           body: JSON.stringify({
             last_action_at: today,
             last_action_note: "Mantenimento rapporto inviato",
+            status: "Mantenimento rapporto",
           }),
         });
 
@@ -1543,6 +1547,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           body: JSON.stringify({
             next_action_at: scheduledDate,
             next_action_note: buildMaintainRapportNote(days),
+            status: "Mantenimento rapporto",
           }),
         });
 
