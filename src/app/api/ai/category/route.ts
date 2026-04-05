@@ -99,8 +99,6 @@ const normalizeConfidence = (value?: number | null) => {
 
 const mapCategoryToStatus = (category: AiCategory) => {
   switch (category) {
-    case "chiuso":
-      return "Chiuso";
     case "interessato":
       return "Interessato";
     case "non_interessato":
@@ -123,7 +121,7 @@ const buildPrompt = ({
     "Sei un assistente che classifica i contatti in base alle email piu recenti.",
     "Restituisci SOLO JSON valido con queste chiavi:",
     "category, confidence, reason.",
-    "category deve essere solo una di: chiuso, interessato, non_interessato.",
+    "category deve essere solo una di: interessato, non_interessato.",
     "Se non sei sicuro, usa interessato.",
     "confidence e un numero tra 0 e 1.",
     "reason e una frase breve (max 120 caratteri).",
@@ -131,7 +129,7 @@ const buildPrompt = ({
     "Esempi:",
     "- interessato: chiede info, conferma disponibilita, prosegue il dialogo.",
     "- non_interessato: rifiuta, declina, dice che non serve/ non e il momento.",
-    "- chiuso: collaborazione conclusa o progetto terminato.",
+    "- interessato: collaborazione conclusa o dialogo attivo.",
     "",
     `Contatto: ${contactName ?? "Sconosciuto"} (${contactEmail ?? "—"})`,
     "",
@@ -252,7 +250,7 @@ export async function POST(request: Request) {
         const updatePayload: Record<string, string | null> = {
           status: mappedStatus,
         };
-        if (mappedStatus === "Chiuso" || mappedStatus === "Non interessato") {
+        if (mappedStatus === "Non interessato") {
           updatePayload.next_action_at = null;
           updatePayload.next_action_note = null;
         }

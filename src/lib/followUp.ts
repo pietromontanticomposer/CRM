@@ -133,23 +133,35 @@ Un saluto,${finalSignature}</div>`;
   };
 };
 
-export const clearAutoFollowUpOnInbound = async (
+export const handleContactInbound = async (
   supabase: any,
   contactId: string
 ) => {
   const { data: contact } = await supabase
     .from("contacts")
-    .select("next_action_note")
+    .select("status, next_action_note")
     .eq("id", contactId)
     .maybeSingle();
 
-  if (contact && getAutomaticFollowUpStage(contact.next_action_note)) {
-    await supabase
-      .from("contacts")
-      .update({
-        next_action_at: null,
-        next_action_note: null,
-      })
-      .eq("id", contactId);
+  if (contact) {
+    const isAutoFollowActive = getAutomaticFollowUpStage(contact.next_action_note);
+    const updates: Record<string, any> = {};
+
+    // Se c'è un auto follow-up attivo o se lo stato è ancora quello iniziale
+    if (isAutoFollowActive || contact.status === "Auto follow impostato") {
+      updates.status = "Risposta ricevuta";
+    }
+
+    if (isAutoFollowActive) {
+      updates.next_action_at = null;
+      updates.next_action_note = null;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await supabase
+        .from("contacts")
+        .update(updates)
+        .eq("id", contactId);
+    }
   }
 };

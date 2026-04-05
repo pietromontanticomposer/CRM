@@ -40,11 +40,8 @@ const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
     return null;
   }
 
-  const status = normalizeString(payload.status) || "Da contattare";
-  const lastActionAt =
-    status === "Già contattato"
-      ? normalizeString(payload.last_action_at) || null
-      : null;
+  const status = normalizeString(payload.status) || "Auto follow impostato";
+  const lastActionAt = null;
 
   return {
     name,

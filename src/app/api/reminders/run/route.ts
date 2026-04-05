@@ -137,7 +137,6 @@ const handleReminderRun = async (request: Request) => {
       "id, name, email, company, role, status, next_action_at, next_action_note"
     )
     .eq("next_action_at", today)
-    .neq("status", "Chiuso")
     .neq("status", "Non interessato");
 
   if (error) {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { clearAutoFollowUpOnInbound } from "@/lib/followUp";
+import { handleContactInbound } from "@/lib/followUp";
 
 type PostmarkAddress = {
   Email?: string;
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
     }
 
     if (insertedEmail?.contact_id) {
-      await clearAutoFollowUpOnInbound(supabase, insertedEmail.contact_id);
+      await handleContactInbound(supabase, insertedEmail.contact_id);
     }
 
     if (insertedEmail?.id) {

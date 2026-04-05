@@ -13,18 +13,16 @@ import {
 } from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
-  "Da contattare",
-  "Già contattato",
   "Auto follow impostato",
+  "Risposta ricevuta",
   "Interessato",
   "Ricontattare più avanti",
   "Non interessato",
-  "Chiuso",
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
 type ContactFolder = "Tutte" | "Follow-up" | "In attesa di risposta" | Status;
-const NEW_CONTACT_STATUS_OPTIONS = ["Da contattare", "Già contattato"] as const;
+const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow impostato", "Interessato"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
@@ -119,27 +117,23 @@ const emptyNewContact: NewContact = {
   email: "",
   company: "",
   role: "",
-  status: "Da contattare",
+  status: "Auto follow impostato",
 };
 
 const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
-    "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
-    "Già contattato": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Auto follow impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
+    "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
     "Ricontattare più avanti": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
-    "Chiuso": "bg-zinc-500/20 text-zinc-200 border-zinc-400/30",
   },
   light: {
-    "Da contattare": "border-amber-300 bg-amber-50 text-amber-800",
-    "Già contattato": "border-sky-300 bg-sky-50 text-sky-800",
     "Auto follow impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
+    "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Interessato": "border-emerald-300 bg-emerald-50 text-emerald-800",
     "Ricontattare più avanti": "border-orange-300 bg-orange-50 text-orange-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
-    "Chiuso": "border-zinc-300 bg-zinc-100 text-zinc-700",
   },
 };
 
@@ -240,7 +234,7 @@ const toDateKey = (value?: string | null) => {
 };
 
 const isOpenFollowUpContact = (contact: Contact, today: string) => {
-  if (contact.status === "Chiuso" || contact.status === "Non interessato") {
+  if (contact.status === "Non interessato") {
     return false;
   }
   const nextActionDate = toDateKey(contact.next_action_at);
@@ -1010,7 +1004,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     };
 
     contacts.forEach((contact) => {
-      if (contact.status === "Chiuso" || contact.status === "Non interessato") {
+      if (contact.status === "Non interessato") {
         return;
       }
       const nextActionDate = toDateKey(contact.next_action_at);
@@ -1400,7 +1394,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     const nextFollowUp = addMonthsToDateInputValue(today, KEEP_IN_TOUCH_MONTHS);
 
     const updatePayload: Record<string, unknown> = {
-      status: contact.status === "Da contattare" ? "Già contattato" : contact.status,
+      status: contact.status,
       last_action_at: today,
       last_action_note: `Mantenimento attivo (ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`,
       next_action_at: nextFollowUp,
@@ -1765,7 +1759,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         company: company || null,
         role: newContact.role.trim() || null,
         status: selectedStatus,
-        last_action_at: selectedStatus === "Già contattato" ? today : null,
+        last_action_at: null,
       }),
     }).catch(() => null);
 
@@ -1867,7 +1861,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const renderContactDetails = (contactId: string) => {
     if (!selected || !draft || selected.id !== contactId) return null;
     const remindersDisabled =
-      draft.status === "Chiuso" || draft.status === "Non interessato";
+      draft.status === "Non interessato";
 
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-sm">
@@ -1886,13 +1880,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         </div>
 
         <div className="mt-4 grid gap-5">
-          {draft.status === "Chiuso" && (
-            <div
-              className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.danger}`}
-            >
-              Contattare solo via telefono
-            </div>
-          )}
           {draft.status === "Non interessato" && (
             <div
               className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.warning}`}
@@ -1977,8 +1964,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       ? {
                           ...prev,
                           status: event.target.value as Status,
-                          ...(event.target.value === "Chiuso" ||
-                          event.target.value === "Non interessato"
+                          ...(event.target.value === "Non interessato"
                             ? {
                                 next_action_at: "",
                                 next_action_note: "",
@@ -2793,10 +2779,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           isSelected
                             ? "border-[var(--accent)] bg-[var(--panel-strong)]"
                             : "border-[var(--line)] bg-[var(--panel)]"
-                        } ${
-                          contact.status === "Chiuso"
-                            ? "opacity-70 hover:opacity-100"
-                            : ""
                         }`}
                       >
                         <div className="flex min-w-0 items-center justify-between gap-2">
@@ -2822,12 +2804,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           </span>
                         </div>
                         <div className="break-words text-xs text-[var(--muted)]">
-                          {contact.status === "Chiuso" ? (
-                            <>Chiuso · contattare via telefono</>
-                          ) : contact.status === "Non interessato" ? (
+                          {contact.status === "Non interessato" ? (
                             <>Non interessato · non ricontattare</>
                           ) : !contact.last_action_at ? (
-                            <>Prossima azione: Da contattare</>
+                            <>Prossima azione: Impostare Auto Follow-up</>
                           ) : (
                             <>
                               Prossima azione:{" "}
@@ -2848,7 +2828,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
         <section
           ref={contentSectionRef}
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg"
+          className="min-w-0 h-[calc(100vh-12rem)] overflow-y-auto rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg custom-scrollbar"
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
@@ -2873,7 +2853,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           )}
 
           {selected && (
-            <div className="mt-6 grid gap-6">
+            <div className="mt-6 grid gap-6 pb-10">
               {renderContactDetails(selected.id)}
               {renderConversation()}
             </div>

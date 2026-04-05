@@ -15,7 +15,7 @@ import {
   getAutomaticFollowUpStage,
   isKeepInTouchNote,
   toFollowUpDateOnly,
-  clearAutoFollowUpOnInbound,
+  handleContactInbound,
 } from "@/lib/followUp";
 
 export const runtime = "nodejs";
@@ -284,7 +284,7 @@ const getFollowUpDays = () => {
 };
 
 const shouldSkipFollowUp = (status?: string | null) =>
-  status === "Chiuso" || status === "Non interessato";
+  status === "Non interessato";
 
 const updateContactAfterOutbound = async (
   contactId: string,
@@ -301,9 +301,8 @@ const updateContactAfterOutbound = async (
 
   const sentDate = parseDateValue(sentAt) ?? new Date();
   const sentDateOnly = toFollowUpDateOnly(sentDate);
-  const promotedStatus =
-    contact.status === "Da contattare" ? "Già contattato" : contact.status;
-  const shouldPromoteStatus = promotedStatus !== contact.status;
+  const nextStatus = contact.status;
+
   const followUpDays = getFollowUpDays();
   const lastActionDate = parseDateValue(contact.last_action_at);
   const nextActionDate = parseDateValue(contact.next_action_at);
@@ -316,9 +315,6 @@ const updateContactAfterOutbound = async (
     !lastActionDate || toFollowUpDateOnly(lastActionDate) < sentDateOnly;
 
   const updatePayload: Record<string, unknown> = {};
-  if (shouldPromoteStatus) {
-    updatePayload.status = promotedStatus;
-  }
   if (shouldRefreshLastAction) {
     updatePayload.last_action_at = sentDateOnly;
     updatePayload.last_action_note = "Email inviata (sync Gmail)";
@@ -626,7 +622,7 @@ export const runSync = async (request: Request) => {
         const direction = isOutbound ? "outbound" : "inbound";
 
         if (direction === "inbound" && contactId) {
-          await clearAutoFollowUpOnInbound(supabase, contactId);
+          await handleContactInbound(supabase, contactId);
         }
 
         if (existing) {
