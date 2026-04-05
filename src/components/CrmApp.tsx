@@ -1954,33 +1954,42 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           <div className="grid gap-3">
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Stato
+                Stato / Etichetta
               </label>
-              <select
-                value={draft.status}
-                onChange={(event) =>
-                  setDraft((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          status: event.target.value as Status,
-                          ...(event.target.value === "Non interessato"
+              <div className="flex flex-wrap gap-2">
+                {STATUS_OPTIONS.map((status) => {
+                  const isActive = draft.status === status;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() =>
+                        setDraft((prev) =>
+                          prev
                             ? {
-                                next_action_at: "",
-                                next_action_note: "",
+                                ...prev,
+                                status: status,
+                                ...(status === "Non interessato"
+                                  ? {
+                                      next_action_at: "",
+                                      next_action_note: "",
+                                    }
+                                  : {}),
                               }
-                            : {}),
-                        }
-                      : prev
-                  )
-                }
-              >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
+                            : prev
+                        )
+                      }
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                        isActive
+                          ? statusStylesByTheme[theme][status].replace("border-", "border-2 border-") + " ring-2 ring-offset-2 ring-offset-[var(--panel)] ring-current"
+                          : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:border-[var(--muted)]"
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
