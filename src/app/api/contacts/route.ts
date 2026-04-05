@@ -23,14 +23,22 @@ type ContactInsert = {
 };
 
 type ContactEmailRow = {
+  id: string;
   contact_id: string | null;
   direction: "inbound" | "outbound" | null;
   received_at: string | null;
   created_at: string | null;
+};
+
+type ContactEmailContentRow = {
+  id: string;
   subject: string | null;
   text_body: string | null;
   html_body: string | null;
 };
+
+const CONTACT_SELECT_FIELDS =
+  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,created_at,updated_at";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") return "";
@@ -111,13 +119,28 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+const chunkArray = <T,>(items: T[], chunkSize: number) => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+};
+
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
-      .from("contacts")
-      .select("*")
-      .order("updated_at", { ascending: false });
+    const [{ data, error }, { data: contactEmails, error: emailsError }] =
+      await Promise.all([
+        supabase
+          .from("contacts")
+          .select(CONTACT_SELECT_FIELDS)
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("emails")
+          .select("id, contact_id, direction, received_at, created_at")
+          .not("contact_id", "is", null),
+      ]);
 
     if (error) {
       console.error("GET /api/contacts failed", error);
@@ -126,13 +149,6 @@ export async function GET() {
         { status: 500 }
       );
     }
-
-    const { data: contactEmails, error: emailsError } = await supabase
-      .from("emails")
-      .select(
-        "contact_id, direction, received_at, created_at, subject, text_body, html_body"
-      )
-      .not("contact_id", "is", null);
 
     if (emailsError) {
       console.error("GET /api/contacts emails fetch failed", emailsError);
@@ -144,7 +160,7 @@ export async function GET() {
 
     const lastInboundAtByContactId = new Map<string, string>();
     const lastOutboundAtByContactId = new Map<string, string>();
-    const latestInboundTextByContactId = new Map<string, string>();
+    const latestInboundEmailIdByContactId = new Map<string, string>();
 
     (contactEmails ?? []).forEach((row) => {
       const email = row as unknown as ContactEmailRow;
@@ -156,12 +172,7 @@ export async function GET() {
         const current = lastInboundAtByContactId.get(email.contact_id);
         if (getTimestamp(candidate) > getTimestamp(current)) {
           lastInboundAtByContactId.set(email.contact_id, candidate);
-          latestInboundTextByContactId.set(
-            email.contact_id,
-            [email.text_body, stripHtml(email.html_body), email.subject]
-              .filter(Boolean)
-              .join(" ")
-          );
+          latestInboundEmailIdByContactId.set(email.contact_id, email.id);
         }
       } else if (email.direction === "outbound") {
         const current = lastOutboundAtByContactId.get(email.contact_id);
@@ -170,6 +181,49 @@ export async function GET() {
         }
       }
     });
+
+    const latestInboundIds = Array.from(
+      new Set(latestInboundEmailIdByContactId.values())
+    );
+    const latestInboundTextByEmailId = new Map<string, string>();
+
+    if (latestInboundIds.length > 0) {
+      const idChunks = chunkArray(latestInboundIds, 200);
+
+      for (const chunk of idChunks) {
+        const { data: inboundContentRows, error: inboundContentError } =
+          await supabase
+            .from("emails")
+            .select("id, subject, text_body, html_body")
+            .in("id", chunk);
+
+        if (inboundContentError) {
+          console.error(
+            "GET /api/contacts latest inbound content fetch failed",
+            inboundContentError
+          );
+          return NextResponse.json(
+            {
+              error: getErrorMessage(
+                inboundContentError,
+                "Impossibile caricare i contatti."
+              ),
+            },
+            { status: 500 }
+          );
+        }
+
+        (inboundContentRows ?? []).forEach((row) => {
+          const inbound = row as unknown as ContactEmailContentRow;
+          latestInboundTextByEmailId.set(
+            inbound.id,
+            [inbound.text_body, stripHtml(inbound.html_body), inbound.subject]
+              .filter(Boolean)
+              .join(" ")
+          );
+        });
+      }
+    }
 
     const contacts = sortContactsByActivity(
       ((data ?? []) as unknown) as ContactRow[],
@@ -208,7 +262,9 @@ export async function GET() {
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
         activity_at: best,
         language: detectLanguageFromEmail(
-          latestInboundTextByContactId.get(contact.id) ?? null
+          latestInboundTextByEmailId.get(
+            latestInboundEmailIdByContactId.get(contact.id) ?? ""
+          ) ?? null
         ),
       };
     });

@@ -1150,7 +1150,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     }
 
     const payload = (await response.json()) as ContactsApiResponse;
-    const nextContacts = sortContacts(payload.contacts || []);
+    const nextContacts = payload.contacts || [];
     setContacts(nextContacts);
     if (!silent) {
       setLoading(false);
