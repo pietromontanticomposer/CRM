@@ -14,7 +14,7 @@ import {
 
 const STATUS_OPTIONS = [
   "Auto follow-up impostato",
-  "In attesa di risposta",
+  "In attesa",
   "Risposta ricevuta",
   "Non interessato",
   "Rimanere in contatto",
@@ -22,8 +22,16 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
-type ContactFolder = "Tutte" | Status;
-const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato", "In attesa di risposta"] as const;
+
+const STATUS_GROUPS = {
+  "In attesa di risposta": ["Auto follow-up impostato", "In attesa"],
+  "Risposta ricevuta": ["Non interessato", "Rimanere in contatto", "Call prenotata"],
+} as const;
+
+type MacroStatus = keyof typeof STATUS_GROUPS;
+type ContactFolder = "Tutte" | Status | MacroStatus;
+
+const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato", "In attesa"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
@@ -124,7 +132,7 @@ const emptyNewContact: NewContact = {
 const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
     "Auto follow-up impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
-    "In attesa di risposta": "bg-sky-500/15 text-sky-200 border-sky-400/30",
+    "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Rimanere in contatto": "bg-orange-500/15 text-orange-200 border-orange-400/30",
@@ -132,7 +140,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   },
   light: {
     "Auto follow-up impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
-    "In attesa di risposta": "border-sky-300 bg-sky-50 text-sky-800",
+    "In attesa": "border-sky-300 bg-sky-50 text-sky-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Rimanere in contatto": "border-orange-300 bg-orange-50 text-orange-800",
@@ -938,7 +946,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, [selectedEmail?.id, selectedEmailAttachments, selected?.id]);
 
   const counts = useMemo(() => {
-    return STATUS_OPTIONS.reduce(
+    const statusCounts = STATUS_OPTIONS.reduce(
       (acc, status) => {
         acc[status] = contacts.filter((contact) => contact.status === status)
           .length;
@@ -946,6 +954,19 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       },
       {} as Record<Status, number>
     );
+
+    const groupCounts = (Object.keys(STATUS_GROUPS) as MacroStatus[]).reduce(
+      (acc, group) => {
+        acc[group] = STATUS_GROUPS[group].reduce(
+          (sum, status) => sum + statusCounts[status],
+          0
+        );
+        return acc;
+      },
+      {} as Record<MacroStatus, number>
+    );
+
+    return { ...statusCounts, ...groupCounts };
   }, [contacts]);
 
   const followUpCount = useMemo(() => {
@@ -972,6 +993,16 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
   const filteredContacts = useMemo(() => {
     if (contactFolder === "Tutte") return searchedContacts;
+    
+    // Se la cartella è un macrogruppo
+    if (contactFolder in STATUS_GROUPS) {
+      const allowedStatuses = STATUS_GROUPS[contactFolder as MacroStatus];
+      return searchedContacts.filter((contact) =>
+        (allowedStatuses as readonly string[]).includes(contact.status)
+      );
+    }
+
+    // Altrimenti è uno stato singolo
     return searchedContacts.filter((contact) => contact.status === contactFolder);
   }, [searchedContacts, contactFolder]);
 
@@ -2746,35 +2777,90 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               </span>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-col gap-5">
+              {/* Filtro Tutte */}
               <button
                 type="button"
                 onClick={() => setContactFolder("Tutte")}
-                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-xs font-bold uppercase tracking-[0.15em] transition ${
                   contactFolder === "Tutte"
-                    ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--ink)]"
-                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                    ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
                 }`}
               >
-                Tutte
-                <span className="ml-1 text-[10px] opacity-80">{contacts.length}</span>
+                <span>Tutte le schede</span>
+                <span className="rounded-full bg-[var(--panel)] px-2 py-0.5 text-[10px] opacity-80">
+                  {contacts.length}
+                </span>
               </button>
-              {STATUS_OPTIONS.map((status) => (
 
+              {/* Gruppo: In attesa di risposta */}
+              <div className="grid gap-2">
                 <button
-                  key={status}
-                  type="button"
-                  onClick={() => setContactFolder(status)}
-                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
-                    contactFolder === status
-                      ? `${statusStyles[status]}`
-                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                  onClick={() => setContactFolder("In attesa di risposta")}
+                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] transition ${
+                    contactFolder === "In attesa di risposta"
+                      ? "border-sky-500/50 bg-sky-500/10 text-sky-400"
+                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
                   }`}
                 >
-                  {status}
-                  <span className="ml-1 text-[10px] opacity-80">{counts[status] ?? 0}</span>
+                  <span>In attesa di risposta</span>
+                  <span className="rounded-full bg-[var(--panel)] px-2 py-0.5 text-[10px] opacity-80">
+                    {counts["In attesa di risposta"] ?? 0}
+                  </span>
                 </button>
-              ))}
+                <div className="ml-2 grid gap-1.5 border-l-2 border-sky-500/20 pl-3">
+                  {STATUS_GROUPS["In attesa di risposta"].map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setContactFolder(status)}
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                        contactFolder === status
+                          ? statusStyles[status]
+                          : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
+                      }`}
+                    >
+                      <span>{status}</span>
+                      <span className="text-[10px] opacity-60">{counts[status] ?? 0}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gruppo: Risposta ricevuta */}
+              <div className="grid gap-2">
+                <button
+                  onClick={() => setContactFolder("Risposta ricevuta")}
+                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] transition ${
+                    contactFolder === "Risposta ricevuta"
+                      ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
+                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
+                  }`}
+                >
+                  <span>Risposta ricevuta</span>
+                  <span className="rounded-full bg-[var(--panel)] px-2 py-0.5 text-[10px] opacity-80">
+                    {counts["Risposta ricevuta"] ?? 0}
+                  </span>
+                </button>
+                <div className="ml-2 grid gap-1.5 border-l-2 border-amber-500/20 pl-3">
+                  {STATUS_GROUPS["Risposta ricevuta"].map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setContactFolder(status)}
+                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
+                        contactFolder === status
+                          ? statusStyles[status]
+                          : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
+                      }`}
+                    >
+                      <span>{status}</span>
+                      <span className="text-[10px] opacity-60">{counts[status] ?? 0}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="mt-3">

@@ -147,8 +147,8 @@ export const handleContactInbound = async (
     const isAutoFollowActive = getAutomaticFollowUpStage(contact.next_action_note);
     const updates: Record<string, any> = {};
 
-    // Se c'è un auto follow-up attivo o se lo stato è ancora quello iniziale o in attesa di risposta
-    if (isAutoFollowActive || contact.status === "Auto follow-up impostato" || contact.status === "In attesa di risposta") {
+    // Se c'è un auto follow-up attivo o se lo stato è ancora quello iniziale o in attesa
+    if (isAutoFollowActive || contact.status === "Auto follow-up impostato" || contact.status === "In attesa") {
       updates.status = "Risposta ricevuta";
     }
 
