@@ -31,7 +31,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Attiva auto follow-up", "In attesa"],
-  "Risposta ricevuta": ["Azione richiesta", "Non interessato", "Call prenotata"],
+  "Risposta ricevuta": ["Azione richiesta", "Non interessato", "Mantenimento rapporto", "Call prenotata"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -2629,13 +2629,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             </div>
           </div>
 
-          {/* Mantenimento rapporto (standalone) */}
-          <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles["Mantenimento rapporto"]}`}>
-            <span>Mantenimento rapporto</span>
-            <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
-              {counts["Mantenimento rapporto"] ?? 0}
-            </span>
-          </div>
         </div>
       </header>
 
@@ -2944,21 +2937,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </div>
               </div>
 
-              {/* Mantenimento rapporto (standalone) */}
-              <button
-                type="button"
-                onClick={() => setContactFolder("Mantenimento rapporto")}
-                className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] maintain-rapport-pulse ${
-                  contactFolder === "Mantenimento rapporto"
-                    ? "border-teal-500/50 bg-teal-500/10 text-teal-500"
-                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
-                }`}
-              >
-                <span>Mantenimento rapporto</span>
-                <span className="rounded-full bg-teal-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                  {counts["Mantenimento rapporto"] ?? 0}
-                </span>
-              </button>
             </div>
 
             <div className="mt-3">
