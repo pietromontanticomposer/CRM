@@ -2156,6 +2156,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                 isActive
                                   ? "shadow-md scale-[1.02] ring-1 ring-current"
                                   : "opacity-40 hover:opacity-100 hover:scale-[1.01]"
+                              }${
+                                status === "Mantenimento rapporto" && isActive
+                                  ? " maintain-rapport-pulse"
+                                  : ""
                               }`}
                             >
                               ↳ {status}
@@ -2691,7 +2695,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               {STATUS_GROUPS["Risposta ricevuta"].map((status) => (
                 <div
                   key={status}
-                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
+                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}${
+                    status === "Mantenimento rapporto" && contactFolder === status
+                      ? " maintain-rapport-pulse"
+                      : ""
+                  }`}
                 >
                   <span>{status}</span>
                   <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
@@ -3003,6 +3011,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         contactFolder === status
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
+                      }${
+                        status === "Mantenimento rapporto" && contactFolder === status
+                          ? " maintain-rapport-pulse"
+                          : ""
                       }`}
                     >
                       <span>{status}</span>
@@ -3118,7 +3130,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               </h2>
             </div>
             {selected && (
-              <div className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}`}>
+              <div
+                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}${
+                  selected.status === "Mantenimento rapporto"
+                    ? " maintain-rapport-pulse"
+                    : ""
+                }`}
+              >
                 {selected.status}
               </div>
             )}
