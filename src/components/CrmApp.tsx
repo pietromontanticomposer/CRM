@@ -2253,7 +2253,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             )}
 
             {/* Ricontatto programmato */}
-            {selected && (
+            {selected && draft.status === "Mantenimento rapporto" && (
               <div className="rounded-3xl border-2 border-orange-200 bg-orange-50/30 p-4 dark:border-orange-900/30 dark:bg-orange-950/10">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="h-2 w-2 rounded-full bg-orange-500" />
