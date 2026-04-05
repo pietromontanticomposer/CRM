@@ -381,7 +381,7 @@ const updateContactAfterOutbound = async (
       updatePayload.next_action_at = toFollowUpDateOnly(
         addDays(sentDate, SECOND_FOLLOW_UP_DAYS)
       );
-      updatePayload.next_action_note = buildAutomaticFollowUpNote(2, followUpDays);
+      updatePayload.next_action_note = buildAutomaticFollowUpNote(2);
     }
   } else if (!keepInTouch && automaticFollowUpStage === 2 && nextActionDateOnly) {
     if (nextActionDateOnly <= sentDateOnly) {
@@ -392,7 +392,7 @@ const updateContactAfterOutbound = async (
     updatePayload.next_action_at = toFollowUpDateOnly(
       addDays(sentDate, followUpDays)
     );
-    updatePayload.next_action_note = buildAutomaticFollowUpNote(1, followUpDays);
+    updatePayload.next_action_note = buildAutomaticFollowUpNote(1);
   }
 
   if (!Object.keys(updatePayload).length) {

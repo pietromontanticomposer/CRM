@@ -602,7 +602,6 @@ const buildReplySubject = (subject?: string | null, fallback?: string | null) =>
 };
 
 const FIRST_FOLLOW_UP_SUBJECT = "Il tuo lavoro";
-const DEFAULT_FIRST_FOLLOW_UP_DAYS = 10;
 
 const buildFirstFollowUpGreeting = (contactName?: string | null) => {
   const name = contactName?.trim();
@@ -1359,7 +1358,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       next_action_note: keepWarm
         ? KEEP_IN_TOUCH_NOTE
         : automaticFollowUpStage === 1
-          ? buildAutomaticFollowUpNote(2, DEFAULT_FIRST_FOLLOW_UP_DAYS)
+          ? buildAutomaticFollowUpNote(2)
           : null,
     };
 

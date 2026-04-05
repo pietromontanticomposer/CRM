@@ -15,7 +15,6 @@ type PostmarkInboundPayload = {
   Subject?: string;
   TextBody?: string;
   HtmlBody?: string;
-  StrippedTextReply?: string;
   Date?: string;
   Headers?: Array<{ Name?: string; Value?: string }>;
   Attachments?: Array<Record<string, unknown>>;
@@ -194,8 +193,15 @@ export async function POST(request: Request) {
   const fromEmail = payload.FromFull?.Email?.trim() || null;
   const fromName = payload.FromFull?.Name?.trim() || null;
   const subject = payload.Subject?.trim() || null;
-  const messageId = payload.MessageID || crypto.randomUUID();
   const receivedAt = parseReceivedAt(payload.Date);
+
+  // Extract real RFC Message-ID from Headers (Postmark's MessageID is an internal UUID)
+  const headersArray = payload.Headers ?? [];
+  const getHeader = (name: string) =>
+    headersArray.find((h) => h.Name?.toLowerCase() === name.toLowerCase())?.Value?.trim() || null;
+  const messageId = getHeader("Message-ID") || payload.MessageID || crypto.randomUUID();
+  const inReplyTo = getHeader("In-Reply-To") || null;
+  const references = getHeader("References") || null;
   try {
     const supabase = getSupabase();
 
@@ -222,6 +228,8 @@ export async function POST(request: Request) {
       contact_id: contactId,
       direction: "inbound" as const,
       message_id_header: messageId,
+      in_reply_to: inReplyTo,
+      references,
       from_email: fromEmail,
       from_name: fromName,
       to_email: process.env.GMAIL_USER ?? null,

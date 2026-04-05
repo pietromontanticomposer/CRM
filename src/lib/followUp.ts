@@ -67,8 +67,7 @@ export const getAutomaticFollowUpStage = (
 };
 
 export const buildAutomaticFollowUpNote = (
-  stage: AutomaticFollowUpStage,
-  firstFollowUpDays: number = 10
+  stage: AutomaticFollowUpStage
 ) => {
   if (stage === 1) {
     return AUTO_FOLLOW_UP_1_NOTE;
@@ -187,8 +186,7 @@ export const handleContactInbound = async (
       isAutoFollowActive ||
       isMaintainActive ||
       contact.status === "Attiva auto follow-up" ||
-      contact.status === "In attesa" ||
-      contact.status === "In attesa di risposta"
+      contact.status === "In attesa"
     ) {
       updates.status = "Risposta ricevuta";
     }

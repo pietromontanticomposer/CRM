@@ -202,7 +202,7 @@ const updateContactAfterOutbound = async (
     updatePayload.last_action_note = "Email inviata dal CRM";
     
     // Se lo stato è quello iniziale, lo mettiamo in "In attesa"
-    if (contact.status === "Attiva auto follow-up" || contact.status === "Da contattare") {
+    if (contact.status === "Attiva auto follow-up") {
       updatePayload.status = "In attesa";
     }
   }
@@ -211,7 +211,7 @@ const updateContactAfterOutbound = async (
       updatePayload.next_action_at = toFollowUpDateOnly(
         addDays(sentDate, SECOND_FOLLOW_UP_DAYS)
       );
-      updatePayload.next_action_note = buildAutomaticFollowUpNote(2, followUpDays);
+      updatePayload.next_action_note = buildAutomaticFollowUpNote(2);
     }
   } else if (!keepInTouch && automaticFollowUpStage === 2 && nextActionDateOnly) {
     if (nextActionDateOnly <= sentDateOnly) {
@@ -222,7 +222,7 @@ const updateContactAfterOutbound = async (
     updatePayload.next_action_at = toFollowUpDateOnly(
       addDays(sentDate, followUpDays)
     );
-    updatePayload.next_action_note = buildAutomaticFollowUpNote(1, followUpDays);
+    updatePayload.next_action_note = buildAutomaticFollowUpNote(1);
   }
 
   if (!Object.keys(updatePayload).length) {
@@ -364,7 +364,7 @@ export async function POST(request: Request) {
       in_reply_to: replyMessageId,
       references: replyReferences,
       from_email: fromAddress,
-      from_name: null,
+      from_name: "Pietro Montanti",
       to_email: payload.to,
       subject: subject || null,
       text_body: payload.text ?? null,

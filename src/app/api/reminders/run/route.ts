@@ -227,20 +227,20 @@ const handleReminderRun = async (request: Request) => {
       });
 
       // Save the sent email
-      await supabase.from("emails").insert({
+      const { data: insertedFollowUp } = await supabase.from("emails").insert({
         contact_id: contact.id,
         direction: "outbound",
         message_id_header: info.messageId,
         in_reply_to: lastEmail?.message_id_header || null,
         references: headers["References"] || null,
         from_email: fromAddress,
-        from_name: null,
+        from_name: "Pietro Montanti",
         to_email: contact.email,
         subject,
         text_body: emailContent.body,
         html_body: emailContent.html,
         received_at: new Date().toISOString(),
-      });
+      }).select("id").single();
 
       // Update contact state
       if (stage === 1) {
@@ -268,6 +268,7 @@ const handleReminderRun = async (request: Request) => {
       await supabase.from("notifications").insert({
         type: "email_sent",
         contact_id: contact.id,
+        email_id: insertedFollowUp?.id ?? null,
         title: `Follow-up automatico inviato a ${contact.name}`,
         body: emailContent.body.slice(0, 100) + "...",
       });
@@ -317,20 +318,20 @@ const handleReminderRun = async (request: Request) => {
         attachments: sigAttach2,
       });
 
-      await supabase.from("emails").insert({
+      const { data: insertedMR } = await supabase.from("emails").insert({
         contact_id: contact.id,
         direction: "outbound",
         message_id_header: info.messageId,
         in_reply_to: lastEmail?.message_id_header || null,
         references: headers["References"] || null,
         from_email: fromAddress,
-        from_name: null,
+        from_name: "Pietro Montanti",
         to_email: contact.email,
         subject,
         text_body: emailContent.body,
         html_body: emailContent.html,
         received_at: new Date().toISOString(),
-      });
+      }).select("id").single();
 
       await supabase
         .from("contacts")
@@ -346,6 +347,7 @@ const handleReminderRun = async (request: Request) => {
       await supabase.from("notifications").insert({
         type: "email_sent",
         contact_id: contact.id,
+        email_id: insertedMR?.id ?? null,
         title: `Mantenimento rapporto inviato a ${contact.name}`,
         body: emailContent.body.slice(0, 100) + "...",
       });

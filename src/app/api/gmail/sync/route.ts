@@ -318,9 +318,8 @@ const updateContactAfterOutbound = async (
     updatePayload.last_action_at = sentDateOnly;
     updatePayload.last_action_note = "Email inviata (sync Gmail)";
     
-    // Se lo stato è quello iniziale, lo mettiamo in "In attesa di risposta"
-    if (contact.status === "Attiva auto follow-up" || contact.status === "Da contattare") {
-      updatePayload.status = "In attesa di risposta";
+    if (contact.status === "Attiva auto follow-up") {
+      updatePayload.status = "In attesa";
     }
   }
   if (!keepInTouch && automaticFollowUpStage === 1 && nextActionDateOnly) {
@@ -328,7 +327,7 @@ const updateContactAfterOutbound = async (
       updatePayload.next_action_at = toFollowUpDateOnly(
         addDays(sentDate, SECOND_FOLLOW_UP_DAYS)
       );
-      updatePayload.next_action_note = buildAutomaticFollowUpNote(2, followUpDays);
+      updatePayload.next_action_note = buildAutomaticFollowUpNote(2);
     }
   } else if (!keepInTouch && automaticFollowUpStage === 2 && nextActionDateOnly) {
     if (nextActionDateOnly <= sentDateOnly) {
@@ -339,7 +338,7 @@ const updateContactAfterOutbound = async (
     updatePayload.next_action_at = toFollowUpDateOnly(
       addDays(sentDate, followUpDays)
     );
-    updatePayload.next_action_note = buildAutomaticFollowUpNote(1, followUpDays);
+    updatePayload.next_action_note = buildAutomaticFollowUpNote(1);
   }
 
   if (!Object.keys(updatePayload).length) {
@@ -725,14 +724,24 @@ export const runSync = async (request: Request) => {
         }
 
         if (insertedEmail) {
-          const titleBase = fromName || fromEmail || "Mittente sconosciuto";
-          await insertNotification({
-            type: "email_received",
-            contact_id: contactId,
-            email_id: insertedEmail.id,
-            title: `Nuova email da ${titleBase}`,
-            body: parsed.subject || normalizeText(parsed.text),
-          });
+          if (direction === "inbound") {
+            const titleBase = fromName || fromEmail || "Mittente sconosciuto";
+            await insertNotification({
+              type: "email_received",
+              contact_id: contactId,
+              email_id: insertedEmail.id,
+              title: `Nuova email da ${titleBase}`,
+              body: parsed.subject || normalizeText(parsed.text),
+            });
+          } else {
+            await insertNotification({
+              type: "email_sent",
+              contact_id: contactId,
+              email_id: insertedEmail.id,
+              title: `Email inviata a ${recipientsDisplay || "destinatario"}`,
+              body: parsed.subject || normalizeText(parsed.text),
+            });
+          }
         }
 
         if (direction === "outbound") {
@@ -776,8 +785,6 @@ export const runSync = async (request: Request) => {
   } finally {
     await client.logout().catch(() => undefined);
   }
-
-  return NextResponse.json({ ok: true, processed, last_uid: maxUid });
 };
 
 export async function GET(request: Request) {
