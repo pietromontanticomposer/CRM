@@ -2684,7 +2684,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
-            <div className="md:sticky md:top-0 md:z-10 md:-mx-5 md:border-b md:border-[var(--line)] md:bg-[var(--panel)] md:px-5 md:pb-4">
+            <div className="sticky top-0 z-30 -mx-5 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-4 pb-4">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
