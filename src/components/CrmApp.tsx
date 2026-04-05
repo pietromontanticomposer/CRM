@@ -140,7 +140,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Mantenimento rapporto": "bg-teal-500/15 text-teal-200 border-teal-400/30",
-    "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
+    "Call prenotata": "bg-violet-500/15 text-violet-200 border-violet-400/30",
   },
   light: {
     "Attiva auto follow-up": "border-indigo-300 bg-indigo-50 text-indigo-800",
@@ -148,7 +148,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Mantenimento rapporto": "border-teal-300 bg-teal-50 text-teal-800",
-    "Call prenotata": "border-emerald-300 bg-emerald-50 text-emerald-800",
+    "Call prenotata": "border-violet-300 bg-violet-50 text-violet-800",
   },
 };
 
