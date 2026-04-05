@@ -848,6 +848,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
   const [maintainRapportPending, setMaintainRapportPending] = useState<string | null>(null);
   const [maintainRapportMessage, setMaintainRapportMessage] = useState<string | null>(null);
+  const [showMaintainWorkflow, setShowMaintainWorkflow] = useState(false);
   const [desktopSidebarHeight, setDesktopSidebarHeight] = useState<number | null>(null);
   const contentSectionRef = useRef<HTMLElement | null>(null);
   const emailRequestIdRef = useRef(0);
@@ -908,6 +909,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       resetConversation: true,
     });
   }, [contacts, selectedId]);
+
+  useEffect(() => {
+    setShowMaintainWorkflow(false);
+  }, [selectedId]);
 
   useEffect(() => {
     const updateSidebarHeight = () => {
@@ -2096,6 +2101,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         type="button"
                         onClick={async () => {
                           const scrollY = window.scrollY;
+                          setShowMaintainWorkflow(false);
                           setDraft((prev) => {
                             if (!prev) return prev;
                             return { ...prev, status: status as Status };
@@ -2143,7 +2149,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       <p className="px-1 text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Specifica esito:</p>
                       {STATUS_GROUPS["Risposta ricevuta"]
                         .map((status) => {
-                        const isActive = draft.status === status;
+                        const isMaintainToggle = status === "Mantenimento rapporto";
+                        const isActive = isMaintainToggle
+                          ? draft.status === status || showMaintainWorkflow
+                          : draft.status === status;
                         const baseStyles = statusStylesByTheme[theme][status as Status];
 
                         return (
@@ -2152,6 +2161,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                               type="button"
                               onClick={async () => {
                                 const scrollY = window.scrollY;
+                                if (status === "Mantenimento rapporto") {
+                                  setShowMaintainWorkflow(true);
+                                  requestAnimationFrame(() => window.scrollTo(0, scrollY));
+                                  return;
+                                }
+
+                                setShowMaintainWorkflow(false);
                                 const shouldClearNextAction =
                                   status === "Non interessato" ||
                                   status === "Collaborazione stabilita";
@@ -2210,7 +2226,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             {/* Mantenimento rapporto */}
             {selected &&
               selected.email &&
-              draft.status === "Mantenimento rapporto" && (
+              (draft.status === "Mantenimento rapporto" || showMaintainWorkflow) && (
               <div className="rounded-3xl border-2 border-teal-200 bg-teal-50/30 p-4 dark:border-teal-900/30 dark:bg-teal-950/10">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="h-2 w-2 rounded-full bg-teal-500" />
@@ -2253,7 +2269,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             )}
 
             {/* Ricontatto programmato */}
-            {selected && draft.status === "Mantenimento rapporto" && (
+            {selected &&
+              (draft.status === "Mantenimento rapporto" || showMaintainWorkflow) && (
               <div className="rounded-3xl border-2 border-orange-200 bg-orange-50/30 p-4 dark:border-orange-900/30 dark:bg-orange-950/10">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="h-2 w-2 rounded-full bg-orange-500" />
