@@ -1985,7 +1985,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
                       draft.status === "Risposta ricevuta"
                         ? "border-amber-500 bg-amber-500 text-white shadow-sm"
-                        : "border-amber-200 bg-white text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:bg-zinc-900 dark:text-amber-400"
+                        : "border-amber-200 bg-white text-amber-700 hover:bg-amber-50 dark:bg-zinc-900 dark:text-amber-400"
                     }`}
                   >
                     Generico / In attesa di gestione
