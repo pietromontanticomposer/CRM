@@ -2558,18 +2558,54 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             {error}
           </div>
         )}
-        <div className="flex flex-wrap gap-2">
-          {STATUS_OPTIONS.map((status) => (
-            <div
-              key={status}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${statusStyles[status]}`}
-            >
-              <span>{status}</span>
-              <span className="rounded-full bg-[var(--panel-strong)] px-2 py-0.5 text-[11px]">
-                {counts[status] ?? 0}
+        <div className="flex flex-wrap gap-6">
+          {/* Gruppo Header: In attesa di risposta */}
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200/50 bg-indigo-50/20 p-2 dark:border-indigo-900/30 dark:bg-indigo-950/10">
+            <div className="flex items-center gap-2 px-2 py-1 text-[11px] font-black uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-400">
+              <span>In attesa di risposta</span>
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] dark:bg-indigo-900/50">
+                {counts["In attesa di risposta"] ?? 0}
               </span>
             </div>
-          ))}
+            <div className="flex flex-wrap gap-2">
+              {STATUS_GROUPS["In attesa di risposta"].map((status) => (
+                <div
+                  key={status}
+                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
+                >
+                  <span>{status}</span>
+                  <span className="opacity-60">{counts[status] ?? 0}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Gruppo Header: Risposta ricevuta */}
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200/50 bg-amber-50/20 p-2 dark:border-amber-900/30 dark:bg-amber-950/10">
+            <div className="flex items-center gap-2 px-2 py-1 text-[11px] font-black uppercase tracking-[0.15em] text-amber-700 dark:text-amber-400">
+              <span>Risposta ricevuta</span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] dark:bg-amber-900/50">
+                {counts["Risposta ricevuta"] ?? 0}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div
+                className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles["Risposta ricevuta"]}`}
+              >
+                <span>Generico</span>
+                <span className="opacity-60">{counts["Risposta ricevuta"] ?? 0}</span>
+              </div>
+              {STATUS_GROUPS["Risposta ricevuta"].map((status) => (
+                <div
+                  key={status}
+                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
+                >
+                  <span>{status}</span>
+                  <span className="opacity-60">{counts[status] ?? 0}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </header>
 
