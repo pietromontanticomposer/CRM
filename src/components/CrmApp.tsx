@@ -2073,32 +2073,49 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     {days}g
                     </button>
                     ))}
-                    <button
-                    type="button"
-                    disabled={remindersDisabled}
-                    onClick={() => {
-                    const today = getTodayDateInputValue();
-                    setDraft((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            next_action_at: addDaysToDateInputValue(today, 10),
-                            next_action_note: AUTO_FOLLOW_UP_1_NOTE,
-                          }
-                        : prev
-                    );
-                    }}
-                    className="rounded-full border border-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-600 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                    Auto Follow-up (10g + 20g)
-                    </button>
-                    </div>
+                    {(() => {
+                     const isAutoFollowUpActive = draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || 
+                                                  draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE;
+                     return (
+                       <button
+                         type="button"
+                         disabled={remindersDisabled}
+                         onClick={() => {
+                           const today = getTodayDateInputValue();
+                           setDraft((prev) =>
+                             prev
+                               ? {
+                                   ...prev,
+                                   next_action_at: addDaysToDateInputValue(today, 10),
+                                   next_action_note: AUTO_FOLLOW_UP_1_NOTE,
+                                 }
+                               : prev
+                           );
+                         }}
+                         className={`rounded-full border px-3 py-1 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                           isAutoFollowUpActive
+                             ? "border-emerald-600 bg-emerald-600 text-white shadow-sm scale-105"
+                             : "border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+                         }`}
+                       >
+                         {isAutoFollowUpActive ? "✓ Auto Follow-up Attivo" : "Auto Follow-up (10g + 20g)"}
+                       </button>
+                     );
+                   })()}
+                 </div>
 
             </div>
             <div className="grid gap-2">
-              <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Nota prossima azione
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Nota prossima azione
+                </label>
+                {(draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE) && (
+                  <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold text-white animate-pulse">
+                    AUTOMATICO
+                  </span>
+                )}
+              </div>
               <input
                 value={draft.next_action_note ?? ""}
                 disabled={remindersDisabled}
