@@ -2562,7 +2562,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-indigo-200/50 bg-indigo-50/20 p-2 dark:border-indigo-900/30 dark:bg-indigo-950/10">
             <div className="flex items-center gap-2 px-2 py-1 text-[11px] font-black uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-400">
               <span>In attesa di risposta</span>
-              <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] dark:bg-indigo-900/50">
+              <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                 {counts["In attesa di risposta"] ?? 0}
               </span>
             </div>
@@ -2573,7 +2573,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
                 >
                   <span>{status}</span>
-                  <span className="opacity-60">{counts[status] ?? 0}</span>
+                  <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
+                    {counts[status] ?? 0}
+                  </span>
                 </div>
               ))}
             </div>
@@ -2583,7 +2585,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200/50 bg-amber-50/20 p-2 dark:border-amber-900/30 dark:bg-amber-950/10">
             <div className="flex items-center gap-2 px-2 py-1 text-[11px] font-black uppercase tracking-[0.15em] text-amber-700 dark:text-amber-400">
               <span>Risposta ricevuta</span>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] dark:bg-amber-900/50">
+              <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                 {counts["Risposta ricevuta"] ?? 0}
               </span>
             </div>
@@ -2592,7 +2594,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles["Risposta ricevuta"]}`}
               >
                 <span>Generico</span>
-                <span className="opacity-60">{counts["Risposta ricevuta"] ?? 0}</span>
+                <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
+                  {counts["Risposta ricevuta"] ?? 0}
+                </span>
               </div>
               {STATUS_GROUPS["Risposta ricevuta"].map((status) => (
                 <div
@@ -2600,7 +2604,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
                 >
                   <span>{status}</span>
-                  <span className="opacity-60">{counts[status] ?? 0}</span>
+                  <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
+                    {counts[status] ?? 0}
+                  </span>
                 </div>
               ))}
             </div>
@@ -2833,7 +2839,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 }`}
               >
                 <span>Tutte le schede</span>
-                <span className="rounded-full bg-[var(--panel)] px-2 py-0.5 text-[10px] opacity-80">
+                <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent)]">
                   {contacts.length}
                 </span>
               </button>
@@ -2849,7 +2855,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   }`}
                 >
                   <span>In attesa di risposta</span>
-                  <span className="rounded-full bg-[var(--panel)] px-2 py-0.5 text-[10px] opacity-80">
+                  <span className="rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                     {counts["In attesa di risposta"] ?? 0}
                   </span>
                 </button>
@@ -2866,7 +2872,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       }`}
                     >
                       <span>{status}</span>
-                      <span className="text-[10px] opacity-60">{counts[status] ?? 0}</span>
+                      <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
+                        {counts[status] ?? 0}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -2883,7 +2891,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   }`}
                 >
                   <span>Risposta ricevuta</span>
-                  <span className="rounded-full bg-[var(--panel)] px-2 py-0.5 text-[10px] opacity-80">
+                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
                     {counts["Risposta ricevuta"] ?? 0}
                   </span>
                 </button>
@@ -2900,7 +2908,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       }`}
                     >
                       <span>{status}</span>
-                      <span className="text-[10px] opacity-60">{counts[status] ?? 0}</span>
+                      <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
+                        {counts[status] ?? 0}
+                      </span>
                     </button>
                   ))}
                 </div>
