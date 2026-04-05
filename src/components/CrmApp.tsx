@@ -1972,7 +1972,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
                     draft.status === "Auto follow impostato"
                       ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                      : "border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 dark:bg-zinc-900 dark:text-indigo-400"
+                      : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400"
                   }`}
                 >
                   Auto follow impostato
@@ -1994,7 +1994,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
                       draft.status === "Risposta ricevuta"
                         ? "border-amber-500 bg-amber-500 text-white shadow-sm"
-                        : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:bg-zinc-900 dark:text-amber-400"
+                        : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:text-amber-500"
                     }`}
                   >
                     Generico / In attesa di gestione
