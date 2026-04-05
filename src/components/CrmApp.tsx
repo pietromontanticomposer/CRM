@@ -1174,10 +1174,18 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     if (emailRequestIdRef.current !== requestId) return;
     const emailRows = payload.emails || [];
     const readMap = payload.readMap || {};
-    setEmails(emailRows);
+
+    const seenIds = new Set();
+    const uniqueRows = emailRows.filter((email) => {
+      if (seenIds.has(email.id)) return false;
+      seenIds.add(email.id);
+      return true;
+    });
+
+    setEmails(uniqueRows);
     setEmailReadById(readMap);
     setEmailsLoading(false);
-    return emailRows;
+    return uniqueRows;
   };
 
   const runBackfillForContact = async (
@@ -2007,28 +2015,59 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       const baseStyles = statusStylesByTheme[theme][status as Status];
 
                       return (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() =>
-                            setDraft((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    status: status as Status,
-                                    ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
-                                  }
-                                : prev
-                            )
-                          }
-                          className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
-                            isActive
-                              ? "shadow-md scale-[1.02] ring-1 ring-current"
-                              : "opacity-50 hover:opacity-100 hover:scale-[1.01]"
-                          }`}
-                        >
-                          ↳ {status}
-                        </button>
+                        <div key={status} className="grid gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDraft((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      status: status as Status,
+                                      ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
+                                    }
+                                  : prev
+                              )
+                            }
+                            className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
+                              isActive
+                                ? "shadow-md scale-[1.02] ring-1 ring-current"
+                                : "opacity-50 hover:opacity-100 hover:scale-[1.01]"
+                            }`}
+                          >
+                            ↳ {status}
+                          </button>
+
+                          {status === "Rimanere in contatto" && isActive && (
+                            <div className="flex flex-wrap gap-2 pl-4 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                              {QUICK_RECONTACT_DAYS.map((days) => (
+                                <button
+                                  key={days}
+                                  type="button"
+                                  onClick={() => {
+                                    const today = getTodayDateInputValue();
+                                    setDraft((prev) =>
+                                      prev
+                                        ? {
+                                            ...prev,
+                                            next_action_at: addDaysToDateInputValue(
+                                              today,
+                                              days
+                                            ),
+                                            next_action_note:
+                                              buildRecontactReminderNote(days),
+                                          }
+                                        : prev
+                                    );
+                                  }}
+                                  className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
+                                >
+                                  {days}g
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -2089,35 +2128,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             </div>
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Ricontatta tra
+                Auto Follow-up
               </label>
               <div className="flex flex-wrap gap-2">
-                {QUICK_RECONTACT_DAYS.map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    disabled={remindersDisabled}
-                    onClick={() => {
-                      const today = getTodayDateInputValue();
-                      setDraft((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              next_action_at: addDaysToDateInputValue(
-                                today,
-                                days
-                              ),
-                              next_action_note:
-                                buildRecontactReminderNote(days),
-                            }
-                          : prev
-                      );
-                    }}
-                    className="rounded-full border border-[var(--accent)] px-3 py-1 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                    {days}g
-                    </button>
-                    ))}
                     {(() => {
                      const isAutoFollowUpActive = draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || 
                                                   draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE;
