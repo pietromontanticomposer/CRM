@@ -2078,6 +2078,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                              prev
                                ? {
                                    ...prev,
+                                   status: "Auto follow impostato",
                                    next_action_at: addDaysToDateInputValue(today, 10),
                                    next_action_note: AUTO_FOLLOW_UP_1_NOTE,
                                  }

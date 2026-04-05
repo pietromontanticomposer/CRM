@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
+import { getAutomaticFollowUpStage } from "@/lib/followUp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -152,27 +153,32 @@ export async function GET() {
     const contacts = sortContactsByActivity(
       ((data ?? []) as unknown) as ContactRow[],
       lastInboundAtByContactId
-    ).map((contact) => ({
-      ...contact,
-      last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
-      last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
-      activity_at: (() => {
-        const candidates = [
-          contact.updated_at,
-          lastInboundAtByContactId.get(contact.id) ?? null,
-          lastOutboundAtByContactId.get(contact.id) ?? null,
-          contact.created_at,
-        ];
-        let best: string | null = null;
-        candidates.forEach((value) => {
-          if (!value) return;
-          if (getTimestamp(value) > getTimestamp(best)) {
-            best = value;
-          }
-        });
-        return best;
-      })(),
-    }));
+    ).map((contact) => {
+      const stage = getAutomaticFollowUpStage(contact.next_action_note as string);
+      const effectiveStatus = stage ? "Auto follow impostato" : contact.status;
+
+      const candidates = [
+        contact.updated_at as string,
+        lastInboundAtByContactId.get(contact.id) ?? null,
+        lastOutboundAtByContactId.get(contact.id) ?? null,
+        contact.created_at as string,
+      ];
+      let best: string | null = null;
+      candidates.forEach((value) => {
+        if (!value) return;
+        if (getTimestamp(value) > getTimestamp(best)) {
+          best = value;
+        }
+      });
+
+      return {
+        ...contact,
+        status: effectiveStatus,
+        last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
+        last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
+        activity_at: best,
+      };
+    });
 
     return NextResponse.json({ contacts });
   } catch (error) {
