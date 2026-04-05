@@ -2021,48 +2021,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                     </button>
                                   ))}
                                 </div>
-
-                                <div className="h-4 w-px bg-amber-200 dark:bg-amber-900/50" />
-
-                                <div className="flex flex-wrap gap-2">
-                                      {(() => {
-                                       const isAutoFollowUpActive = draft.next_action_note === AUTO_FOLLOW_UP_1_NOTE || 
-                                                                    draft.next_action_note === AUTO_FOLLOW_UP_2_NOTE;
-                                       return (
-                                         <button
-                                           type="button"
-                                           disabled={remindersDisabled}
-                                           onClick={() => {
-                                             const today = getTodayDateInputValue();
-                                             setDraft((prev) => {
-                                               if (!prev) return prev;
-                                               if (isAutoFollowUpActive) {
-                                                 return {
-                                                   ...prev,
-                                                   status: prev.status === "Auto follow-up impostato" ? "Risposta ricevuta" : prev.status,
-                                                   next_action_at: "",
-                                                   next_action_note: "",
-                                                 };
-                                               }
-                                               return {
-                                                 ...prev,
-                                                 status: "Auto follow-up impostato",
-                                                 next_action_at: addDaysToDateInputValue(today, 10),
-                                                 next_action_note: AUTO_FOLLOW_UP_1_NOTE,
-                                               };
-                                             });
-                                           }}
-                                           className={`rounded-full border px-3 py-1 text-[10px] font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                                             isAutoFollowUpActive
-                                               ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                                               : "border-indigo-500 text-indigo-600 hover:bg-indigo-50"
-                                           }`}
-                                         >
-                                           {isAutoFollowUpActive ? "✓ Auto Follow-up Attivo" : "Auto Follow-up (10g + 20g)"}
-                                         </button>
-                                       );
-                                     })()}
-                                </div>
                               </div>
                             )}
                           </div>
@@ -2871,7 +2829,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}`}
+                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" ? " animate-pulse" : ""}`}
                           >
                             {contact.status}
                           </span>
