@@ -3051,7 +3051,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
         <section
           ref={contentSectionRef}
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg md:sticky md:top-6 md:max-h-[calc(100vh-3rem)] md:overflow-y-auto"
+          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg md:sticky md:top-6"
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">

@@ -188,7 +188,7 @@ export const handleContactInbound = async (
       contact.status === "Attiva auto follow-up" ||
       contact.status === "In attesa"
     ) {
-      updates.status = "Risposta ricevuta";
+      updates.status = "Azione richiesta";
     }
 
     // Cancella follow-up automatico o mantenimento rapporto se il contatto risponde
