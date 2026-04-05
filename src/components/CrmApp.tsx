@@ -1996,19 +1996,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </div>
                 
                 <div className="grid gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDraft((prev) => prev ? { ...prev, status: "Risposta ricevuta" } : prev)}
-                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${statusStylesByTheme[theme]["Risposta ricevuta"]} ${
-                      draft.status === "Risposta ricevuta"
-                        ? "shadow-md scale-[1.02] ring-1 ring-current"
-                        : "opacity-50 hover:opacity-100 hover:scale-[1.01]"
-                    }`}
-                  >
-                    Generico / In attesa di gestione
-                  </button>
-                  
-                  <div className="mt-2 grid grid-cols-1 gap-2 border-t border-amber-200 pt-3 dark:border-amber-900/50">
+                  <div className="grid grid-cols-1 gap-2">
                     <p className="text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Seleziona esito:</p>
                     {["Non interessato", "Rimanere in contatto", "Call prenotata"].map((status) => {
                       const isActive = draft.status === status;
