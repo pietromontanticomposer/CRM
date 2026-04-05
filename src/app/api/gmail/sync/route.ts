@@ -587,6 +587,16 @@ export const runSync = async (request: Request) => {
           .maybeSingle();
 
         const parsed = await parseEmail(message.source as Buffer | Uint8Array);
+
+        // Skip if same message_id_header already exists (prevents cross-folder dupes)
+        if (!existing && parsed.messageId) {
+          const { data: dupByMsgId } = await supabase
+            .from("emails")
+            .select("id")
+            .eq("message_id_header", parsed.messageId)
+            .maybeSingle();
+          if (dupByMsgId) continue;
+        }
         const attachmentsMeta = await uploadAttachments(
           parsed.attachments,
           message.uid
