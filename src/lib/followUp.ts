@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export const KEEP_IN_TOUCH_MONTHS = 2;
 export const KEEP_IN_TOUCH_NOTE = `Mantenere in contatto (automatico ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`;
 
@@ -81,6 +83,11 @@ export const extractFirstName = (fullName: string) => {
   return firstPart.charAt(0).toUpperCase() + firstPart.slice(1).toLowerCase();
 };
 
+export type FollowUpLanguage = "it" | "en";
+
+const getFollowUpLanguage = (value?: string | null): FollowUpLanguage =>
+  value === "en" ? "en" : "it";
+
 const DEFAULT_SIGNATURE_HTML = `
 <div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
   <div style="font-weight: bold; font-size: 16px;">Pietro Montanti</div>
@@ -93,9 +100,21 @@ const DEFAULT_SIGNATURE_HTML = `
   </div>
 </div>`;
 
-export const buildAutoFollowUpEmail1 = (name: string, signatureHtml?: string | null) => {
+export const buildAutoFollowUpEmail1 = (
+  name: string,
+  signatureHtml?: string | null,
+  language?: FollowUpLanguage | null
+) => {
   const firstName = extractFirstName(name);
-  const text = `Ciao ${firstName}!,
+  const selectedLanguage = getFollowUpLanguage(language);
+  const text =
+    selectedLanguage === "en"
+      ? `Hi ${firstName},
+just a quick follow-up to my previous email.
+If it makes sense to chat, I am available next Monday or Tuesday at 4:00 PM (CET).
+Let me know what works best for you.
+Best,`
+      : `Ciao ${firstName}!,
 ti scrivo per riprendere velocemente la mia ultima mail.
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.
 Fammi sapere cosa ti è più comodo.
@@ -103,22 +122,41 @@ A presto,`;
 
   const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
 
-  const html = `<div>Ciao ${firstName}!,<br><br>
+  const html =
+    selectedLanguage === "en"
+      ? `<div>Hi ${firstName},<br><br>
+just a quick follow-up to my previous email.<br>
+If it makes sense to chat, I am available next Monday or Tuesday at 4:00 PM (CET).<br>
+Let me know what works best for you.<br><br>
+Best,${finalSignature}</div>`
+      : `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per riprendere velocemente la mia ultima mail.<br>
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.<br>
 Fammi sapere cosa ti è più comodo.<br><br>
 A presto,${finalSignature}</div>`;
 
   return {
-    subject: "Il tuo lavoro",
+    subject: selectedLanguage === "en" ? "Your project" : "Il tuo lavoro",
     body: text,
     html: html,
   };
 };
 
-export const buildAutoFollowUpEmail2 = (name: string, signatureHtml?: string | null) => {
+export const buildAutoFollowUpEmail2 = (
+  name: string,
+  signatureHtml?: string | null,
+  language?: FollowUpLanguage | null
+) => {
   const firstName = extractFirstName(name);
-  const text = `Ciao ${firstName}!,
+  const selectedLanguage = getFollowUpLanguage(language);
+  const text =
+    selectedLanguage === "en"
+      ? `Hi ${firstName},
+this is my last follow-up.
+Since I have not heard back, I assume your music needs are currently already covered.
+If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week.
+Best regards,`
+      : `Ciao ${firstName}!,
 ti scrivo per un ultimo follow-up.
 Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali siano già soddisfatte.
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.
@@ -126,22 +164,45 @@ Un saluto,`;
 
   const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
 
-  const html = `<div>Ciao ${firstName}!,<br><br>
+  const html =
+    selectedLanguage === "en"
+      ? `<div>Hi ${firstName},<br><br>
+this is my last follow-up.<br>
+Since I have not heard back, I assume your music needs are currently already covered.<br>
+If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week.<br><br>
+Best regards,${finalSignature}</div>`
+      : `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per un ultimo follow-up.<br>
 Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali siano già soddisfatte.<br>
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.<br><br>
 Un saluto,${finalSignature}</div>`;
 
   return {
-    subject: "Il tuo lavoro",
+    subject: selectedLanguage === "en" ? "Your project" : "Il tuo lavoro",
     body: text,
     html: html,
   };
 };
 
-export const buildMaintainRapportEmail = (name: string, signatureHtml?: string | null) => {
+export const buildMaintainRapportEmail = (
+  name: string,
+  signatureHtml?: string | null,
+  language?: FollowUpLanguage | null
+) => {
   const firstName = extractFirstName(name);
-  const text = `Ciao ${firstName}!,
+  const selectedLanguage = getFollowUpLanguage(language);
+  const text =
+    selectedLanguage === "en"
+      ? `Hi ${firstName},
+
+I hope you are doing well.
+
+I have been meaning to reconnect and I would be glad to be in touch again. I was wondering how your projects are going these days.
+
+In the meantime, I also updated my website (https://www.pietromontanti.com/) and collected some recent work on SoundCloud (https://soundcloud.com/pietromontanticomposer), many selected at international festivals, so feel free to have a look if you like.
+
+Best regards,`
+      : `Ciao ${firstName}!,
 
 spero tu stia bene.
 
@@ -153,21 +214,28 @@ Un saluto,`;
 
   const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
 
-  const html = `<div>Ciao ${firstName}!,<br><br>
+  const html =
+    selectedLanguage === "en"
+      ? `<div>Hi ${firstName},<br><br>
+I hope you are doing well.<br><br>
+I have been meaning to reconnect and I would be glad to be in touch again. I was wondering how your projects are going these days.<br><br>
+In the meantime, I also updated my website (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) and collected some recent work on <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a>, many selected at international festivals, so feel free to have a look if you like.<br><br>
+Best regards,${finalSignature}</div>`
+      : `<div>Ciao ${firstName}!,<br><br>
 spero tu stia bene.<br><br>
 È da un po' che pensavo di risentirti e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i tuoi progetti in questo periodo.<br><br>
 Nel frattempo ho aggiornato anche il mio sito (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) e raccolto alcuni lavori recenti su <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a> molti selezionati in festival internazionali quindi se ti fa piacere puoi dare un'occhiata!<br><br>
 Un saluto,${finalSignature}</div>`;
 
   return {
-    subject: "Il tuo lavoro",
+    subject: selectedLanguage === "en" ? "Your project" : "Il tuo lavoro",
     body: text,
     html: html,
   };
 };
 
 export const handleContactInbound = async (
-  supabase: any,
+  supabase: SupabaseClient,
   contactId: string
 ) => {
   const { data: contact } = await supabase
@@ -179,7 +247,7 @@ export const handleContactInbound = async (
   if (contact) {
     const isAutoFollowActive = getAutomaticFollowUpStage(contact.next_action_note);
     const isMaintainActive = isMaintainRapportNote(contact.next_action_note);
-    const updates: Record<string, any> = {};
+    const updates: Record<string, string | null> = {};
 
     // Se c'è un auto follow-up attivo o se lo stato è ancora quello iniziale o in attesa
     if (

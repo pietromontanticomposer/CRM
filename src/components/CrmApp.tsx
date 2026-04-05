@@ -1533,7 +1533,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     try {
       if (days === 0) {
         // Invio immediato: costruisci email e invia via API
-        const emailContent = buildMaintainRapportEmail(contact.name ?? "");
+        const emailContent = buildMaintainRapportEmail(
+          contact.name ?? "",
+          undefined,
+          contact.language ?? undefined
+        );
 
         // Trova l'ultima email per il threading (Re:)
         const lastEmail = emails

@@ -7,7 +7,6 @@ import {
   KEEP_IN_TOUCH_NOTE,
   isKeepInTouchNote,
   getAutomaticFollowUpStage,
-  AUTO_FOLLOW_UP_1_NOTE,
   AUTO_FOLLOW_UP_2_NOTE,
   SECOND_FOLLOW_UP_DAYS,
   buildAutoFollowUpEmail1,
@@ -15,8 +14,9 @@ import {
   buildMaintainRapportEmail,
   isMaintainRapportNote,
   buildMaintainRapportNote,
-  toFollowUpDateOnly,
+  type FollowUpLanguage,
 } from "@/lib/followUp";
+import { detectLanguageFromEmail, stripHtml } from "@/lib/languageDetection";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,6 +99,59 @@ const getSmtpConfig = () => {
   };
 };
 
+type InboundEmailRow = {
+  contact_id: string | null;
+  received_at: string | null;
+  created_at: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+};
+
+const getTimestamp = (value?: string | null) => {
+  if (!value) return 0;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const loadContactLanguageMap = async (
+  supabase: ReturnType<typeof getSupabase>,
+  contactIds: string[]
+) => {
+  const map = new Map<string, FollowUpLanguage | null>();
+  if (!contactIds.length) return map;
+
+  const { data: inboundRows, error } = await supabase
+    .from("emails")
+    .select("contact_id, received_at, created_at, subject, text_body, html_body")
+    .eq("direction", "inbound")
+    .in("contact_id", contactIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const latestByContact = new Map<string, { ts: number; text: string }>();
+  (inboundRows as InboundEmailRow[] | null)?.forEach((row) => {
+    if (!row.contact_id) return;
+    const candidateTs = getTimestamp(row.received_at ?? row.created_at);
+    const current = latestByContact.get(row.contact_id);
+    if (current && current.ts >= candidateTs) return;
+    latestByContact.set(row.contact_id, {
+      ts: candidateTs,
+      text: [row.text_body, stripHtml(row.html_body), row.subject]
+        .filter(Boolean)
+        .join(" "),
+    });
+  });
+
+  latestByContact.forEach((value, contactId) => {
+    map.set(contactId, detectLanguageFromEmail(value.text));
+  });
+
+  return map;
+};
+
 const buildBody = (
   date: string,
   item: {
@@ -155,6 +208,11 @@ const handleReminderRun = async (request: Request) => {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
+  const contactLanguageMap = await loadContactLanguageMap(
+    supabase,
+    dueContacts.map((contact) => contact.id)
+  );
+
   const transportConfig = getSmtpConfig();
   const transport = transportConfig
     ? nodemailer.createTransport(transportConfig)
@@ -176,13 +234,14 @@ const handleReminderRun = async (request: Request) => {
 
   for (const contact of dueContacts) {
     const stage = getAutomaticFollowUpStage(contact.next_action_note);
+    const language = contactLanguageMap.get(contact.id) ?? "it";
 
     if (stage && contact.email) {
       // Automatic Follow-up
       const emailContent =
         stage === 1
-          ? buildAutoFollowUpEmail1(contact.name, signatureHtml)
-          : buildAutoFollowUpEmail2(contact.name, signatureHtml);
+          ? buildAutoFollowUpEmail1(contact.name, signatureHtml, language)
+          : buildAutoFollowUpEmail2(contact.name, signatureHtml, language);
 
       // Try to find the last email for threading
       const { data: lastEmail } = await supabase
@@ -275,7 +334,11 @@ const handleReminderRun = async (request: Request) => {
       });
     } else if (isMaintainRapportNote(contact.next_action_note) && contact.email) {
       // Mantenimento rapporto schedulato
-      const emailContent = buildMaintainRapportEmail(contact.name, signatureHtml);
+      const emailContent = buildMaintainRapportEmail(
+        contact.name,
+        signatureHtml,
+        language
+      );
 
       const { data: lastEmail } = await supabase
         .from("emails")
