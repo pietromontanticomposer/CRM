@@ -313,18 +313,6 @@ const classifyContact = async (contact: {
   }
 
   const summaryText = JSON.stringify(parsed);
-  const mappedStatus = mapCategoryToStatus(parsed.category);
-
-  if (contact.status !== mappedStatus) {
-    const updatePayload: Record<string, string | null> = {
-      status: mappedStatus,
-    };
-    if (mappedStatus === "Chiuso" || mappedStatus === "Non interessato") {
-      updatePayload.next_action_at = null;
-      updatePayload.next_action_note = null;
-    }
-    await supabase.from("contacts").update(updatePayload).eq("id", contact.id);
-  }
 
   const { error: storeError } = await supabase
     .from("conversation_summaries")

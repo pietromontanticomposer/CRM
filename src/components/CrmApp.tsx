@@ -16,6 +16,7 @@ const STATUS_OPTIONS = [
   "Da contattare",
   "Già contattato",
   "Interessato",
+  "Ricontattare più avanti",
   "Non interessato",
   "Chiuso",
 ] as const;
@@ -125,6 +126,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Già contattato": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
+    "Ricontattare più avanti": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Chiuso": "bg-zinc-500/20 text-zinc-200 border-zinc-400/30",
   },
@@ -132,6 +134,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Da contattare": "border-amber-300 bg-amber-50 text-amber-800",
     "Già contattato": "border-sky-300 bg-sky-50 text-sky-800",
     "Interessato": "border-emerald-300 bg-emerald-50 text-emerald-800",
+    "Ricontattare più avanti": "border-orange-300 bg-orange-50 text-orange-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Chiuso": "border-zinc-300 bg-zinc-100 text-zinc-700",
   },

@@ -270,7 +270,7 @@ export async function POST(request: Request) {
         last_email_at: existing.last_email_at,
         model: existing.model,
         cached: true,
-        applied_status: mapCategoryToStatus(parsedExisting.category),
+        applied_status: null,
       });
     }
   }
@@ -335,18 +335,6 @@ export async function POST(request: Request) {
 
   const summaryText = JSON.stringify(parsed);
 
-  const mappedStatus = mapCategoryToStatus(parsed.category);
-  if (contact.status !== mappedStatus) {
-    const updatePayload: Record<string, string | null> = {
-      status: mappedStatus,
-    };
-    if (mappedStatus === "Chiuso" || mappedStatus === "Non interessato") {
-      updatePayload.next_action_at = null;
-      updatePayload.next_action_note = null;
-    }
-    await supabase.from("contacts").update(updatePayload).eq("id", contact.id);
-  }
-
   const { data: stored, error: storeError } = await supabase
     .from("conversation_summaries")
     .upsert(
@@ -376,7 +364,7 @@ export async function POST(request: Request) {
         model: generated.model,
         cached: false,
         stored: false,
-        applied_status: mappedStatus,
+        applied_status: null,
       });
     }
     return NextResponse.json(
@@ -395,6 +383,6 @@ export async function POST(request: Request) {
     model: stored.model,
     cached: false,
     stored: true,
-    applied_status: mappedStatus,
+    applied_status: null,
   });
 }
