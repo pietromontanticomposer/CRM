@@ -8,6 +8,12 @@ export const FOLLOW_UP_TIME_ZONE = "Europe/Rome";
 export const AUTO_FOLLOW_UP_1_NOTE = "Follow-up automatico 1/2 (10 giorni)";
 export const AUTO_FOLLOW_UP_2_NOTE = `Follow-up automatico 2/2 (${SECOND_FOLLOW_UP_DAYS} giorni dal primo)`;
 
+export const MANUAL_RECONTACT_NOTE_PREFIX = "Ricontatto programmato";
+export const buildManualRecontactNote = (days: number) =>
+  `${MANUAL_RECONTACT_NOTE_PREFIX} (${days} giorni)`;
+export const isManualRecontactNote = (value?: string | null) =>
+  !!value?.trim().startsWith(MANUAL_RECONTACT_NOTE_PREFIX);
+
 export const MAINTAIN_RAPPORT_NOTE_PREFIX = "Mantenimento rapporto";
 export const buildMaintainRapportNote = (days: number) =>
   days === 0

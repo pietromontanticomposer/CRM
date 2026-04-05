@@ -14,6 +14,8 @@ import {
   buildMaintainRapportNote,
   buildMaintainRapportEmail,
   extractFirstName,
+  isManualRecontactNote,
+  buildManualRecontactNote,
 } from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
@@ -2166,6 +2168,62 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 {maintainRapportMessage && (
                   <p className="mt-2 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
                     {maintainRapportMessage}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Ricontatto programmato */}
+            {selected && (
+              <div className="rounded-3xl border-2 border-orange-200 bg-orange-50/30 p-4 dark:border-orange-900/30 dark:bg-orange-950/10">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-2 w-2 rounded-full bg-orange-500" />
+                  <label className="text-[11px] font-black uppercase tracking-[0.15em] text-orange-700 dark:text-orange-500">
+                    Ricontatto programmato
+                  </label>
+                  {isManualRecontactNote(draft.next_action_note) && (
+                    <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                      IMPOSTATO
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[7, 15, 30, 60].map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      onClick={async () => {
+                        const today = getTodayDateInputValue();
+                        const scheduledDate = addDaysToDateInputValue(today, days);
+                        setDraft((prev) =>
+                          prev
+                            ? { ...prev, next_action_at: scheduledDate, next_action_note: buildManualRecontactNote(days) }
+                            : prev
+                        );
+                        if (selected?.id) {
+                          const res = await fetch(`/api/contacts/${selected.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              next_action_at: scheduledDate,
+                              next_action_note: buildManualRecontactNote(days),
+                            }),
+                          });
+                          if (res.ok) {
+                            const payload = (await res.json()) as ContactsApiResponse;
+                            applyContactUpdate(payload.contact as Contact);
+                          }
+                        }
+                      }}
+                      className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1.5 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
+                    >
+                      {days}g
+                    </button>
+                  ))}
+                </div>
+                {isManualRecontactNote(draft.next_action_note) && draft.next_action_at && (
+                  <p className="mt-2 text-[11px] font-semibold text-orange-700 dark:text-orange-400">
+                    ✓ Ricontatto fissato per il {new Date(draft.next_action_at + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
                   </p>
                 )}
               </div>
