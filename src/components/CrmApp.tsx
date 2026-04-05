@@ -17,7 +17,7 @@ import {
 } from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
-  "Auto follow-up impostato",
+  "Attiva auto follow-up",
   "In attesa",
   "Risposta ricevuta",
   "Non interessato",
@@ -28,14 +28,14 @@ const STATUS_OPTIONS = [
 type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
-  "In attesa di risposta": ["Auto follow-up impostato", "In attesa"],
+  "In attesa di risposta": ["Attiva auto follow-up", "In attesa"],
   "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata", "Mantenimento rapporto"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
 type ContactFolder = "Tutte" | Status | MacroStatus;
 
-const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato", "In attesa"] as const;
+const NEW_CONTACT_STATUS_OPTIONS = ["Attiva auto follow-up", "In attesa"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
@@ -130,12 +130,12 @@ const emptyNewContact: NewContact = {
   email: "",
   company: "",
   role: "",
-  status: "Auto follow-up impostato",
+  status: "Attiva auto follow-up",
 };
 
 const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
-    "Auto follow-up impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
+    "Attiva auto follow-up": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
     "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
@@ -143,7 +143,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   },
   light: {
-    "Auto follow-up impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
+    "Attiva auto follow-up": "border-indigo-300 bg-indigo-50 text-indigo-800",
     "In attesa": "border-sky-300 bg-sky-50 text-sky-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
@@ -2026,15 +2026,28 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 <div className="grid gap-2">
                   {STATUS_GROUPS["In attesa di risposta"].map((status) => {
                     const isActive = draft.status === status;
-                    const isAutoFollowUp = status === "Auto follow-up impostato";
+                    const isAutoFollowUp = status === "Attiva auto follow-up";
                     return (
                       <button
                         key={status}
                         type="button"
-                        onClick={() => setDraft((prev) => {
-                          if (!prev) return prev;
-                          return { ...prev, status: status as Status };
-                        })}
+                        onClick={async () => {
+                          setDraft((prev) => {
+                            if (!prev) return prev;
+                            return { ...prev, status: status as Status };
+                          });
+                          if (draft?.id) {
+                            const res = await fetch(`/api/contacts/${draft.id}`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ status }),
+                            });
+                            if (res.ok) {
+                              const payload = (await res.json()) as ContactsApiResponse;
+                              applyContactUpdate(payload.contact as Contact);
+                            }
+                          }
+                        }}
                         className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold ${
                           isActive
                             ? "border-indigo-600 bg-indigo-600 text-white shadow-sm scale-[1.02]"
@@ -2073,7 +2086,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           <div key={status} className="grid gap-2">
                             <button
                               type="button"
-                              onClick={() =>
+                              onClick={async () => {
                                 setDraft((prev) =>
                                   prev
                                     ? {
@@ -2082,8 +2095,22 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                         ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
                                       }
                                     : prev
-                                )
-                              }
+                                );
+                                if (draft?.id) {
+                                  const res = await fetch(`/api/contacts/${draft.id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      status,
+                                      ...(status === "Non interessato" ? { next_action_at: null, next_action_note: null } : {}),
+                                    }),
+                                  });
+                                  if (res.ok) {
+                                    const payload = (await res.json()) as ContactsApiResponse;
+                                    applyContactUpdate(payload.contact as Contact);
+                                  }
+                                }
+                              }}
                               className={`rounded-xl border px-4 py-2 text-left text-xs font-bold ${baseStyles} ${
                                 isActive
                                   ? "shadow-md scale-[1.02] ring-1 ring-current"
@@ -2827,7 +2854,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </button>
                 <div className="ml-2 grid gap-1.5 border-l-2 border-sky-500/20 pl-3">
                   {STATUS_GROUPS["In attesa di risposta"].map((status) => {
-                    const isAutoFollowUp = status === "Auto follow-up impostato";
+                    const isAutoFollowUp = status === "Attiva auto follow-up";
                     const isSelected = contactFolder === status;
                     return (
                     <button
@@ -2953,7 +2980,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             </div>
                           </div>
                           <span
-                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Auto follow-up impostato" ? " auto-follow-pulse" : ""}${contact.status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""}`}
+                            className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Attiva auto follow-up" ? " auto-follow-pulse" : ""}${contact.status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""}`}
                           >
                             {contact.status}
                           </span>

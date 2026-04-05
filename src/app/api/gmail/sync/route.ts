@@ -319,7 +319,7 @@ const updateContactAfterOutbound = async (
     updatePayload.last_action_note = "Email inviata (sync Gmail)";
     
     // Se lo stato è quello iniziale, lo mettiamo in "In attesa di risposta"
-    if (contact.status === "Auto follow-up impostato" || contact.status === "Da contattare") {
+    if (contact.status === "Attiva auto follow-up" || contact.status === "Da contattare") {
       updatePayload.status = "In attesa di risposta";
     }
   }

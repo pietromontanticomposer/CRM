@@ -180,7 +180,7 @@ export const handleContactInbound = async (
     if (
       isAutoFollowActive ||
       isMaintainActive ||
-      contact.status === "Auto follow-up impostato" ||
+      contact.status === "Attiva auto follow-up" ||
       contact.status === "In attesa" ||
       contact.status === "In attesa di risposta"
     ) {
