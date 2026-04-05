@@ -61,16 +61,7 @@ export const extractFirstName = (fullName: string) => {
   return firstPart.charAt(0).toUpperCase() + firstPart.slice(1).toLowerCase();
 };
 
-export const buildAutoFollowUpEmail1 = (name: string, signatureHtml?: string | null) => {
-  const firstName = extractFirstName(name);
-  const text = `Ciao ${firstName}!,
-ti scrivo per riprendere velocemente la mia ultima mail.
-Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.
-Fammi sapere cosa ti è più comodo.
-A presto,`;
-
-  // Fallback signature if none in env
-  const defaultSignature = `
+const DEFAULT_SIGNATURE_HTML = `
 <div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
   <div style="font-weight: bold; font-size: 16px;">Pietro Montanti</div>
   <div style="font-size: 14px;">Multi Instrumentalist, Composer for TV & Theatre</div>
@@ -82,7 +73,15 @@ A presto,`;
   </div>
 </div>`;
 
-  const finalSignature = signatureHtml || defaultSignature;
+export const buildAutoFollowUpEmail1 = (name: string, signatureHtml?: string | null) => {
+  const firstName = extractFirstName(name);
+  const text = `Ciao ${firstName}!,
+ti scrivo per riprendere velocemente la mia ultima mail.
+Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.
+Fammi sapere cosa ti è più comodo.
+A presto,`;
+
+  const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
 
   const html = `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per riprendere velocemente la mia ultima mail.<br>
@@ -105,20 +104,7 @@ Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali si
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.
 Un saluto,`;
 
-  // Fallback signature if none in env
-  const defaultSignature = `
-<div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
-  <div style="font-weight: bold; font-size: 16px;">Pietro Montanti</div>
-  <div style="font-size: 14px;">Multi Instrumentalist, Composer for TV & Theatre</div>
-  <div style="font-size: 14px;">3515172560</div>
-  <div style="font-size: 14px;">P.IVA: 04593080239</div>
-  <div style="font-size: 14px;">Via Mulino Turri 9c, Negrar (VR)</div>
-  <div style="margin-top: 20px;">
-    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="320" style="display: block; max-width: 100%; height: auto;">
-  </div>
-</div>`;
-
-  const finalSignature = signatureHtml || defaultSignature;
+  const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
 
   const html = `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per un ultimo follow-up.<br>

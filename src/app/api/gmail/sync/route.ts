@@ -301,7 +301,6 @@ const updateContactAfterOutbound = async (
 
   const sentDate = parseDateValue(sentAt) ?? new Date();
   const sentDateOnly = toFollowUpDateOnly(sentDate);
-  const nextStatus = contact.status;
 
   const followUpDays = getFollowUpDays();
   const lastActionDate = parseDateValue(contact.last_action_at);

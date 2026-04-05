@@ -220,20 +220,32 @@ export async function POST(request: Request) {
 
     const emailRow = {
       contact_id: contactId,
-      message_id: messageId,
+      direction: "inbound" as const,
+      message_id_header: messageId,
       from_email: fromEmail,
       from_name: fromName,
+      to_email: process.env.GMAIL_USER ?? null,
       subject,
       text_body: payload.TextBody ?? null,
       html_body: payload.HtmlBody ?? null,
-      stripped_text_reply: payload.StrippedTextReply ?? null,
       received_at: receivedAt,
       raw: rawPayload,
     };
 
+    // Check for duplicate by message_id_header before inserting
+    const { data: existing } = await supabase
+      .from("emails")
+      .select("id, contact_id")
+      .eq("message_id_header", messageId)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json({ ok: true });
+    }
+
     const { data: insertedEmail, error: emailError } = await supabase
       .from("emails")
-      .upsert(emailRow, { onConflict: "message_id", ignoreDuplicates: true })
+      .insert(emailRow)
       .select("id, contact_id")
       .maybeSingle();
 

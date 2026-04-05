@@ -221,6 +221,7 @@ const handleReminderRun = async (request: Request) => {
         in_reply_to: lastEmail?.message_id_header || null,
         references: headers["References"] || null,
         from_email: fromAddress,
+        from_name: null,
         to_email: contact.email,
         subject,
         text_body: emailContent.body,
