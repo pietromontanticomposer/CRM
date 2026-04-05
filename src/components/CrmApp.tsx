@@ -13,7 +13,7 @@ import {
 } from "@/lib/followUp";
 
 const STATUS_OPTIONS = [
-  "Auto follow impostato",
+  "Auto follow-up impostato",
   "Risposta ricevuta",
   "Non interessato",
   "Rimanere in contatto",
@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
 
 type Status = (typeof STATUS_OPTIONS)[number];
 type ContactFolder = "Tutte" | "Follow-up" | "In attesa di risposta" | Status;
-const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow impostato"] as const;
+const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
@@ -117,19 +117,19 @@ const emptyNewContact: NewContact = {
   email: "",
   company: "",
   role: "",
-  status: "Auto follow impostato",
+  status: "Auto follow-up impostato",
 };
 
 const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
-    "Auto follow impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
+    "Auto follow-up impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Rimanere in contatto": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   },
   light: {
-    "Auto follow impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
+    "Auto follow-up impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Rimanere in contatto": "border-orange-300 bg-orange-50 text-orange-800",
@@ -946,7 +946,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     const waitingCount = contacts.filter((contact) => {
       const lastInbound = getTimestamp(contact.last_inbound_email_at);
       const lastOutbound = getTimestamp(contact.last_outbound_email_at);
-      return lastOutbound > lastInbound;
+      return lastOutbound > lastInbound && contact.status !== "Auto follow-up impostato";
     }).length;
 
     return { ...baseCounts, "In attesa di risposta": waitingCount };
@@ -985,7 +985,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       return searchedContacts.filter((contact) => {
         const lastInbound = getTimestamp(contact.last_inbound_email_at);
         const lastOutbound = getTimestamp(contact.last_outbound_email_at);
-        return lastOutbound > lastInbound;
+        return lastOutbound > lastInbound && contact.status !== "Auto follow-up impostato";
       });
     }
     if (contactFolder === "Tutte") return searchedContacts;
@@ -1964,18 +1964,18 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   type="button"
                   onClick={() => setDraft((prev) => {
                     if (!prev) return prev;
-                    if (prev.status === "Auto follow impostato") {
+                    if (prev.status === "Auto follow-up impostato") {
                       return { ...prev, status: "Risposta ricevuta" };
                     }
-                    return { ...prev, status: "Auto follow impostato" };
+                    return { ...prev, status: "Auto follow-up impostato" };
                   })}
                   className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
-                    draft.status === "Auto follow impostato"
+                    draft.status === "Auto follow-up impostato"
                       ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
                       : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400"
                   }`}
                 >
-                  Auto follow impostato
+                  Auto follow-up impostato
                 </button>
               </div>
 
@@ -2132,14 +2132,14 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                              if (isAutoFollowUpActive) {
                                return {
                                  ...prev,
-                                 status: prev.status === "Auto follow impostato" ? "Risposta ricevuta" : prev.status,
+                                 status: prev.status === "Auto follow-up impostato" ? "Risposta ricevuta" : prev.status,
                                  next_action_at: "",
                                  next_action_note: "",
                                };
                              }
                              return {
                                ...prev,
-                               status: "Auto follow impostato",
+                               status: "Auto follow-up impostato",
                                next_action_at: addDaysToDateInputValue(today, 10),
                                next_action_note: AUTO_FOLLOW_UP_1_NOTE,
                              };
@@ -2868,7 +2868,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           {contact.status === "Non interessato" ? (
                             <>Non interessato · non rimanere in contatto</>
                           ) : !contact.last_action_at ? (
-                            <>Prossima azione: Impostare Auto Follow-up</>
+                            <>Prossima azione: Impostare Auto follow-up</>
                           ) : (
                             <>
                               Prossima azione:{" "}

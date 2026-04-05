@@ -41,7 +41,7 @@ const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
     return null;
   }
 
-  const status = normalizeString(payload.status) || "Auto follow impostato";
+  const status = normalizeString(payload.status) || "Auto follow-up impostato";
   const lastActionAt = null;
 
   return {
@@ -155,7 +155,7 @@ export async function GET() {
       lastInboundAtByContactId
     ).map((contact) => {
       const stage = getAutomaticFollowUpStage(contact.next_action_note as string);
-      const effectiveStatus = stage ? "Auto follow impostato" : contact.status;
+      const effectiveStatus = stage ? "Auto follow-up impostato" : contact.status;
 
       const candidates = [
         contact.updated_at as string,
