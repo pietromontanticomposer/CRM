@@ -1865,7 +1865,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-sm">
-        <div className="sticky top-[-17px] z-20 -mx-4 -mt-4 mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] bg-[var(--panel-strong)] px-4 pt-4 pb-3">
+        <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] bg-[var(--panel-strong)] px-4 pt-4 pb-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--muted)]">
               Scheda
@@ -2472,7 +2472,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
   return (
     <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-0 sm:px-10">
-      <header className="sticky top-0 z-40 -mx-6 mb-10 flex w-full flex-col gap-4 bg-[var(--bg)]/80 px-6 py-6 backdrop-blur-md sm:-mx-10 sm:px-10">
+      <header className="sticky top-0 z-40 -mx-6 mb-10 flex w-full flex-col gap-4 bg-[var(--bg)] border-b border-[var(--line)] px-6 py-6 sm:-mx-10 sm:px-10">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -2732,7 +2732,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           </div>
 
           <div className="mt-8">
-            <div className="sticky top-[-21px] z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-5 pb-4">
+            <div className="sticky top-0 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-4 pb-4">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
               <span>Contatti</span>
               <span>
