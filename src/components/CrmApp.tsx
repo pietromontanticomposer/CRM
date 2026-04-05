@@ -36,8 +36,8 @@ const STATUS_GROUPS = {
     "Azione richiesta",
     "Non interessato",
     "Mantenimento rapporto",
-    "Collaborazione stabilita",
     "Call prenotata",
+    "Collaborazione stabilita",
   ],
 } as const;
 
