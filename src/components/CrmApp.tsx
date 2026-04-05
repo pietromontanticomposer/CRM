@@ -1976,6 +1976,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
           <div className="grid gap-3">
             <div className="grid gap-6">
+              {/* Gruppo: In attesa di risposta */}
               <div className="rounded-3xl border-2 border-indigo-200 bg-indigo-50/30 p-4 dark:border-indigo-900/30 dark:bg-indigo-950/10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-indigo-500" />
@@ -1984,25 +1985,30 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   </label>
                 </div>
                 <div className="grid gap-2">
-                  {["Auto follow-up impostato", "In attesa"].map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setDraft((prev) => {
-                        if (!prev) return prev;
-                        return { ...prev, status: status as Status };
-                      })}
-                      className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
-                        draft.status === status
-                          ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                          : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400"
-                      }`}
-                    >
-                      {status}
-                    </button>
-                  ))}
+                  {STATUS_GROUPS["In attesa di risposta"].map((status) => {
+                    const isActive = draft.status === status;
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => setDraft((prev) => {
+                          if (!prev) return prev;
+                          return { ...prev, status: status as Status };
+                        })}
+                        className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${
+                          isActive
+                            ? "border-indigo-600 bg-indigo-600 text-white shadow-sm scale-[1.02]"
+                            : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        ↳ {status}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* Gruppo: Risposta ricevuta */}
               <div className="rounded-3xl border-2 border-amber-200 bg-amber-50/30 p-4 dark:border-amber-900/30 dark:bg-amber-950/10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
@@ -2012,83 +2018,86 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </div>
                 
                 <div className="grid gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDraft((prev) => {
-                      if (!prev) return prev;
-                      return { ...prev, status: "Risposta ricevuta" };
-                    })}
-                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition mb-2 ${
-                      draft.status === "Risposta ricevuta"
-                        ? "border-amber-600 bg-amber-600 text-white shadow-sm"
-                        : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:text-amber-400"
-                    }`}
-                  >
-                    Risposta ricevuta
-                  </button>
+                  <div className="grid grid-cols-1 gap-2">
+                    {/* Pulsante generico Risposta Ricevuta */}
+                    <button
+                      type="button"
+                      onClick={() => setDraft((prev) => {
+                        if (!prev) return prev;
+                        return { ...prev, status: "Risposta ricevuta" };
+                      })}
+                      className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition mb-1 ${
+                        draft.status === "Risposta ricevuta"
+                          ? "border-amber-600 bg-amber-600 text-white shadow-sm scale-[1.02]"
+                          : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:text-amber-400 opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      ✓ Risposta ricevuta (generico)
+                    </button>
 
-                  <div className="grid grid-cols-1 gap-2 border-t border-amber-200/50 dark:border-amber-900/30 pt-4">
-                    <p className="text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Seleziona esito:</p>
-                    {["Non interessato", "Rimanere in contatto", "Call prenotata"].map((status) => {
-                      const isActive = draft.status === status;
-                      const baseStyles = statusStylesByTheme[theme][status as Status];
+                    <div className="mt-1 grid gap-2 border-t border-amber-200/50 dark:border-amber-900/30 pt-3">
+                      <p className="px-1 text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Specifica esito:</p>
+                      {STATUS_GROUPS["Risposta ricevuta"].map((status) => {
+                        const isActive = draft.status === status;
+                        const baseStyles = statusStylesByTheme[theme][status as Status];
 
-                      return (
-                        <div key={status} className="grid gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDraft((prev) =>
-                                prev
-                                  ? {
-                                      ...prev,
-                                      status: status as Status,
-                                      ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
-                                    }
-                                  : prev
-                              )
-                            }
-                            className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
-                              isActive
-                                ? "shadow-md scale-[1.02] ring-1 ring-current"
-                                : "opacity-50 hover:opacity-100 hover:scale-[1.01]"
-                            }`}
-                          >
-                            ↳ {status}
-                          </button>
+                        return (
+                          <div key={status} className="grid gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDraft((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        status: status as Status,
+                                        ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
+                                      }
+                                    : prev
+                                )
+                              }
+                              className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
+                                isActive
+                                  ? "shadow-md scale-[1.02] ring-1 ring-current"
+                                  : "opacity-40 hover:opacity-100 hover:scale-[1.01]"
+                              }`}
+                            >
+                              ↳ {status}
+                            </button>
 
-                          {status === "Rimanere in contatto" && isActive && (
-                            <div className="flex flex-wrap gap-2 pl-4 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                              {QUICK_RECONTACT_DAYS.map((days) => (
-                                <button
-                                  key={days}
-                                  type="button"
-                                  onClick={() => {
-                                    const today = getTodayDateInputValue();
-                                    setDraft((prev) =>
-                                      prev
-                                        ? {
-                                            ...prev,
-                                            next_action_at: addDaysToDateInputValue(
-                                              today,
-                                              days
-                                            ),
-                                            next_action_note:
-                                              buildRecontactReminderNote(days),
-                                          }
-                                        : prev
-                                    );
-                                  }}
-                                  className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
-                                >
-                                  {days}g
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            {status === "Rimanere in contatto" && isActive && (
+                              <div className="flex flex-wrap gap-2 pl-4 py-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                {QUICK_RECONTACT_DAYS.map((days) => (
+                                  <button
+                                    key={days}
+                                    type="button"
+                                    onClick={() => {
+                                      const today = getTodayDateInputValue();
+                                      setDraft((prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              next_action_at: addDaysToDateInputValue(
+                                                today,
+                                                days
+                                              ),
+                                              next_action_note:
+                                                buildRecontactReminderNote(days),
+                                            }
+                                          : prev
+                                      );
+                                    }}
+                                    className="rounded-full border border-orange-400 bg-orange-50/50 px-3 py-1 text-[10px] font-bold text-orange-700 transition hover:bg-orange-100 dark:bg-orange-950/20 dark:text-orange-400 dark:hover:bg-orange-950/40"
+                                  >
+                                    {days}g
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
