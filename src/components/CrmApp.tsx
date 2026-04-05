@@ -817,6 +817,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [followUpMessage, setFollowUpMessage] = useState<string | null>(null);
   const [maintainRapportPending, setMaintainRapportPending] = useState<string | null>(null);
   const [maintainRapportMessage, setMaintainRapportMessage] = useState<string | null>(null);
+  const [desktopSidebarHeight, setDesktopSidebarHeight] = useState<number | null>(null);
   const contentSectionRef = useRef<HTMLElement | null>(null);
   const emailRequestIdRef = useRef(0);
   const summaryRequestIdRef = useRef(0);
@@ -851,6 +852,44 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     );
     return sanitizeHtml(withInline);
   }, [selectedEmail?.html_body, selectedEmailAttachments, selectedEmail?.id]);
+
+  useEffect(() => {
+    const updateSidebarHeight = () => {
+      if (
+        window.innerWidth < TWO_COLUMN_LAYOUT_MIN_WIDTH ||
+        !contentSectionRef.current
+      ) {
+        setDesktopSidebarHeight(null);
+        return;
+      }
+
+      const nextHeight = Math.round(
+        contentSectionRef.current.getBoundingClientRect().height
+      );
+
+      setDesktopSidebarHeight((current) =>
+        current === nextHeight ? current : nextHeight
+      );
+    };
+
+    const frameId = window.requestAnimationFrame(updateSidebarHeight);
+    window.addEventListener("resize", updateSidebarHeight);
+
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => updateSidebarHeight());
+
+    if (observer && contentSectionRef.current) {
+      observer.observe(contentSectionRef.current);
+    }
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("resize", updateSidebarHeight);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -2634,7 +2673,12 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
       <main className="relative mx-auto grid w-full max-w-7xl flex-1 items-start gap-6 md:grid-cols-[minmax(280px,320px)_minmax(0,1fr)] lg:gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
         <section
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg md:sticky md:top-6 md:max-h-[calc(100vh-3rem)] md:overflow-y-auto md:pr-3"
+          style={
+            desktopSidebarHeight
+              ? { height: `${desktopSidebarHeight}px` }
+              : undefined
+          }
+          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg md:overflow-y-auto md:pr-3"
         >
           <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
             Nuovo contatto
