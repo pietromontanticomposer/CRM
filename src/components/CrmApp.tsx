@@ -27,7 +27,18 @@ const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato", "In attesa di ri
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
-// ...
+  id: string;
+  name: string;
+  email: string | null;
+  company: string | null;
+  role: string | null;
+  status: Status;
+  last_action_at: string | null;
+  last_action_note: string | null;
+  next_action_at: string | null;
+  next_action_note: string | null;
+  notes: string | null;
+  created_at: string;
   updated_at: string;
   last_inbound_email_at?: string | null;
   last_outbound_email_at?: string | null;
@@ -43,7 +54,73 @@ type NewContact = {
   role: string;
   status: NewContactStatus;
 };
-// ...
+
+type ContactsApiResponse = {
+  contacts?: Contact[];
+  contact?: Contact;
+  error?: string;
+};
+
+type EmailsApiResponse = {
+  emails?: EmailRow[];
+  readMap?: Record<string, boolean>;
+  error?: string;
+};
+
+type EmailDirection = "inbound" | "outbound";
+
+type EmailRow = {
+  id: string;
+  contact_id: string | null;
+  direction: EmailDirection;
+  gmail_uid: number | null;
+  message_id_header: string | null;
+  in_reply_to: string | null;
+  references: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  to_email: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  received_at: string | null;
+  created_at: string | null;
+  raw: Record<string, unknown> | null;
+};
+
+type SummaryPayload = {
+  one_liner?: string;
+  highlights?: string[];
+  open_questions?: string[];
+  next_actions?: string[];
+  last_inbound?: string;
+  last_outbound?: string;
+};
+
+type SummaryState = {
+  raw: string;
+  parsed: SummaryPayload | null;
+  updatedAt?: string | null;
+  lastEmailAt?: string | null;
+  model?: string | null;
+  rateLimited?: boolean;
+};
+
+type ComposePreset =
+  | "custom"
+  | "first_follow_up_tu"
+  | "first_follow_up_lei";
+
+export type CrmTheme = "light" | "dark";
+
+const emptyNewContact: NewContact = {
+  name: "",
+  email: "",
+  company: "",
+  role: "",
+  status: "Auto follow-up impostato",
+};
+
 const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
     "Auto follow-up impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
