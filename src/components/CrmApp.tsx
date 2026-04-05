@@ -712,6 +712,15 @@ const sortContacts = (contacts: Contact[]) =>
     return getTimestamp(b.created_at) - getTimestamp(a.created_at);
   });
 
+const getMostRecentlyCreatedContact = (contacts: Contact[]) => {
+  if (!contacts.length) return null;
+  return contacts.reduce((latest, current) =>
+    getTimestamp(current.created_at) > getTimestamp(latest.created_at)
+      ? current
+      : latest
+  );
+};
+
 const buildDraft = (contact: Contact): DraftContact => ({
   id: contact.id,
   name: contact.name,
@@ -852,6 +861,31 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     );
     return sanitizeHtml(withInline);
   }, [selectedEmail?.html_body, selectedEmailAttachments, selectedEmail?.id]);
+
+  useEffect(() => {
+    if (!contacts.length) {
+      return;
+    }
+
+    const selectedStillPresent = selectedId
+      ? contacts.some((contact) => contact.id === selectedId)
+      : false;
+
+    if (selectedStillPresent) {
+      return;
+    }
+
+    const defaultContact = getMostRecentlyCreatedContact(contacts);
+    if (!defaultContact) {
+      return;
+    }
+
+    setSelectedId(defaultContact.id);
+    setDraft(buildDraft(defaultContact));
+    void loadEmails(defaultContact.id, defaultContact.email, {
+      resetConversation: true,
+    });
+  }, [contacts, selectedId]);
 
   useEffect(() => {
     const updateSidebarHeight = () => {
