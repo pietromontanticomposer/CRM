@@ -20,8 +20,7 @@ const buildAutoFollowUpEmail1 = (name, signatureHtml) => {
 ti scrivo per riprendere velocemente la mia ultima mail.
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.
 Fammi sapere cosa ti è più comodo.
-A presto,
-Pietro`;
+A presto,`;
 
   const defaultSignature = `
 <div style="margin-top: 15px; font-family: Helvetica, Arial, sans-serif; color: #333; line-height: 1.4;">
@@ -31,7 +30,7 @@ Pietro`;
   <div style="font-size: 12px;">P.IVA: 04593080239</div>
   <div style="font-size: 12px;">Via Mulino Turri 9c, Negrar (VR)</div>
   <div style="margin-top: 10px;">
-    <img src="cid:firma_pietro" alt="Pietro Montanti" width="130" style="display: block; max-width: 100%; height: auto; border-radius: 2px;">
+    <img src="cid:firma_pietro" alt="Pietro Montanti" width="80" style="display: block; width: 80px; height: auto; border-radius: 2px;">
   </div>
 </div>`;
 
@@ -41,8 +40,7 @@ Pietro`;
 ti scrivo per riprendere velocemente la mia ultima mail.<br>
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.<br>
 Fammi sapere cosa ti è più comodo.<br><br>
-A presto,<br>
-Pietro${finalSignature}</div>`;
+A presto,${finalSignature}</div>`;
 
   return {
     subject: "Il tuo lavoro",
@@ -52,7 +50,7 @@ Pietro${finalSignature}</div>`;
 };
 
 async function sendTest() {
-  console.log(`Inviando mail di prova a ${testEmail}...`);
+  console.log(`Inviando mail (FOTO PICCOLA 80px) a ${testEmail}...`);
 
   const transport = nodemailer.createTransport({
     service: "gmail",
@@ -67,7 +65,7 @@ async function sendTest() {
   const info = await transport.sendMail({
     from: process.env.GMAIL_USER,
     to: testEmail,
-    subject: "TEST PROPORZIONI: " + emailContent.subject,
+    subject: "TEST 80px: " + emailContent.subject,
     text: emailContent.body,
     html: emailContent.html,
     attachments: [{

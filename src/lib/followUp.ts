@@ -104,7 +104,7 @@ Pietro`;
   <div style="font-size: 12px;">P.IVA: 04593080239</div>
   <div style="font-size: 12px;">Via Mulino Turri 9c, Negrar (VR)</div>
   <div style="margin-top: 10px;">
-    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="130" style="display: block; max-width: 100%; height: auto; border-radius: 2px;">
+    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="80" style="display: block; width: 80px; height: auto; border-radius: 2px;">
   </div>
 </div>`;
 
