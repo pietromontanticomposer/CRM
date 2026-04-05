@@ -15,6 +15,7 @@ import {
 const STATUS_OPTIONS = [
   "Da contattare",
   "Già contattato",
+  "Auto follow impostato",
   "Interessato",
   "Ricontattare più avanti",
   "Non interessato",
@@ -125,6 +126,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
     "Da contattare": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Già contattato": "bg-sky-500/15 text-sky-200 border-sky-400/30",
+    "Auto follow impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
     "Interessato": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
     "Ricontattare più avanti": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
@@ -133,6 +135,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   light: {
     "Da contattare": "border-amber-300 bg-amber-50 text-amber-800",
     "Già contattato": "border-sky-300 bg-sky-50 text-sky-800",
+    "Auto follow impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
     "Interessato": "border-emerald-300 bg-emerald-50 text-emerald-800",
     "Ricontattare più avanti": "border-orange-300 bg-orange-50 text-orange-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
