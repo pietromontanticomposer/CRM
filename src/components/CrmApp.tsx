@@ -2208,7 +2208,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             </div>
 
             {/* Mantenimento rapporto */}
-            {selected && selected.email && (
+            {selected &&
+              selected.email &&
+              draft.status === "Mantenimento rapporto" && (
               <div className="rounded-3xl border-2 border-teal-200 bg-teal-50/30 p-4 dark:border-teal-900/30 dark:bg-teal-950/10">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="h-2 w-2 rounded-full bg-teal-500" />
