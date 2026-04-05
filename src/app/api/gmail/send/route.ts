@@ -200,6 +200,11 @@ const updateContactAfterOutbound = async (
   if (shouldRefreshLastAction) {
     updatePayload.last_action_at = sentDateOnly;
     updatePayload.last_action_note = "Email inviata dal CRM";
+    
+    // Se lo stato è quello iniziale, lo mettiamo in "In attesa di risposta"
+    if (contact.status === "Auto follow-up impostato" || contact.status === "Da contattare") {
+      updatePayload.status = "In attesa di risposta";
+    }
   }
   if (!keepInTouch && automaticFollowUpStage === 1 && nextActionDateOnly) {
     if (nextActionDateOnly <= sentDateOnly) {

@@ -154,8 +154,17 @@ export async function GET() {
       ((data ?? []) as unknown) as ContactRow[],
       lastInboundAtByContactId
     ).map((contact) => {
+      const lastInbound = getTimestamp(lastInboundAtByContactId.get(contact.id));
+      const lastOutbound = getTimestamp(lastOutboundAtByContactId.get(contact.id));
+      
       const stage = getAutomaticFollowUpStage(contact.next_action_note as string);
-      const effectiveStatus = stage ? "Auto follow-up impostato" : contact.status;
+      let effectiveStatus = stage ? "Auto follow-up impostato" : contact.status;
+
+      // Se non hanno mai risposto e abbiamo mandato almeno una mail,
+      // e lo stato non è già uno di quelli terminali o l'auto follow-up
+      if (!lastInbound && lastOutbound > 0 && effectiveStatus !== "Auto follow-up impostato" && !["Non interessato", "Call prenotata"].includes(contact.status as string)) {
+        effectiveStatus = "In attesa di risposta";
+      }
 
       const candidates = [
         contact.updated_at as string,

@@ -14,6 +14,7 @@ import {
 
 const STATUS_OPTIONS = [
   "Auto follow-up impostato",
+  "In attesa di risposta",
   "Risposta ricevuta",
   "Non interessato",
   "Rimanere in contatto",
@@ -21,23 +22,12 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
-type ContactFolder = "Tutte" | "Follow-up" | "In attesa di risposta" | Status;
-const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato"] as const;
+type ContactFolder = "Tutte" | "Follow-up" | Status;
+const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato", "In attesa di risposta"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
 type Contact = {
-  id: string;
-  name: string;
-  email: string | null;
-  company: string | null;
-  role: string | null;
-  status: Status;
-  last_action_at: string | null;
-  last_action_note: string | null;
-  next_action_at: string | null;
-  next_action_note: string | null;
-  notes: string | null;
-  created_at: string;
+// ...
   updated_at: string;
   last_inbound_email_at?: string | null;
   last_outbound_email_at?: string | null;
@@ -53,76 +43,11 @@ type NewContact = {
   role: string;
   status: NewContactStatus;
 };
-
-type ContactsApiResponse = {
-  contacts?: Contact[];
-  contact?: Contact;
-  error?: string;
-};
-
-type EmailsApiResponse = {
-  emails?: EmailRow[];
-  readMap?: Record<string, boolean>;
-  error?: string;
-};
-
-type EmailDirection = "inbound" | "outbound";
-
-type EmailRow = {
-  id: string;
-  contact_id: string | null;
-  direction: EmailDirection;
-  gmail_uid: number | null;
-  message_id_header: string | null;
-  in_reply_to: string | null;
-  references: string | null;
-  from_email: string | null;
-  from_name: string | null;
-  to_email: string | null;
-  subject: string | null;
-  text_body: string | null;
-  html_body: string | null;
-  received_at: string | null;
-  created_at: string | null;
-  raw: Record<string, unknown> | null;
-};
-
-type SummaryPayload = {
-  one_liner?: string;
-  highlights?: string[];
-  open_questions?: string[];
-  next_actions?: string[];
-  last_inbound?: string;
-  last_outbound?: string;
-};
-
-type SummaryState = {
-  raw: string;
-  parsed: SummaryPayload | null;
-  updatedAt?: string | null;
-  lastEmailAt?: string | null;
-  model?: string | null;
-  rateLimited?: boolean;
-};
-
-type ComposePreset =
-  | "custom"
-  | "first_follow_up_tu"
-  | "first_follow_up_lei";
-
-export type CrmTheme = "light" | "dark";
-
-const emptyNewContact: NewContact = {
-  name: "",
-  email: "",
-  company: "",
-  role: "",
-  status: "Auto follow-up impostato",
-};
-
+// ...
 const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
     "Auto follow-up impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
+    "In attesa di risposta": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Rimanere in contatto": "bg-orange-500/15 text-orange-200 border-orange-400/30",
@@ -130,12 +55,14 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   },
   light: {
     "Auto follow-up impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
+    "In attesa di risposta": "border-sky-300 bg-sky-50 text-sky-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Rimanere in contatto": "border-orange-300 bg-orange-50 text-orange-800",
     "Call prenotata": "border-emerald-300 bg-emerald-50 text-emerald-800",
   },
 };
+
 
 const QUICK_RECONTACT_DAYS = [7, 10, 15, 30] as const;
 const TWO_COLUMN_LAYOUT_MIN_WIDTH = 768;
@@ -934,7 +861,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, [selectedEmail?.id, selectedEmailAttachments, selected?.id]);
 
   const counts = useMemo(() => {
-    const baseCounts = STATUS_OPTIONS.reduce(
+    return STATUS_OPTIONS.reduce(
       (acc, status) => {
         acc[status] = contacts.filter((contact) => contact.status === status)
           .length;
@@ -942,14 +869,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       },
       {} as Record<Status, number>
     );
-
-    const waitingCount = contacts.filter((contact) => {
-      const lastInbound = getTimestamp(contact.last_inbound_email_at);
-      const lastOutbound = getTimestamp(contact.last_outbound_email_at);
-      return lastOutbound > lastInbound && contact.status !== "Auto follow-up impostato";
-    }).length;
-
-    return { ...baseCounts, "In attesa di risposta": waitingCount };
   }, [contacts]);
 
   const followUpCount = useMemo(() => {
@@ -981,16 +900,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         isOpenFollowUpContact(contact, today)
       );
     }
-    if (contactFolder === "In attesa di risposta") {
-      return searchedContacts.filter((contact) => {
-        const lastInbound = getTimestamp(contact.last_inbound_email_at);
-        const lastOutbound = getTimestamp(contact.last_outbound_email_at);
-        return lastOutbound > lastInbound && contact.status !== "Auto follow-up impostato";
-      });
-    }
     if (contactFolder === "Tutte") return searchedContacts;
     return searchedContacts.filter((contact) => contact.status === contactFolder);
   }, [searchedContacts, contactFolder]);
+
 
   const followUpSummary = useMemo(() => {
     const today = getTodayDateInputValue();
@@ -1965,28 +1878,29 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-indigo-500" />
                   <label className="text-[11px] font-black uppercase tracking-[0.15em] text-indigo-700 dark:text-indigo-500">
-                    Stato Iniziale
+                    Stato Iniziale / In attesa
                   </label>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setDraft((prev) => {
-                    if (!prev) return prev;
-                    if (prev.status === "Auto follow-up impostato") {
-                      return { ...prev, status: "Risposta ricevuta" };
-                    }
-                    return { ...prev, status: "Auto follow-up impostato" };
-                  })}
-                  className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
-                    draft.status === "Auto follow-up impostato"
-                      ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
-                      : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400"
-                  }`}
-                >
-                  Auto follow-up impostato
-                </button>
+                <div className="grid gap-2">
+                  {["Auto follow-up impostato", "In attesa di risposta"].map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setDraft((prev) => {
+                        if (!prev) return prev;
+                        return { ...prev, status: status as Status };
+                      })}
+                      className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition ${
+                        draft.status === status
+                          ? "border-indigo-600 bg-indigo-600 text-white shadow-sm"
+                          : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400"
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
               </div>
-
               <div className="rounded-3xl border-2 border-amber-200 bg-amber-50/30 p-4 dark:border-amber-900/30 dark:bg-amber-950/10">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
@@ -1996,7 +1910,22 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                 </div>
                 
                 <div className="grid gap-2">
-                  <div className="grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDraft((prev) => {
+                      if (!prev) return prev;
+                      return { ...prev, status: "Risposta ricevuta" };
+                    })}
+                    className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold transition mb-2 ${
+                      draft.status === "Risposta ricevuta"
+                        ? "border-amber-600 bg-amber-600 text-white shadow-sm"
+                        : "border-amber-200 bg-[var(--panel)] text-amber-700 hover:bg-amber-50 dark:text-amber-400"
+                    }`}
+                  >
+                    Risposta ricevuta
+                  </button>
+
+                  <div className="grid grid-cols-1 gap-2 border-t border-amber-200/50 dark:border-amber-900/30 pt-4">
                     <p className="text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Seleziona esito:</p>
                     {["Non interessato", "Rimanere in contatto", "Call prenotata"].map((status) => {
                       const isActive = draft.status === status;
@@ -2770,20 +2699,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               >
                 Follow-up
                 <span className="ml-1 text-[10px] opacity-80">{followUpCount}</span>
-                </button>
-                <button
-                type="button"
-                onClick={() => setContactFolder("In attesa di risposta")}
-                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
-                  contactFolder === "In attesa di risposta"
-                    ? toneStyles.outbound
-                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
-                }`}
-                >
-                In attesa di risposta
-                <span className="ml-1 text-[10px] opacity-80">{counts["In attesa di risposta"] ?? 0}</span>
-                </button>
-                {STATUS_OPTIONS.map((status) => (
+              </button>
+              {STATUS_OPTIONS.map((status) => (
 
                 <button
                   key={status}
