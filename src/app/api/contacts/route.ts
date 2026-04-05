@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 import { getAutomaticFollowUpStage } from "@/lib/followUp";
 import { detectLanguageFromEmail, stripHtml } from "@/lib/languageDetection";
+import { extractEmails, normalizeEmail } from "@/lib/server/emailMatching";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +36,16 @@ type ContactEmailContentRow = {
   subject: string | null;
   text_body: string | null;
   html_body: string | null;
+};
+
+type InboundLanguageRow = {
+  from_email: string | null;
+  to_email: string | null;
+  subject: string | null;
+  text_body: string | null;
+  html_body: string | null;
+  received_at: string | null;
+  created_at: string | null;
 };
 
 const CONTACT_SELECT_FIELDS =
@@ -125,6 +136,54 @@ const chunkArray = <T,>(items: T[], chunkSize: number) => {
     chunks.push(items.slice(index, index + chunkSize));
   }
   return chunks;
+};
+
+const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+const detectLanguageForContactEmail = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  email?: string | null
+) => {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
+  const escaped = escapeIlike(normalized);
+  const { data, error } = await supabase
+    .from("emails")
+    .select(
+      "from_email, to_email, subject, text_body, html_body, received_at, created_at"
+    )
+    .eq("direction", "inbound")
+    .or(`from_email.ilike.%${escaped}%,to_email.ilike.%${escaped}%`)
+    .limit(80);
+
+  if (error) {
+    throw error;
+  }
+
+  let bestText: string | null = null;
+  let bestTimestamp = 0;
+
+  (data as InboundLanguageRow[] | null)?.forEach((row) => {
+    const participants = new Set([
+      ...extractEmails(row.from_email),
+      ...extractEmails(row.to_email),
+    ]);
+    if (!participants.has(normalized)) return;
+
+    const candidateTimestamp = Math.max(
+      getTimestamp(row.received_at),
+      getTimestamp(row.created_at)
+    );
+    if (candidateTimestamp <= bestTimestamp) return;
+
+    bestTimestamp = candidateTimestamp;
+    bestText = [row.text_body, stripHtml(row.html_body), row.subject]
+      .filter(Boolean)
+      .join(" ");
+  });
+
+  return detectLanguageFromEmail(bestText);
 };
 
 export async function GET() {
@@ -306,7 +365,17 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ contact: data }, { status: 201 });
+    const language = await detectLanguageForContactEmail(supabase, data.email);
+
+    return NextResponse.json(
+      {
+        contact: {
+          ...data,
+          language,
+        },
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("POST /api/contacts unexpected error", error);
     return NextResponse.json(
