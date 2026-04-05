@@ -69,7 +69,18 @@ Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo al
 Fammi sapere cosa ti è più comodo.
 A presto,`;
 
-  // ... (defaultSignature stays same)
+  // Fallback signature if none in env
+  const defaultSignature = `
+<div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
+  <div style="font-weight: bold; font-size: 16px;">Pietro Montanti</div>
+  <div style="font-size: 14px;">Multi Instrumentalist, Composer for TV & Theatre</div>
+  <div style="font-size: 14px;">3515172560</div>
+  <div style="font-size: 14px;">P.IVA: 04593080239</div>
+  <div style="font-size: 14px;">Via Mulino Turri 9c, Negrar (VR)</div>
+  <div style="margin-top: 20px;">
+    <img src="https://crm-next-pietro.vercel.app/firma_pietro.png" alt="Pietro Montanti" width="320" style="display: block; max-width: 100%; height: auto;">
+  </div>
+</div>`;
 
   const finalSignature = signatureHtml || defaultSignature;
 
@@ -92,8 +103,7 @@ export const buildAutoFollowUpEmail2 = (name: string, signatureHtml?: string | n
 ti scrivo per un ultimo follow-up.
 Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali siano già soddisfatte.
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.
-Un saluto,
-Pietro`;
+Un saluto,`;
 
   // Fallback signature if none in env
   const defaultSignature = `
@@ -114,8 +124,7 @@ Pietro`;
 ti scrivo per un ultimo follow-up.<br>
 Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali siano già soddisfatte.<br>
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.<br><br>
-Un saluto,<br>
-Pietro${finalSignature}</div>`;
+Un saluto,${finalSignature}</div>`;
 
   return {
     subject: "Il tuo lavoro",
