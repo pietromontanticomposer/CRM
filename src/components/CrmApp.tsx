@@ -1023,7 +1023,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     };
 
     contacts.forEach((contact) => {
-      if (contact.status === "Non interessato") {
+      if (contact.status === "Non interessato" || contact.status === "Mantenimento rapporto") {
         return;
       }
       const nextActionDate = toDateKey(contact.next_action_at);
@@ -1418,14 +1418,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setFollowUpActionByContact((prev) => ({ ...prev, [contact.id]: "keepwarm" }));
 
     const today = getTodayDateInputValue();
-    const nextFollowUp = addMonthsToDateInputValue(today, KEEP_IN_TOUCH_MONTHS);
 
     const updatePayload: Record<string, unknown> = {
-      status: contact.status,
+      status: "Mantenimento rapporto",
       last_action_at: today,
-      last_action_note: `Mantenimento attivo (ogni ${KEEP_IN_TOUCH_MONTHS} mesi)`,
-      next_action_at: nextFollowUp,
-      next_action_note: KEEP_IN_TOUCH_NOTE,
+      last_action_note: `Mantenimento rapporto attivato`,
+      next_action_at: null,
+      next_action_note: null,
     };
 
     const response = await fetch(`/api/contacts/${contact.id}`, {
@@ -1468,7 +1467,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     const updated = payload.contact as Contact;
     applyContactUpdate(updated);
     setFollowUpMessage(
-      `Mantenimento attivo: reminder ogni ${KEEP_IN_TOUCH_MONTHS} mesi.`
+      `✓ Mantenimento rapporto attivato per ${contact.name ?? "contatto"}.`
     );
     setFollowUpActionByContact((prev) => {
       const next = { ...prev };
