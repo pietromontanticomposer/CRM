@@ -22,7 +22,7 @@ const STATUS_OPTIONS = [
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
-type ContactFolder = "Tutte" | "Follow-up" | Status;
+type ContactFolder = "Tutte" | Status;
 const NEW_CONTACT_STATUS_OPTIONS = ["Auto follow-up impostato", "In attesa di risposta"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
 
@@ -971,12 +971,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   }, [contacts, contactSearch]);
 
   const filteredContacts = useMemo(() => {
-    if (contactFolder === "Follow-up") {
-      const today = getTodayDateInputValue();
-      return searchedContacts.filter((contact) =>
-        isOpenFollowUpContact(contact, today)
-      );
-    }
     if (contactFolder === "Tutte") return searchedContacts;
     return searchedContacts.filter((contact) => contact.status === contactFolder);
   }, [searchedContacts, contactFolder]);
@@ -2764,18 +2758,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               >
                 Tutte
                 <span className="ml-1 text-[10px] opacity-80">{contacts.length}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setContactFolder("Follow-up")}
-                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
-                  contactFolder === "Follow-up"
-                    ? toneStyles.warning
-                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
-                }`}
-              >
-                Follow-up
-                <span className="ml-1 text-[10px] opacity-80">{followUpCount}</span>
               </button>
               {STATUS_OPTIONS.map((status) => (
 

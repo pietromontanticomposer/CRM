@@ -10,7 +10,7 @@ const CATEGORY_THREAD_KEY = "__ai_category__";
 const DEFAULT_LIMIT = 40;
 const DEFAULT_RECENT_COUNT = 8;
 
-type AiCategory = "chiuso" | "interessato" | "non_interessato";
+type AiCategory = "risposta_ricevuta" | "non_interessato";
 
 type CategoryPayload = {
   category?: string;
@@ -77,9 +77,15 @@ const normalizeCategory = (value?: string | null): AiCategory | null => {
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/[^a-z_]/g, "");
-  if (cleaned === "chiuso" || cleaned === "chiusi") return "chiuso";
-  if (cleaned === "interessato" || cleaned === "interessati")
-    return "interessato";
+  if (
+    cleaned === "chiuso" ||
+    cleaned === "chiusi" ||
+    cleaned === "risposta_ricevuta" ||
+    cleaned === "interessato" ||
+    cleaned === "interessati"
+  ) {
+    return "risposta_ricevuta";
+  }
   if (
     cleaned === "non_interessato" ||
     cleaned === "noninteressato" ||
@@ -99,12 +105,12 @@ const normalizeConfidence = (value?: number | null) => {
 
 const mapCategoryToStatus = (category: AiCategory) => {
   switch (category) {
-    case "interessato":
-      return "Interessato";
+    case "risposta_ricevuta":
+      return "Risposta ricevuta";
     case "non_interessato":
       return "Non interessato";
     default:
-      return "Interessato";
+      return "Risposta ricevuta";
   }
 };
 
@@ -121,15 +127,15 @@ const buildPrompt = ({
     "Sei un assistente che classifica i contatti in base alle email piu recenti.",
     "Restituisci SOLO JSON valido con queste chiavi:",
     "category, confidence, reason.",
-    "category deve essere solo una di: interessato, non_interessato.",
-    "Se non sei sicuro, usa interessato.",
+    "category deve essere solo una di: risposta_ricevuta, non_interessato.",
+    "Se non sei sicuro, usa risposta_ricevuta.",
     "confidence e un numero tra 0 e 1.",
     "reason e una frase breve (max 120 caratteri).",
     "Non basarti su parole chiave: valuta il contesto e il significato.",
     "Esempi:",
-    "- interessato: chiede info, conferma disponibilita, prosegue il dialogo.",
+    "- risposta_ricevuta: chiede info, conferma disponibilita, prosegue il dialogo.",
     "- non_interessato: rifiuta, declina, dice che non serve/ non e il momento.",
-    "- interessato: collaborazione conclusa o dialogo attivo.",
+    "- risposta_ricevuta: collaborazione conclusa o dialogo attivo.",
     "",
     `Contatto: ${contactName ?? "Sconosciuto"} (${contactEmail ?? "—"})`,
     "",
