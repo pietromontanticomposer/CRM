@@ -2713,23 +2713,30 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   </span>
                 </button>
                 <div className="ml-2 grid gap-1.5 border-l-2 border-sky-500/20 pl-3">
-                  {STATUS_GROUPS["In attesa di risposta"].map((status) => (
+                  {STATUS_GROUPS["In attesa di risposta"].map((status) => {
+                    const isAutoFollowUp = status === "Auto follow-up impostato";
+                    const isSelected = contactFolder === status;
+                    return (
                     <button
                       key={status}
                       type="button"
                       onClick={() => setContactFolder(status)}
                       className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
-                        contactFolder === status
+                        isSelected
                           ? statusStyles[status]
                           : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
-                      }${status === "Auto follow-up impostato" ? " animate-pulse" : ""}`}
+                      }`}
+                      style={isAutoFollowUp ? {
+                        animation: "autoFollowPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                      } : undefined}
                     >
                       <span>{status}</span>
                       <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
                         {counts[status] ?? 0}
                       </span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
