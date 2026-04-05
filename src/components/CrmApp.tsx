@@ -24,6 +24,7 @@ const STATUS_OPTIONS = [
   "Azione richiesta",
   "Non interessato",
   "Mantenimento rapporto",
+  "Collaborazione stabilita",
   "Call prenotata",
 ] as const;
 
@@ -31,7 +32,13 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Attiva auto follow-up", "In attesa"],
-  "Risposta ricevuta": ["Azione richiesta", "Non interessato", "Mantenimento rapporto", "Call prenotata"],
+  "Risposta ricevuta": [
+    "Azione richiesta",
+    "Non interessato",
+    "Mantenimento rapporto",
+    "Collaborazione stabilita",
+    "Call prenotata",
+  ],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -142,6 +149,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Azione richiesta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Mantenimento rapporto": "bg-teal-500/15 text-teal-200 border-teal-400/30",
+    "Collaborazione stabilita": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
     "Call prenotata": "bg-violet-500/15 text-violet-200 border-violet-400/30",
   },
   light: {
@@ -150,6 +158,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Azione richiesta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Mantenimento rapporto": "border-teal-300 bg-teal-50 text-teal-800",
+    "Collaborazione stabilita": "border-emerald-300 bg-emerald-50 text-emerald-800",
     "Call prenotata": "border-violet-300 bg-violet-50 text-violet-800",
   },
 };
@@ -252,7 +261,10 @@ const toDateKey = (value?: string | null) => {
 };
 
 const isOpenFollowUpContact = (contact: Contact, today: string) => {
-  if (contact.status === "Non interessato") {
+  if (
+    contact.status === "Non interessato" ||
+    contact.status === "Collaborazione stabilita"
+  ) {
     return false;
   }
   const nextActionDate = toDateKey(contact.next_action_at);
@@ -1055,7 +1067,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     };
 
     contacts.forEach((contact) => {
-      if (contact.status === "Non interessato" || contact.status === "Mantenimento rapporto") {
+      if (
+        contact.status === "Non interessato" ||
+        contact.status === "Mantenimento rapporto" ||
+        contact.status === "Collaborazione stabilita"
+      ) {
         return;
       }
       const nextActionDate = toDateKey(contact.next_action_at);
@@ -1959,7 +1975,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const renderContactDetails = (contactId: string) => {
     if (!selected || !draft || selected.id !== contactId) return null;
     const remindersDisabled =
-      draft.status === "Non interessato";
+      draft.status === "Non interessato" ||
+      draft.status === "Collaborazione stabilita";
 
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-sm">
@@ -2125,12 +2142,17 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                               type="button"
                               onClick={async () => {
                                 const scrollY = window.scrollY;
+                                const shouldClearNextAction =
+                                  status === "Non interessato" ||
+                                  status === "Collaborazione stabilita";
                                 setDraft((prev) =>
                                   prev
                                     ? {
                                         ...prev,
                                         status: status as Status,
-                                        ...(status === "Non interessato" ? { next_action_at: "", next_action_note: "" } : {}),
+                                        ...(shouldClearNextAction
+                                          ? { next_action_at: "", next_action_note: "" }
+                                          : {}),
                                       }
                                     : prev
                                 );
@@ -2141,7 +2163,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       status,
-                                      ...(status === "Non interessato" ? { next_action_at: null, next_action_note: null } : {}),
+                                      ...(shouldClearNextAction
+                                        ? { next_action_at: null, next_action_note: null }
+                                        : {}),
                                     }),
                                   });
                                   if (res.ok) {

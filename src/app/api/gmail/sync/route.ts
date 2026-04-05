@@ -284,7 +284,7 @@ const getFollowUpDays = () => {
 };
 
 const shouldSkipFollowUp = (status?: string | null) =>
-  status === "Non interessato";
+  status === "Non interessato" || status === "Collaborazione stabilita";
 
 const updateContactAfterOutbound = async (
   contactId: string,

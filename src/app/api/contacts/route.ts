@@ -162,7 +162,7 @@ export async function GET() {
 
       // Se non hanno mai risposto e abbiamo mandato almeno una mail,
       // e lo stato non è già uno di quelli terminali o l'auto follow-up
-      if (!lastInbound && lastOutbound > 0 && effectiveStatus !== "Attiva auto follow-up" && !["Non interessato", "Call prenotata", "Mantenimento rapporto"].includes(contact.status as string)) {
+      if (!lastInbound && lastOutbound > 0 && effectiveStatus !== "Attiva auto follow-up" && !["Non interessato", "Call prenotata", "Mantenimento rapporto", "Collaborazione stabilita"].includes(contact.status as string)) {
         effectiveStatus = "In attesa";
       }
 
