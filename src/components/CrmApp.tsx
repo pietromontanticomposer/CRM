@@ -21,7 +21,7 @@ import {
 const STATUS_OPTIONS = [
   "Attiva auto follow-up",
   "In attesa",
-  "Risposta ricevuta",
+  "Azione richiesta",
   "Non interessato",
   "Mantenimento rapporto",
   "Call prenotata",
@@ -31,7 +31,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Attiva auto follow-up", "In attesa"],
-  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Call prenotata"],
+  "Risposta ricevuta": ["Azione richiesta", "Non interessato", "Call prenotata"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -139,7 +139,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   dark: {
     "Attiva auto follow-up": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
     "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
-    "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
+    "Azione richiesta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
     "Mantenimento rapporto": "bg-teal-500/15 text-teal-200 border-teal-400/30",
     "Call prenotata": "bg-violet-500/15 text-violet-200 border-violet-400/30",
@@ -147,7 +147,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
   light: {
     "Attiva auto follow-up": "border-indigo-300 bg-indigo-50 text-indigo-800",
     "In attesa": "border-sky-300 bg-sky-50 text-sky-800",
-    "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
+    "Azione richiesta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
     "Mantenimento rapporto": "border-teal-300 bg-teal-50 text-teal-800",
     "Call prenotata": "border-violet-300 bg-violet-50 text-violet-800",
@@ -241,7 +241,7 @@ const addDaysToDateInputValue = (dateInput: string, days: number) => {
 };
 
 const buildRecontactReminderNote = (days: number) =>
-  `Risposta ricevuta - ricontattare tra ${days} giorni`;
+  `Azione richiesta - ricontattare tra ${days} giorni`;
 
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
@@ -2042,7 +2042,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     <div className="mt-1 grid gap-2 border-t border-amber-200/50 dark:border-amber-900/30 pt-3">
                       <p className="px-1 text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Specifica esito:</p>
                       {STATUS_GROUPS["Risposta ricevuta"]
-                        .filter(status => status !== "Risposta ricevuta")
                         .map((status) => {
                         const isActive = draft.status === status;
                         const baseStyles = statusStylesByTheme[theme][status as Status];
