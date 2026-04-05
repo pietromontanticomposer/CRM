@@ -16,7 +16,7 @@ const STATUS_OPTIONS = [
   "Auto follow impostato",
   "Risposta ricevuta",
   "Non interessato",
-  "Ricontattare",
+  "Rimanere in contatto",
   "Call prenotata",
 ] as const;
 
@@ -125,14 +125,14 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Auto follow impostato": "bg-indigo-500/15 text-indigo-200 border-indigo-400/30",
     "Risposta ricevuta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
-    "Ricontattare": "bg-orange-500/15 text-orange-200 border-orange-400/30",
+    "Rimanere in contatto": "bg-orange-500/15 text-orange-200 border-orange-400/30",
     "Call prenotata": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
   },
   light: {
     "Auto follow impostato": "border-indigo-300 bg-indigo-50 text-indigo-800",
     "Risposta ricevuta": "border-amber-300 bg-amber-50 text-amber-800",
     "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
-    "Ricontattare": "border-orange-300 bg-orange-50 text-orange-800",
+    "Rimanere in contatto": "border-orange-300 bg-orange-50 text-orange-800",
     "Call prenotata": "border-emerald-300 bg-emerald-50 text-emerald-800",
   },
 };
@@ -223,7 +223,7 @@ const addDaysToDateInputValue = (dateInput: string, days: number) => {
 };
 
 const buildRecontactReminderNote = (days: number) =>
-  `Ricontattare tra ${days} giorni`;
+  `Rimanere in contatto tra ${days} giorni`;
 
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
@@ -1884,7 +1884,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             <div
               className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.warning}`}
             >
-              Non interessato · non ricontattare
+              Non interessato · non rimanere in contatto
             </div>
           )}
           <div className="grid gap-3">
@@ -2002,7 +2002,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   
                   <div className="mt-2 grid grid-cols-1 gap-2 border-t border-amber-200 pt-3 dark:border-amber-900/50">
                     <p className="text-[9px] font-bold uppercase text-amber-600/70 dark:text-amber-500/50 mb-1">Seleziona esito:</p>
-                    {["Non interessato", "Ricontattare", "Call prenotata"].map((status) => {
+                    {["Non interessato", "Rimanere in contatto", "Call prenotata"].map((status) => {
                       const isActive = draft.status === status;
                       const baseStyles = statusStylesByTheme[theme][status as Status];
 
@@ -2179,7 +2179,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                       : prev
                   )
                 }
-                placeholder="Ricontattare tra 7 giorni"
+                placeholder="Rimanere in contatto tra 7 giorni"
               />
             </div>
           </div>
@@ -2866,7 +2866,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         </div>
                         <div className="break-words text-xs text-[var(--muted)]">
                           {contact.status === "Non interessato" ? (
-                            <>Non interessato · non ricontattare</>
+                            <>Non interessato · non rimanere in contatto</>
                           ) : !contact.last_action_at ? (
                             <>Prossima azione: Impostare Auto Follow-up</>
                           ) : (
