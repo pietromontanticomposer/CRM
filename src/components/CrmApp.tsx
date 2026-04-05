@@ -2487,7 +2487,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden px-6 pb-16 pt-6 sm:px-10">
+    <div className="relative flex min-h-screen flex-col px-6 pb-16 pt-6 sm:px-10">
       <header className="relative mx-auto mb-10 flex w-full max-w-7xl flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
