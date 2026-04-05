@@ -106,11 +106,11 @@ const normalizeConfidence = (value?: number | null) => {
 const mapCategoryToStatus = (category: AiCategory) => {
   switch (category) {
     case "risposta_ricevuta":
-      return "In attesa";
+      return "Risposta ricevuta";
     case "non_interessato":
       return "Non interessato";
     default:
-      return "In attesa";
+      return "Risposta ricevuta";
   }
 };
 

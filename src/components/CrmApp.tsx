@@ -25,7 +25,7 @@ type Status = (typeof STATUS_OPTIONS)[number];
 
 const STATUS_GROUPS = {
   "In attesa di risposta": ["Auto follow-up impostato", "In attesa"],
-  "Risposta ricevuta": ["Non interessato", "Rimanere in contatto", "Call prenotata"],
+  "Risposta ricevuta": ["Risposta ricevuta", "Non interessato", "Rimanere in contatto", "Call prenotata"],
 } as const;
 
 type MacroStatus = keyof typeof STATUS_GROUPS;
@@ -2590,14 +2590,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
-              <div
-                className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles["Risposta ricevuta"]}`}
-              >
-                <span>Generico</span>
-                <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
-                  {counts["Risposta ricevuta"] ?? 0}
-                </span>
-              </div>
               {STATUS_GROUPS["Risposta ricevuta"].map((status) => (
                 <div
                   key={status}
