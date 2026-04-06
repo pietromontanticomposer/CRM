@@ -154,13 +154,13 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "Call prenotata": "bg-violet-500/15 text-violet-200 border-violet-400/30",
   },
   light: {
-    "Attiva auto follow-up": "border-indigo-300 bg-indigo-50 text-indigo-800",
-    "In attesa": "border-sky-300 bg-sky-50 text-sky-800",
-    "Azione richiesta": "border-amber-300 bg-amber-50 text-amber-800",
-    "Non interessato": "border-rose-300 bg-rose-50 text-rose-800",
-    "Mantenimento rapporto": "border-teal-300 bg-teal-50 text-teal-800",
-    "Collaborazione stabilita": "border-emerald-300 bg-emerald-50 text-emerald-800",
-    "Call prenotata": "border-violet-300 bg-violet-50 text-violet-800",
+    "Attiva auto follow-up": "border-indigo-500 bg-indigo-100 text-indigo-900",
+    "In attesa": "border-sky-500 bg-sky-100 text-sky-900",
+    "Azione richiesta": "border-amber-500 bg-amber-100 text-amber-900",
+    "Non interessato": "border-rose-500 bg-rose-100 text-rose-900",
+    "Mantenimento rapporto": "border-teal-500 bg-teal-100 text-teal-900",
+    "Collaborazione stabilita": "border-emerald-500 bg-emerald-100 text-emerald-900",
+    "Call prenotata": "border-violet-500 bg-violet-100 text-violet-900",
   },
 };
 
@@ -857,7 +857,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const toneStyles = toneStylesByTheme[theme];
   const deleteButtonClass =
     theme === "light"
-      ? "rounded-full border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 transition hover:border-red-400 hover:bg-red-50 disabled:opacity-60"
+      ? "rounded-full border border-red-600 bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
       : "rounded-full border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400/70 hover:bg-red-500/10 disabled:opacity-60";
   const keepInTouchButtonClass =
     theme === "light"
@@ -2109,7 +2109,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                         className={`w-full rounded-xl border px-4 py-2 text-left text-xs font-bold ${
                           isActive
                             ? "border-indigo-600 bg-indigo-600 text-white shadow-sm scale-[1.02]"
-                            : "border-indigo-200 bg-[var(--panel)] text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 opacity-60 hover:opacity-100"
+                            : "border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 dark:text-indigo-400"
                         }${isAutoFollowUp && isActive ? " auto-follow-pulse" : " transition-all"}`}
                       >
                         ↳ {getStatusLabel(status)}
@@ -2190,7 +2190,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                               className={`rounded-xl border px-4 py-2 text-left text-xs font-bold transition-all ${baseStyles} ${
                                 isActive
                                   ? "shadow-md scale-[1.02] ring-1 ring-current"
-                                  : "opacity-40 hover:opacity-100 hover:scale-[1.01]"
+                                  : "hover:scale-[1.01]"
                               }${
                                 status === "Mantenimento rapporto" && isActive
                                   ? " maintain-rapport-pulse"
