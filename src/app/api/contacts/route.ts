@@ -38,7 +38,8 @@ type ContactEmailContentRow = {
   html_body: string | null;
 };
 
-type InboundLanguageRow = {
+type LanguageCandidateRow = {
+  direction: "inbound" | "outbound" | null;
   from_email: string | null;
   to_email: string | null;
   subject: string | null;
@@ -151,11 +152,10 @@ const detectLanguageForContactEmail = async (
   const { data, error } = await supabase
     .from("emails")
     .select(
-      "from_email, to_email, subject, text_body, html_body, received_at, created_at"
+      "direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
     )
-    .eq("direction", "inbound")
     .or(`from_email.ilike.%${escaped}%,to_email.ilike.%${escaped}%`)
-    .limit(80);
+    .limit(120);
 
   if (error) {
     throw error;
@@ -164,7 +164,7 @@ const detectLanguageForContactEmail = async (
   let bestText: string | null = null;
   let bestTimestamp = 0;
 
-  (data as InboundLanguageRow[] | null)?.forEach((row) => {
+  (data as LanguageCandidateRow[] | null)?.forEach((row) => {
     const participants = new Set([
       ...extractEmails(row.from_email),
       ...extractEmails(row.to_email),
@@ -220,6 +220,7 @@ export async function GET() {
     const lastInboundAtByContactId = new Map<string, string>();
     const lastOutboundAtByContactId = new Map<string, string>();
     const latestInboundEmailIdByContactId = new Map<string, string>();
+    const latestOutboundEmailIdByContactId = new Map<string, string>();
 
     (contactEmails ?? []).forEach((row) => {
       const email = row as unknown as ContactEmailRow;
@@ -237,17 +238,21 @@ export async function GET() {
         const current = lastOutboundAtByContactId.get(email.contact_id);
         if (getTimestamp(candidate) > getTimestamp(current)) {
           lastOutboundAtByContactId.set(email.contact_id, candidate);
+          latestOutboundEmailIdByContactId.set(email.contact_id, email.id);
         }
       }
     });
 
-    const latestInboundIds = Array.from(
-      new Set(latestInboundEmailIdByContactId.values())
+    const latestLanguageCandidateIds = Array.from(
+      new Set([
+        ...latestInboundEmailIdByContactId.values(),
+        ...latestOutboundEmailIdByContactId.values(),
+      ])
     );
     const latestInboundTextByEmailId = new Map<string, string>();
 
-    if (latestInboundIds.length > 0) {
-      const idChunks = chunkArray(latestInboundIds, 200);
+    if (latestLanguageCandidateIds.length > 0) {
+      const idChunks = chunkArray(latestLanguageCandidateIds, 200);
 
       for (const chunk of idChunks) {
         const { data: inboundContentRows, error: inboundContentError } =
@@ -320,11 +325,17 @@ export async function GET() {
         last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
         activity_at: best,
-        language: detectLanguageFromEmail(
-          latestInboundTextByEmailId.get(
-            latestInboundEmailIdByContactId.get(contact.id) ?? ""
-          ) ?? null
-        ),
+        language:
+          detectLanguageFromEmail(
+            latestInboundTextByEmailId.get(
+              latestInboundEmailIdByContactId.get(contact.id) ?? ""
+            ) ?? null
+          ) ??
+          detectLanguageFromEmail(
+            latestInboundTextByEmailId.get(
+              latestOutboundEmailIdByContactId.get(contact.id) ?? ""
+            ) ?? null
+          ),
       };
     });
 
