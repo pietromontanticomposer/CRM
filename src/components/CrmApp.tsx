@@ -2962,14 +2962,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               </span>
             </div>
 
-            <div className="mt-3">
-              <input
-                placeholder="Cerca contatto (nome, email, produzione...)"
-                value={contactSearch}
-                onChange={(event) => setContactSearch(event.target.value)}
-              />
-            </div>
-
             <div className="mt-4 flex flex-col gap-5">
               {/* Filtro Tutte */}
               <button
@@ -3070,6 +3062,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
             </div>
 
+            <div className="mt-3">
+              <input
+                placeholder="Cerca contatto (nome, email, produzione...)"
+                value={contactSearch}
+                onChange={(event) => setContactSearch(event.target.value)}
+              />
+            </div>
             </div>
 
             <div className="mt-4 grid gap-3">
