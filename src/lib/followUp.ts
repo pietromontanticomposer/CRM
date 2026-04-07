@@ -83,6 +83,10 @@ export const extractFirstName = (fullName: string) => {
   return firstPart.charAt(0).toUpperCase() + firstPart.slice(1).toLowerCase();
 };
 
+/** Returns true when the contact is a production company (not "Regista e Produzione") */
+export const isProductionOnly = (role?: string | null) =>
+  role === "Produzione";
+
 export type FollowUpLanguage = "it" | "en";
 
 const getFollowUpLanguage = (value?: string | null): FollowUpLanguage =>
@@ -103,10 +107,12 @@ const DEFAULT_SIGNATURE_HTML = `
 export const buildAutoFollowUpEmail1 = (
   name: string,
   signatureHtml?: string | null,
-  language?: FollowUpLanguage | null
+  language?: FollowUpLanguage | null,
+  role?: string | null
 ) => {
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
+  const plural = isProductionOnly(role);
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
@@ -114,7 +120,13 @@ just a quick follow-up to my previous email.
 If it makes sense to chat, I am available next Monday or Tuesday at 4:00 PM (CET).
 Let me know what works best for you.
 Best,`
-      : `Ciao ${firstName}!,
+      : plural
+        ? `Buongiorno,
+vi scrivo per riprendere velocemente la mia ultima mail.
+Se può avere senso sentirci, sono disponibile lunedì o martedì prossimo alle 16.
+Fatemi sapere cosa vi è più comodo.
+A presto,`
+        : `Ciao ${firstName}!,
 ti scrivo per riprendere velocemente la mia ultima mail.
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.
 Fammi sapere cosa ti è più comodo.
@@ -129,7 +141,13 @@ just a quick follow-up to my previous email.<br>
 If it makes sense to chat, I am available next Monday or Tuesday at 4:00 PM (CET).<br>
 Let me know what works best for you.<br><br>
 Best,${finalSignature}</div>`
-      : `<div>Ciao ${firstName}!,<br><br>
+      : plural
+        ? `<div>Buongiorno,<br><br>
+vi scrivo per riprendere velocemente la mia ultima mail.<br>
+Se può avere senso sentirci, sono disponibile lunedì o martedì prossimo alle 16.<br>
+Fatemi sapere cosa vi è più comodo.<br><br>
+A presto,${finalSignature}</div>`
+        : `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per riprendere velocemente la mia ultima mail.<br>
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.<br>
 Fammi sapere cosa ti è più comodo.<br><br>
@@ -145,10 +163,12 @@ A presto,${finalSignature}</div>`;
 export const buildAutoFollowUpEmail2 = (
   name: string,
   signatureHtml?: string | null,
-  language?: FollowUpLanguage | null
+  language?: FollowUpLanguage | null,
+  role?: string | null
 ) => {
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
+  const plural = isProductionOnly(role);
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
@@ -156,7 +176,13 @@ this is my last follow-up.
 Since I have not heard back, I assume your music needs are currently already covered.
 If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week.
 Best regards,`
-      : `Ciao ${firstName}!,
+      : plural
+        ? `Buongiorno,
+vi scrivo per un ultimo follow-up.
+Non avendo ricevuto risposta, presumo che al momento le vostre esigenze musicali siano già soddisfatte.
+Se volete comunque sentirci, fatemi sapere e sono disponibile a fissare una call su Zoom questa settimana.
+Un saluto,`
+        : `Ciao ${firstName}!,
 ti scrivo per un ultimo follow-up.
 Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali siano già soddisfatte.
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.
@@ -171,7 +197,13 @@ this is my last follow-up.<br>
 Since I have not heard back, I assume your music needs are currently already covered.<br>
 If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week.<br><br>
 Best regards,${finalSignature}</div>`
-      : `<div>Ciao ${firstName}!,<br><br>
+      : plural
+        ? `<div>Buongiorno,<br><br>
+vi scrivo per un ultimo follow-up.<br>
+Non avendo ricevuto risposta, presumo che al momento le vostre esigenze musicali siano già soddisfatte.<br>
+Se volete comunque sentirci, fatemi sapere e sono disponibile a fissare una call su Zoom questa settimana.<br><br>
+Un saluto,${finalSignature}</div>`
+        : `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per un ultimo follow-up.<br>
 Non avendo ricevuto risposta, presumo che al momento le tue esigenze musicali siano già soddisfatte.<br>
 Se vuoi comunque sentirci, fammi sapere e sono disponibile a fissare una call su Zoom questa settimana.<br><br>
@@ -187,10 +219,12 @@ Un saluto,${finalSignature}</div>`;
 export const buildMaintainRapportEmail = (
   name: string,
   signatureHtml?: string | null,
-  language?: FollowUpLanguage | null
+  language?: FollowUpLanguage | null,
+  role?: string | null
 ) => {
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
+  const plural = isProductionOnly(role);
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
@@ -202,7 +236,17 @@ I have been meaning to reconnect and I would be glad to be in touch again. I was
 In the meantime, I also updated my website (https://www.pietromontanti.com/) and collected some recent work on SoundCloud (https://soundcloud.com/pietromontanticomposer), many selected at international festivals, so feel free to have a look if you like.
 
 Best regards,`
-      : `Ciao ${firstName}!,
+      : plural
+        ? `Buongiorno,
+
+spero stiate bene.
+
+È da un po' che pensavo di ricontattarvi e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i vostri progetti in questo periodo.
+
+Nel frattempo ho aggiornato anche il mio sito (https://www.pietromontanti.com/) e raccolto alcuni lavori recenti su SoundCloud (https://soundcloud.com/pietromontanticomposer) molti selezionati in festival internazionali quindi se vi fa piacere potete dare un'occhiata!
+
+Un saluto,`
+        : `Ciao ${firstName}!,
 
 spero tu stia bene.
 
@@ -221,7 +265,13 @@ I hope you are doing well.<br><br>
 I have been meaning to reconnect and I would be glad to be in touch again. I was wondering how your projects are going these days.<br><br>
 In the meantime, I also updated my website (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) and collected some recent work on <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a>, many selected at international festivals, so feel free to have a look if you like.<br><br>
 Best regards,${finalSignature}</div>`
-      : `<div>Ciao ${firstName}!,<br><br>
+      : plural
+        ? `<div>Buongiorno,<br><br>
+spero stiate bene.<br><br>
+È da un po' che pensavo di ricontattarvi e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i vostri progetti in questo periodo.<br><br>
+Nel frattempo ho aggiornato anche il mio sito (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) e raccolto alcuni lavori recenti su <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a> molti selezionati in festival internazionali quindi se vi fa piacere potete dare un'occhiata!<br><br>
+Un saluto,${finalSignature}</div>`
+        : `<div>Ciao ${firstName}!,<br><br>
 spero tu stia bene.<br><br>
 È da un po' che pensavo di risentirti e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i tuoi progetti in questo periodo.<br><br>
 Nel frattempo ho aggiornato anche il mio sito (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) e raccolto alcuni lavori recenti su <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a> molti selezionati in festival internazionali quindi se ti fa piacere puoi dare un'occhiata!<br><br>

@@ -240,8 +240,8 @@ const handleReminderRun = async (request: Request) => {
       // Automatic Follow-up
       const emailContent =
         stage === 1
-          ? buildAutoFollowUpEmail1(contact.name, signatureHtml, language)
-          : buildAutoFollowUpEmail2(contact.name, signatureHtml, language);
+          ? buildAutoFollowUpEmail1(contact.name, signatureHtml, language, contact.role)
+          : buildAutoFollowUpEmail2(contact.name, signatureHtml, language, contact.role);
 
       // Try to find the last email for threading
       const { data: lastEmail } = await supabase
@@ -337,7 +337,8 @@ const handleReminderRun = async (request: Request) => {
       const emailContent = buildMaintainRapportEmail(
         contact.name,
         signatureHtml,
-        language
+        language,
+        contact.role
       );
 
       const { data: lastEmail } = await supabase

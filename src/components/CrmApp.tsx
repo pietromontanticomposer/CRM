@@ -1536,7 +1536,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         const emailContent = buildMaintainRapportEmail(
           contact.name ?? "",
           undefined,
-          contact.language ?? undefined
+          contact.language ?? undefined,
+          contact.role ?? undefined
         );
 
         // Trova l'ultima email per il threading (Re:)
