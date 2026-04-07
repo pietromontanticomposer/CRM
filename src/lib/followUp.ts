@@ -113,17 +113,18 @@ export const buildAutoFollowUpEmail1 = (
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
   const plural = isProductionOnly(role);
+  const fullName = name.trim();
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
 just a quick follow-up to my previous email.
 If it makes sense to chat, I am available next Monday or Tuesday at 4:00 PM (CET).
-Let me know what works best for you.
+Let me know what works best for you!
 Best,`
       : plural
-        ? `Buongiorno,
+        ? `Buongiorno team di ${fullName}!
 vi scrivo per riprendere velocemente la mia ultima mail.
-Se può avere senso sentirci, sono disponibile lunedì o martedì prossimo alle 16.
+Se può avere senso sentirci, sono disponibile lunedì o martedì prossimo alle 16!
 Fatemi sapere cosa vi è più comodo.
 A presto,`
         : `Ciao ${firstName}!,
@@ -139,12 +140,12 @@ A presto,`;
       ? `<div>Hi ${firstName},<br><br>
 just a quick follow-up to my previous email.<br>
 If it makes sense to chat, I am available next Monday or Tuesday at 4:00 PM (CET).<br>
-Let me know what works best for you.<br><br>
+Let me know what works best for you!<br><br>
 Best,${finalSignature}</div>`
       : plural
-        ? `<div>Buongiorno,<br><br>
+        ? `<div>Buongiorno team di ${fullName}!<br><br>
 vi scrivo per riprendere velocemente la mia ultima mail.<br>
-Se può avere senso sentirci, sono disponibile lunedì o martedì prossimo alle 16.<br>
+Se può avere senso sentirci, sono disponibile lunedì o martedì prossimo alle 16!<br>
 Fatemi sapere cosa vi è più comodo.<br><br>
 A presto,${finalSignature}</div>`
         : `<div>Ciao ${firstName}!,<br><br>
@@ -169,18 +170,19 @@ export const buildAutoFollowUpEmail2 = (
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
   const plural = isProductionOnly(role);
+  const fullName = name.trim();
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
 this is my last follow-up.
 Since I have not heard back, I assume your music needs are currently already covered.
-If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week.
+If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week!
 Best regards,`
       : plural
-        ? `Buongiorno,
+        ? `Buongiorno team di ${fullName}!
 vi scrivo per un ultimo follow-up.
 Non avendo ricevuto risposta, presumo che al momento le vostre esigenze musicali siano già soddisfatte.
-Se volete comunque sentirci, fatemi sapere e sono disponibile a fissare una call su Zoom questa settimana.
+Se volete comunque sentirci, fatemi sapere e sarò felice di fissare una call su Zoom questa settimana!
 Un saluto,`
         : `Ciao ${firstName}!,
 ti scrivo per un ultimo follow-up.
@@ -195,13 +197,13 @@ Un saluto,`;
       ? `<div>Hi ${firstName},<br><br>
 this is my last follow-up.<br>
 Since I have not heard back, I assume your music needs are currently already covered.<br>
-If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week.<br><br>
+If you would still like to connect, let me know and I will be happy to schedule a Zoom call this week!<br><br>
 Best regards,${finalSignature}</div>`
       : plural
-        ? `<div>Buongiorno,<br><br>
+        ? `<div>Buongiorno team di ${fullName}!<br><br>
 vi scrivo per un ultimo follow-up.<br>
 Non avendo ricevuto risposta, presumo che al momento le vostre esigenze musicali siano già soddisfatte.<br>
-Se volete comunque sentirci, fatemi sapere e sono disponibile a fissare una call su Zoom questa settimana.<br><br>
+Se volete comunque sentirci, fatemi sapere e sarò felice di fissare una call su Zoom questa settimana!<br><br>
 Un saluto,${finalSignature}</div>`
         : `<div>Ciao ${firstName}!,<br><br>
 ti scrivo per un ultimo follow-up.<br>
@@ -225,21 +227,22 @@ export const buildMaintainRapportEmail = (
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
   const plural = isProductionOnly(role);
+  const fullName = name.trim();
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
 
-I hope you are doing well.
+I hope you are doing well!
 
 I have been meaning to reconnect and I would be glad to be in touch again. I was wondering how your projects are going these days.
 
-In the meantime, I also updated my website (https://www.pietromontanti.com/) and collected some recent work on SoundCloud (https://soundcloud.com/pietromontanticomposer), many selected at international festivals, so feel free to have a look if you like.
+In the meantime, I also updated my website (https://www.pietromontanti.com/) and collected some recent work on SoundCloud (https://soundcloud.com/pietromontanticomposer), many selected at international festivals, so feel free to have a look if you like!
 
 Best regards,`
       : plural
-        ? `Buongiorno,
+        ? `Buongiorno team di ${fullName}!
 
-spero stiate bene.
+spero stiate bene!
 
 È da un po' che pensavo di ricontattarvi e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i vostri progetti in questo periodo.
 
@@ -261,13 +264,13 @@ Un saluto,`;
   const html =
     selectedLanguage === "en"
       ? `<div>Hi ${firstName},<br><br>
-I hope you are doing well.<br><br>
+I hope you are doing well!<br><br>
 I have been meaning to reconnect and I would be glad to be in touch again. I was wondering how your projects are going these days.<br><br>
-In the meantime, I also updated my website (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) and collected some recent work on <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a>, many selected at international festivals, so feel free to have a look if you like.<br><br>
+In the meantime, I also updated my website (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) and collected some recent work on <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a>, many selected at international festivals, so feel free to have a look if you like!<br><br>
 Best regards,${finalSignature}</div>`
       : plural
-        ? `<div>Buongiorno,<br><br>
-spero stiate bene.<br><br>
+        ? `<div>Buongiorno team di ${fullName}!<br><br>
+spero stiate bene!<br><br>
 È da un po' che pensavo di ricontattarvi e mi faceva piacere riallacciare il contatto. Mi chiedevo come stessero andando i vostri progetti in questo periodo.<br><br>
 Nel frattempo ho aggiornato anche il mio sito (<a href="https://www.pietromontanti.com/">pietromontanti.com</a>) e raccolto alcuni lavori recenti su <a href="https://soundcloud.com/pietromontanticomposer">SoundCloud</a> molti selezionati in festival internazionali quindi se vi fa piacere potete dare un'occhiata!<br><br>
 Un saluto,${finalSignature}</div>`
