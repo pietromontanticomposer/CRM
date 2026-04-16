@@ -882,7 +882,13 @@ const sortContacts = (contacts: Contact[]) =>
   [...contacts].sort((a, b) => {
     const aInbound = getTimestamp(a.last_inbound_email_at ?? null);
     const bInbound = getTimestamp(b.last_inbound_email_at ?? null);
+    // Chi ha risposto va prima di chi non ha mai risposto
+    const aHasReply = aInbound > 0 ? 1 : 0;
+    const bHasReply = bInbound > 0 ? 1 : 0;
+    if (aHasReply !== bHasReply) return bHasReply - aHasReply;
+    // Tra chi ha risposto, ordina per risposta più recente
     if (aInbound !== bInbound) return bInbound - aInbound;
+    // Fallback: attività generale
     const activityDiff =
       getContactActivityTimestamp(b) - getContactActivityTimestamp(a);
     if (activityDiff !== 0) return activityDiff;
