@@ -880,6 +880,9 @@ const getContactActivityTimestamp = (contact: Contact) =>
 
 const sortContacts = (contacts: Contact[]) =>
   [...contacts].sort((a, b) => {
+    const aInbound = getTimestamp(a.last_inbound_email_at ?? null);
+    const bInbound = getTimestamp(b.last_inbound_email_at ?? null);
+    if (aInbound !== bInbound) return bInbound - aInbound;
     const activityDiff =
       getContactActivityTimestamp(b) - getContactActivityTimestamp(a);
     if (activityDiff !== 0) return activityDiff;
