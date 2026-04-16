@@ -2305,6 +2305,13 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   useEffect(() => {
     void loadContacts();
     void loadEmailAccounts();
+    const onContactsRefresh = () => {
+      void loadContacts({ silent: true });
+    };
+    window.addEventListener("crm:contacts-refresh", onContactsRefresh);
+    return () => {
+      window.removeEventListener("crm:contacts-refresh", onContactsRefresh);
+    };
   }, []);
 
   const handleAdd = async (event: FormEvent) => {
