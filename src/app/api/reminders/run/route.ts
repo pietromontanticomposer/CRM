@@ -8,6 +8,9 @@ import {
   getAutomaticFollowUpStage,
   AUTO_FOLLOW_UP_2_NOTE,
   SECOND_FOLLOW_UP_DAYS,
+  DEAD_CONTACT_DAYS,
+  DEAD_CONTACT_CHECK_NOTE,
+  isDeadContactCheckNote,
   buildAutoFollowUpEmail1,
   buildAutoFollowUpEmail2,
   buildMaintainRapportEmail,
@@ -317,6 +320,7 @@ const handleReminderRun = async (request: Request) => {
     .lte("next_action_at", today)
     .neq("status", "Non interessato")
     .neq("status", "Collaborazione stabilita")
+    .neq("status", "Contatto morto")
     .order("next_action_at", { ascending: true });
 
   if (error) {
@@ -494,8 +498,8 @@ const handleReminderRun = async (request: Request) => {
           });
       } else {
         await updateContactForOwner(supabase, contact, {
-            next_action_at: null,
-            next_action_note: null,
+            next_action_at: addDaysToDateOnly(today, DEAD_CONTACT_DAYS),
+            next_action_note: DEAD_CONTACT_CHECK_NOTE,
             last_action_at: today,
             last_action_note: "Follow-up automatico 2/2 inviato (fine)",
           });
@@ -593,6 +597,23 @@ const handleReminderRun = async (request: Request) => {
         `Mantenimento rapporto inviato a ${contactLabel}`,
         emailContent.body.slice(0, 100) + "..."
       );
+    } else if (isDeadContactCheckNote(contact.next_action_note)) {
+      // 30 giorni dopo il 2° follow-up senza risposta → contatto morto
+      const contactLabel = getContactLabel(contact);
+      await updateContactForOwner(supabase, contact, {
+        next_action_at: null,
+        next_action_note: null,
+        status: "Contatto morto",
+      });
+
+      await supabase.from("notifications").insert({
+        type: "email_sent",
+        owner_id: contact.owner_id ?? null,
+        contact_id: contact.id,
+        email_id: null,
+        title: `Contatto morto: ${contactLabel}`,
+        body: "Nessuna risposta dopo 30 giorni dal secondo follow-up.",
+      });
     } else {
       // Manual Reminder to Pietro
       const body = buildBody(today, {

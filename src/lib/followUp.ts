@@ -10,6 +10,11 @@ export const FOLLOW_UP_TIME_ZONE = "Europe/Rome";
 export const AUTO_FOLLOW_UP_1_NOTE = "Follow-up automatico 1/2 (10 giorni)";
 export const AUTO_FOLLOW_UP_2_NOTE = `Follow-up automatico 2/2 (${SECOND_FOLLOW_UP_DAYS} giorni dal primo)`;
 
+export const DEAD_CONTACT_DAYS = 30;
+export const DEAD_CONTACT_CHECK_NOTE = `Verifica contatto morto (${DEAD_CONTACT_DAYS} giorni dal 2° follow-up)`;
+export const isDeadContactCheckNote = (value?: string | null) =>
+  !!value?.trim().startsWith("Verifica contatto morto");
+
 export const MANUAL_RECONTACT_NOTE_PREFIX = "Ricontatto programmato";
 export const buildManualRecontactNote = (days: number) =>
   `${MANUAL_RECONTACT_NOTE_PREFIX} (${days} giorni)`;
@@ -92,7 +97,7 @@ export type FollowUpLanguage = "it" | "en";
 const getFollowUpLanguage = (value?: string | null): FollowUpLanguage =>
   value === "en" ? "en" : "it";
 
-const DEFAULT_SIGNATURE_HTML = `
+export const DEFAULT_SIGNATURE_HTML = `
 <div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
   <div style="font-weight: bold; font-size: 16px;">Pietro Montanti</div>
   <div style="font-size: 14px;">Multi Instrumentalist, Composer for TV & Theatre</div>

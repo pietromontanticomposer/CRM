@@ -23,6 +23,7 @@ const STATUS_OPTIONS = [
   "In attesa",
   "Azione richiesta",
   "Non interessato",
+  "Contatto morto",
   "Mantenimento rapporto",
   "Collaborazione stabilita",
   "Call prenotata",
@@ -35,6 +36,7 @@ const STATUS_GROUPS = {
   "Risposta ricevuta": [
     "Azione richiesta",
     "Non interessato",
+    "Contatto morto",
     "Mantenimento rapporto",
     "Call prenotata",
     "Collaborazione stabilita",
@@ -46,6 +48,25 @@ type ContactFolder = "Tutte" | Status | MacroStatus;
 
 const NEW_CONTACT_STATUS_OPTIONS = ["Attiva auto follow-up", "In attesa"] as const;
 type NewContactStatus = (typeof NEW_CONTACT_STATUS_OPTIONS)[number];
+
+const emailProviderDefaults: Record<
+  EmailProvider,
+  Pick<EmailAccountDraft, "imapHost" | "imapPort">
+> = {
+  gmail: { imapHost: "imap.gmail.com", imapPort: "993" },
+  outlook: { imapHost: "outlook.office365.com", imapPort: "993" },
+  imap: { imapHost: "", imapPort: "993" },
+};
+
+const emptyEmailAccountDraft: EmailAccountDraft = {
+  provider: "gmail",
+  email: "",
+  username: "",
+  password: "",
+  imapHost: emailProviderDefaults.gmail.imapHost,
+  imapPort: emailProviderDefaults.gmail.imapPort,
+  mailbox: "",
+};
 
 type Contact = {
   id: string;
@@ -110,22 +131,39 @@ type EmailRow = {
   raw: Record<string, unknown> | null;
 };
 
-type SummaryPayload = {
-  one_liner?: string;
-  highlights?: string[];
-  open_questions?: string[];
-  next_actions?: string[];
-  last_inbound?: string;
-  last_outbound?: string;
+type EmailProvider = "gmail" | "outlook" | "imap";
+
+type EmailAccount = {
+  id: string;
+  provider: EmailProvider;
+  email: string;
+  display_name: string | null;
+  username: string | null;
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_secure: boolean | null;
+  mailbox: string | null;
+  sync_enabled: boolean | null;
+  sync_status: string | null;
+  last_sync_at: string | null;
+  last_error: string | null;
 };
 
-type SummaryState = {
-  raw: string;
-  parsed: SummaryPayload | null;
-  updatedAt?: string | null;
-  lastEmailAt?: string | null;
-  model?: string | null;
-  rateLimited?: boolean;
+type EmailAccountsApiResponse = {
+  ok?: boolean;
+  accounts?: EmailAccount[];
+  account?: EmailAccount;
+  error?: string;
+};
+
+type EmailAccountDraft = {
+  provider: EmailProvider;
+  email: string;
+  username: string;
+  password: string;
+  imapHost: string;
+  imapPort: string;
+  mailbox: string;
 };
 
 type ComposePreset =
@@ -149,6 +187,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "In attesa": "bg-sky-500/15 text-sky-200 border-sky-400/30",
     "Azione richiesta": "bg-amber-500/15 text-amber-200 border-amber-400/30",
     "Non interessato": "bg-rose-500/15 text-rose-200 border-rose-400/30",
+    "Contatto morto": "bg-gray-500/15 text-gray-400 border-gray-500/30",
     "Mantenimento rapporto": "bg-teal-500/15 text-teal-200 border-teal-400/30",
     "Collaborazione stabilita": "bg-emerald-500/15 text-emerald-200 border-emerald-400/30",
     "Call prenotata": "bg-violet-500/15 text-violet-200 border-violet-400/30",
@@ -158,6 +197,7 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
     "In attesa": "border-sky-500 bg-sky-100 text-sky-900",
     "Azione richiesta": "border-amber-500 bg-amber-100 text-amber-900",
     "Non interessato": "border-rose-500 bg-rose-100 text-rose-900",
+    "Contatto morto": "border-gray-400 bg-gray-100 text-gray-500",
     "Mantenimento rapporto": "border-teal-500 bg-teal-100 text-teal-900",
     "Collaborazione stabilita": "border-emerald-500 bg-emerald-100 text-emerald-900",
     "Call prenotata": "border-violet-500 bg-violet-100 text-violet-900",
@@ -181,11 +221,11 @@ const toneStylesByTheme = {
   light: {
     error: "border-red-300 bg-red-50 text-red-700",
     warning: "border-amber-300 bg-amber-50 text-amber-800",
-    success: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    success: "border-emerald-500 bg-emerald-50 text-emerald-900",
     danger: "border-rose-300 bg-rose-50 text-rose-800",
     inbound: "border-emerald-300 bg-emerald-50 text-emerald-800",
     outbound: "border-amber-300 bg-amber-50 text-amber-800",
-    keepInTouch: "border-cyan-300 bg-cyan-50 text-cyan-800",
+    keepInTouch: "border-teal-500 bg-teal-50 text-teal-900",
   },
 } as const;
 
@@ -253,6 +293,11 @@ const addDaysToDateInputValue = (dateInput: string, days: number) => {
 const buildRecontactReminderNote = (days: number) =>
   `Azione richiesta - ricontattare tra ${days} giorni`;
 
+const AUTOMATION_RUN_HOUR = 10;
+const MINUTE_MS = 60 * 1000;
+const AUTO_SYNC_THROTTLE_MS = 5 * MINUTE_MS;
+const OPEN_SYNC_CONCURRENCY = 2;
+
 const toDateKey = (value?: string | null) => {
   if (!value) return null;
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
@@ -271,6 +316,113 @@ const isOpenFollowUpContact = (contact: Contact, today: string) => {
   const nextActionDate = toDateKey(contact.next_action_at);
   if (!nextActionDate) return false;
   return nextActionDate <= today;
+};
+
+const getAutomationTargetDate = (value?: string | null) => {
+  const dateKey = toDateKey(value);
+  if (!dateKey) return null;
+
+  const target = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return null;
+  target.setHours(AUTOMATION_RUN_HOUR, 0, 0, 0);
+  return target;
+};
+
+const formatCountdownDuration = (milliseconds: number) => {
+  const totalMinutes = Math.max(1, Math.ceil(Math.abs(milliseconds) / MINUTE_MS));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) {
+    return hours > 0 ? `${days}g ${hours}h` : `${days}g`;
+  }
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+  }
+  return `${minutes}m`;
+};
+
+const formatAutomationTarget = (target: Date) =>
+  target.toLocaleString("it-IT", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const formatAutomationTime = (target: Date) =>
+  target.toLocaleTimeString("it-IT", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const getFollowUpSendStatus = (contact: Contact, nowMs: number) => {
+  const today = getTodayDateInputValue();
+  const lastActionToday = toDateKey(contact.last_action_at) === today;
+  const lastOutboundToday = toDateKey(contact.last_outbound_email_at) === today;
+  const lastActionNote = contact.last_action_note?.trim().toLowerCase() ?? "";
+  const sentFollowUpToday =
+    lastActionToday &&
+    lastActionNote.includes("follow-up") &&
+    lastActionNote.includes("inviato");
+
+  if (sentFollowUpToday) {
+    return { label: "Follow-up inviato oggi", sent: true };
+  }
+
+  const stage = getAutomaticFollowUpStage(contact.next_action_note);
+  const target = getAutomationTargetDate(contact.next_action_at);
+
+  if (stage && target && nowMs < target.getTime()) {
+    return {
+      label: `Non ancora inviato: parte alle ${formatAutomationTime(target)}`,
+      sent: false,
+    };
+  }
+
+  if (stage) {
+    return {
+      label: `Non risulta inviato - follow-up ${stage}/2`,
+      sent: false,
+    };
+  }
+
+  if (isManualRecontactNote(contact.next_action_note)) {
+    return { label: "Promemoria manuale, non invia mail", sent: false };
+  }
+
+  if (lastOutboundToday) {
+    return { label: "Email inviata oggi", sent: true };
+  }
+
+  return { label: "Da gestire, non risulta inviato", sent: false };
+};
+
+const getScheduledCountdown = (
+  nextActionAt: string | null | undefined,
+  nextActionNote: string | null | undefined,
+  nowMs: number
+) => {
+  const stage = getAutomaticFollowUpStage(nextActionNote);
+  const isMaintain = isMaintainRapportNote(nextActionNote);
+  if (!stage && !isMaintain) return null;
+
+  const target = getAutomationTargetDate(nextActionAt);
+  if (!target) return null;
+
+  const diff = target.getTime() - nowMs;
+  const duration = formatCountdownDuration(diff);
+  const isOverdue = diff < 0;
+
+  return {
+    kind: isMaintain ? "maintain" : "auto",
+    title: isMaintain ? "Mantenimento rapporto" : `Follow-up automatico ${stage}/2`,
+    label: isOverdue ? `In ritardo da ${duration}` : `Mancano ${duration}`,
+    targetLabel: formatAutomationTarget(target),
+    note: nextActionNote,
+  };
 };
 
 const extractEmails = (value?: string | null) => {
@@ -757,56 +909,9 @@ const buildDraft = (contact: Contact): DraftContact => ({
   notes: contact.notes,
 });
 
-const normalizeString = (value: unknown, maxLen = 0) => {
-  if (typeof value !== "string") return "";
-  const trimmed = value.trim();
-  if (!maxLen || trimmed.length <= maxLen) return trimmed;
-  return `${trimmed.slice(0, maxLen).trimEnd()}…`;
-};
-
-const normalizeSummary = (value: unknown): SummaryPayload | null => {
-  if (!value || typeof value !== "object") return null;
-  const source = value as SummaryPayload;
-  const normalized = {
-    one_liner: normalizeString(source.one_liner, 380),
-    highlights: [],
-    open_questions: [],
-    next_actions: [],
-    last_inbound: normalizeString(source.last_inbound, 160),
-    last_outbound: normalizeString(source.last_outbound, 160),
-  };
-  const hasContent = Boolean(
-    normalized.one_liner ||
-      normalized.last_inbound ||
-      normalized.last_outbound
-  );
-  return hasContent ? normalized : null;
-};
-
-const stripJsonWrapper = (value: string) => {
-  const trimmed = value.trim();
-  if (trimmed.startsWith("```")) {
-    const firstBreak = trimmed.indexOf("\n");
-    const lastFence = trimmed.lastIndexOf("```");
-    if (firstBreak !== -1 && lastFence > firstBreak) {
-      return trimmed.slice(firstBreak + 1, lastFence).trim();
-    }
-  }
-  const firstBrace = trimmed.indexOf("{");
-  const lastBrace = trimmed.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    return trimmed.slice(firstBrace, lastBrace + 1).trim();
-  }
-  return trimmed;
-};
-
-const parseSummary = (value?: string | null) => {
-  if (!value) return null;
-  try {
-    return normalizeSummary(JSON.parse(stripJsonWrapper(value)));
-  } catch {
-    return null;
-  }
+const PULSE_DURATION_MS = 2000;
+const notifyCrmNotificationsUpdated = () => {
+  window.dispatchEvent(new Event("crm:notifications-updated"));
 };
 
 export default function CrmApp({ theme }: { theme: CrmTheme }) {
@@ -825,12 +930,22 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [emails, setEmails] = useState<EmailRow[]>([]);
   const [emailsLoading, setEmailsLoading] = useState(false);
   const [emailsError, setEmailsError] = useState<string | null>(null);
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
+  const [emailAccountsLoading, setEmailAccountsLoading] = useState(false);
+  const [emailAccountsReady, setEmailAccountsReady] = useState(false);
+  const [emailAccountsError, setEmailAccountsError] = useState<string | null>(null);
+  const [selectedEmailAccountId, setSelectedEmailAccountId] = useState("");
+  const [showEmailAccountForm, setShowEmailAccountForm] = useState(false);
+  const [emailAccountDraft, setEmailAccountDraft] = useState<EmailAccountDraft>(
+    emptyEmailAccountDraft
+  );
+  const [emailAccountSaving, setEmailAccountSaving] = useState(false);
+  const [emailAccountTesting, setEmailAccountTesting] = useState(false);
+  const [emailAccountMessage, setEmailAccountMessage] = useState<string | null>(null);
   const [emailReadById, setEmailReadById] = useState<Record<string, boolean>>(
     {}
   );
-  const [summary, setSummary] = useState<SummaryState | null>(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [countdownNow, setCountdownNow] = useState(() => Date.now());
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [emailPreset, setEmailPreset] = useState<ComposePreset>("custom");
   const [emailSubject, setEmailSubject] = useState("");
@@ -851,8 +966,12 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [showMaintainWorkflow, setShowMaintainWorkflow] = useState(false);
   const [desktopSidebarHeight, setDesktopSidebarHeight] = useState<number | null>(null);
   const contentSectionRef = useRef<HTMLElement | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
   const emailRequestIdRef = useRef(0);
-  const summaryRequestIdRef = useRef(0);
+  const backfillContactIdsRef = useRef<Set<string>>(new Set());
+  const backfillCompletedAtRef = useRef<Record<string, number>>({});
+  const emailAccountSelectionReadyRef = useRef(false);
+  const openSyncStartedRef = useRef(false);
   const statusStyles = statusStylesByTheme[theme];
   const toneStyles = toneStylesByTheme[theme];
   const deleteButtonClass =
@@ -861,8 +980,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       : "rounded-full border border-red-500/40 px-4 py-2 text-sm font-semibold text-red-200 transition hover:border-red-400/70 hover:bg-red-500/10 disabled:opacity-60";
   const keepInTouchButtonClass =
     theme === "light"
-      ? "rounded-full border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-100 disabled:opacity-60"
-      : "rounded-full border border-cyan-400/40 bg-cyan-500/10 px-2 py-1 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:opacity-60";
+      ? "rounded-full border border-teal-700 bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-60"
+      : "rounded-full border border-teal-300/60 bg-teal-500/20 px-2 py-1 text-[11px] font-semibold text-teal-100 transition hover:bg-teal-500/30 disabled:opacity-60";
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
   const conversationRefreshing = Boolean(
@@ -884,9 +1003,64 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     );
     return sanitizeHtml(withInline);
   }, [selectedEmail?.html_body, selectedEmailAttachments, selectedEmail?.id]);
+  const activeEmailAccount =
+    emailAccounts.find((account) => account.id === selectedEmailAccountId) ||
+    null;
+  const activeEmailAccountLabel = activeEmailAccount
+    ? activeEmailAccount.display_name || activeEmailAccount.email
+    : emailAccounts.length > 0
+      ? "Tutte le caselle collegate"
+      : "Gmail attuale";
 
   useEffect(() => {
-    if (!contacts.length) {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCountdownNow(Date.now());
+    }, 30 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    let frameId = 0;
+
+    const updatePulseClock = () => {
+      const phase =
+        ((Date.now() % PULSE_DURATION_MS) / PULSE_DURATION_MS) * Math.PI * 2;
+      const strength = (1 - Math.cos(phase)) / 2;
+
+      root.style.setProperty(
+        "--crm-pulse-blur",
+        `${(strength * 16).toFixed(2)}px`
+      );
+      root.style.setProperty(
+        "--crm-pulse-spread",
+        `${(strength * 6).toFixed(2)}px`
+      );
+      root.style.setProperty(
+        "--crm-pulse-alpha",
+        (0.5 - strength * 0.1).toFixed(3)
+      );
+
+      frameId = window.requestAnimationFrame(updatePulseClock);
+    };
+
+    updatePulseClock();
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      root.style.removeProperty("--crm-pulse-blur");
+      root.style.removeProperty("--crm-pulse-spread");
+      root.style.removeProperty("--crm-pulse-alpha");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!contacts.length || !emailAccountsReady) {
       return;
     }
 
@@ -903,16 +1077,42 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       return;
     }
 
+    selectedIdRef.current = defaultContact.id;
     setSelectedId(defaultContact.id);
     setDraft(buildDraft(defaultContact));
     void loadEmails(defaultContact.id, defaultContact.email, {
       resetConversation: true,
     });
-  }, [contacts, selectedId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, selectedId, emailAccountsReady]);
+
+  useEffect(() => {
+    if (!emailAccountsReady || !contacts.length || openSyncStartedRef.current) {
+      return;
+    }
+
+    openSyncStartedRef.current = true;
+    void syncContactsOnOpen(contacts, emailAccounts);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contacts, emailAccounts, emailAccountsReady]);
 
   useEffect(() => {
     setShowMaintainWorkflow(false);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!emailAccountSelectionReadyRef.current) {
+      emailAccountSelectionReadyRef.current = true;
+      return;
+    }
+    if (!selected?.id) return;
+    void loadEmails(selected.id, selected.email, {
+      resetConversation: true,
+      emailAccountId: selectedEmailAccountId || null,
+      syncAllEmailAccounts: !selectedEmailAccountId,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEmailAccountId]);
 
   useEffect(() => {
     const updateSidebarHeight = () => {
@@ -974,7 +1174,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         if (!response.ok) return;
         const payload = (await response.json()) as { updated?: boolean };
         if (payload?.updated) {
-          await loadEmails(selected.id, selected.email, { background: true });
+          await loadEmails(selected.id, selected.email, {
+            background: true,
+            syncGmail: false,
+          });
         }
       } catch (error) {
         console.error(error);
@@ -1095,28 +1298,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     [emails]
   );
 
-  const summaryMeta = useMemo(() => {
-    if (!visibleEmails.length) return null;
-    const lastActivity =
-      visibleEmails[0]?.received_at ?? visibleEmails[0]?.created_at ?? null;
-    const unreadCount = visibleEmails.reduce((acc, email) => {
-      if (
-        email.direction === "inbound" &&
-        !(emailReadById[email.id] ?? true)
-      ) {
-        return acc + 1;
-      }
-      return acc;
-    }, 0);
-
-    return {
-      lastActivity,
-      unreadCount,
-      threadCount: new Set(visibleEmails.map((email) => getEmailThreadKey(email)))
-        .size,
-    };
-  }, [visibleEmails, emailReadById]);
-
   const loadContacts = async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!silent) {
@@ -1158,24 +1339,162 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     return nextContacts;
   };
 
+  const loadEmailAccounts = async () => {
+    setEmailAccountsReady(false);
+    setEmailAccountsLoading(true);
+    setEmailAccountsError(null);
+    const response = await fetch("/api/email-accounts", {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => null);
+
+    if (!response) {
+      setEmailAccountsError("Impossibile caricare gli account email.");
+      setEmailAccountsLoading(false);
+      setEmailAccountsReady(true);
+      return [] as EmailAccount[];
+    }
+
+    if (!response.ok) {
+      setEmailAccountsError(
+        await readApiError(response, "Impossibile caricare gli account email.")
+      );
+      setEmailAccountsLoading(false);
+      setEmailAccountsReady(true);
+      return [] as EmailAccount[];
+    }
+
+    const payload = (await response.json()) as EmailAccountsApiResponse;
+    const nextAccounts = payload.accounts || [];
+    setEmailAccounts(nextAccounts);
+    setSelectedEmailAccountId((prev) => {
+      if (prev && nextAccounts.some((account) => account.id === prev)) {
+        return prev;
+      }
+      return "";
+    });
+    setEmailAccountsLoading(false);
+    setEmailAccountsReady(true);
+    return nextAccounts;
+  };
+
+  const buildEmailAccountPayload = () => ({
+    provider: emailAccountDraft.provider,
+    email: emailAccountDraft.email,
+    username: emailAccountDraft.username || emailAccountDraft.email,
+    password: emailAccountDraft.password,
+    imapHost: emailAccountDraft.imapHost,
+    imapPort: Number(emailAccountDraft.imapPort || "993"),
+    imapSecure: true,
+    mailbox: emailAccountDraft.mailbox || null,
+  });
+
+  const handleEmailProviderChange = (provider: EmailProvider) => {
+    const defaults = emailProviderDefaults[provider];
+    setEmailAccountDraft((prev) => ({
+      ...prev,
+      provider,
+      imapHost: defaults.imapHost,
+      imapPort: defaults.imapPort,
+    }));
+    setEmailAccountMessage(null);
+    setEmailAccountsError(null);
+  };
+
+  const handleTestEmailAccount = async () => {
+    setEmailAccountTesting(true);
+    setEmailAccountMessage(null);
+    setEmailAccountsError(null);
+    const response = await fetch("/api/email-accounts/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildEmailAccountPayload()),
+    }).catch(() => null);
+
+    if (!response) {
+      setEmailAccountsError("Test connessione fallito.");
+      setEmailAccountTesting(false);
+      return false;
+    }
+
+    if (!response.ok) {
+      setEmailAccountsError(
+        await readApiError(response, "Test connessione fallito.")
+      );
+      setEmailAccountTesting(false);
+      return false;
+    }
+
+    setEmailAccountMessage("Connessione email riuscita.");
+    setEmailAccountTesting(false);
+    return true;
+  };
+
+  const handleSaveEmailAccount = async () => {
+    setEmailAccountSaving(true);
+    setEmailAccountMessage(null);
+    setEmailAccountsError(null);
+    const response = await fetch("/api/email-accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildEmailAccountPayload()),
+    }).catch(() => null);
+
+    if (!response) {
+      setEmailAccountsError("Impossibile salvare account email.");
+      setEmailAccountSaving(false);
+      return;
+    }
+
+    if (!response.ok) {
+      setEmailAccountsError(
+        await readApiError(response, "Impossibile salvare account email.")
+      );
+      setEmailAccountSaving(false);
+      return;
+    }
+
+    const payload = (await response.json()) as EmailAccountsApiResponse;
+    const account = payload.account;
+    if (account) {
+      setEmailAccounts((prev) => [account, ...prev]);
+      setSelectedEmailAccountId("");
+      setEmailAccountDraft(emptyEmailAccountDraft);
+      setShowEmailAccountForm(false);
+      setEmailAccountMessage("Account email collegato.");
+      void syncContactsOnOpen(contacts, [account]);
+    }
+    setEmailAccountSaving(false);
+  };
+
   const loadEmails = async (
     contactId: string | null,
     email?: string | null,
-    options?: { resetConversation?: boolean; background?: boolean }
+    options?: {
+      resetConversation?: boolean;
+      background?: boolean;
+      syncGmail?: boolean;
+      emailAccountId?: string | null;
+      syncAllEmailAccounts?: boolean;
+      forceSync?: boolean;
+    }
   ) => {
     const resetConversation = options?.resetConversation ?? false;
     const background = options?.background ?? false;
+    const syncGmail = options?.syncGmail ?? true;
+    const emailAccountId =
+      options?.emailAccountId === undefined
+        ? selectedEmailAccountId || null
+        : options.emailAccountId || null;
+    const syncAllEmailAccounts =
+      options?.syncAllEmailAccounts ?? !emailAccountId;
     if (!contactId) {
       emailRequestIdRef.current += 1;
-      summaryRequestIdRef.current += 1;
       setEmails([]);
       setSelectedEmailId(null);
       setEmailReadById({});
       setEmailsLoading(false);
       setEmailsError(null);
-      setSummary(null);
-      setSummaryLoading(false);
-      setSummaryError(null);
       return [] as EmailRow[];
     }
 
@@ -1183,23 +1502,21 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     emailRequestIdRef.current = requestId;
 
     if (resetConversation) {
-      summaryRequestIdRef.current += 1;
       setEmails([]);
       setSelectedEmailId(null);
       setEmailReadById({});
-      setSummary(null);
-      setSummaryLoading(false);
-      setSummaryError(null);
     }
 
     if (!background) {
       setEmailsLoading(true);
       setEmailsError(null);
     }
+
     const query = new URLSearchParams();
     if (email?.trim()) {
       query.set("email", email);
     }
+    query.set("limit", "150");
 
     const response = await fetch(
       `/api/contacts/${contactId}/emails${
@@ -1246,52 +1563,127 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setEmails(uniqueRows);
     setEmailReadById(readMap);
     setEmailsLoading(false);
+
+    if (syncGmail) {
+      const accountIds = syncAllEmailAccounts
+        ? emailAccounts.length > 0
+          ? emailAccounts.map((account) => account.id)
+          : [null]
+        : [emailAccountId];
+
+      void runBackfillForContact(contactId, email, accountIds, {
+        force: options?.forceSync ?? false,
+      }).then((synced) => {
+        if (!synced) return;
+        if (selectedIdRef.current === contactId) {
+          void loadEmails(contactId, email, {
+            background: true,
+            syncGmail: false,
+          });
+        }
+        void loadContacts({ silent: true });
+      });
+    }
+
     return uniqueRows;
   };
 
   const runBackfillForContact = async (
     contactId: string,
-    email?: string | null
+    email?: string | null,
+    emailAccountIds?: Array<string | null>,
+    options?: { force?: boolean; quiet?: boolean }
   ) => {
     const emailList = extractEmails(email);
-    if (!emailList.length) return;
-    if (backfillByContact[contactId] === "pending") return;
-
-    setBackfillByContact((prev) => ({ ...prev, [contactId]: "pending" }));
-    try {
-      let beforeUid: number | null = null;
-      let batchCount = 0;
-
-      while (batchCount < 20) {
-        const response = await fetch("/api/gmail/backfill-contact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            emails: emailList,
-            contactId,
-            limit: 400,
-            beforeUid,
-          }),
-        });
-        if (!response.ok) return;
-
-        const payload = (await response.json()) as {
-          nextCursor?: number | null;
-        };
-        const nextCursor =
-          typeof payload?.nextCursor === "number" && payload.nextCursor > 0
-            ? payload.nextCursor
-            : null;
-
-        batchCount += 1;
-        if (!nextCursor) {
-          break;
-        }
-        beforeUid = nextCursor;
+    if (!emailList.length) return true;
+    const accountIds =
+      emailAccountIds && emailAccountIds.length > 0 ? emailAccountIds : [null];
+    const uniqueAccountIds = Array.from(
+      new Set(accountIds.map((accountId) => accountId || null))
+    );
+    const backfillKey = `${contactId}:${uniqueAccountIds
+      .map((accountId) => accountId || "legacy")
+      .join(",")}`;
+    if (backfillContactIdsRef.current.has(backfillKey)) return false;
+    if (!options?.force) {
+      const lastCompletedAt = backfillCompletedAtRef.current[backfillKey] ?? 0;
+      if (Date.now() - lastCompletedAt < AUTO_SYNC_THROTTLE_MS) {
+        return false;
       }
+    }
+
+    backfillContactIdsRef.current.add(backfillKey);
+    setBackfillByContact((prev) => ({ ...prev, [contactId]: "pending" }));
+    if (!options?.quiet) {
+      setEmailsError(null);
+    }
+    try {
+      const syncAccount = async (accountId: string | null) => {
+        let beforeUid: number | null = null;
+        let batchCount = 0;
+
+        while (batchCount < 1) {
+          const response = await fetch("/api/gmail/backfill-contact", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              emails: emailList,
+              contactId,
+              limit: options?.force ? 20 : 6,
+              sinceDays: options?.force ? 365 : 30,
+              force: options?.force ?? false,
+              beforeUid,
+              emailAccountId: accountId || undefined,
+            }),
+          });
+          if (!response.ok) {
+            if (!options?.quiet) {
+              setEmailsError(
+                await readApiError(response, "Impossibile aggiornare le email.")
+              );
+            }
+            return "failed" as const;
+          }
+
+          const payload = (await response.json()) as {
+            inserted?: number;
+            updated?: number;
+            nextCursor?: number | null;
+          };
+          const changed =
+            Number(payload?.inserted ?? 0) > 0 ||
+            Number(payload?.updated ?? 0) > 0;
+          const nextCursor =
+            typeof payload?.nextCursor === "number" && payload.nextCursor > 0
+              ? payload.nextCursor
+              : null;
+
+          batchCount += 1;
+          if (!nextCursor) {
+            return changed ? ("changed" as const) : ("unchanged" as const);
+          }
+          beforeUid = nextCursor;
+        }
+        return "unchanged" as const;
+      };
+
+      const results = await Promise.all(
+        uniqueAccountIds.map((accountId) => syncAccount(accountId))
+      );
+
+      const ok = results.every((result) => result !== "failed");
+      if (ok) {
+        backfillCompletedAtRef.current[backfillKey] = Date.now();
+      }
+      return ok && results.some((result) => result === "changed");
     } catch (error) {
       console.error(error);
+      if (!options?.quiet) {
+        setEmailsError("Impossibile aggiornare le email da Gmail.");
+      }
+      return false;
     } finally {
+      backfillContactIdsRef.current.delete(backfillKey);
       setBackfillByContact((prev) => {
         const next = { ...prev };
         delete next[contactId];
@@ -1300,59 +1692,94 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     }
   };
 
-  const refreshSummary = async (contactId: string, force = false) => {
-    const requestId = summaryRequestIdRef.current + 1;
-    summaryRequestIdRef.current = requestId;
-    setSummaryLoading(true);
-    setSummaryError(null);
-    try {
-      const response = await fetch("/api/summary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contactId, force }),
-      });
+  const syncContactsOnOpen = async (
+    contactsToSync: Contact[],
+    accountsToSync: EmailAccount[]
+  ) => {
+    const targets = contactsToSync.filter(
+      (contact) => contact.id && extractEmails(contact.email).length > 0
+    );
+    if (!targets.length) return;
 
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        if (summaryRequestIdRef.current !== requestId) return;
-        setSummaryError(
-          errorPayload?.error ||
-            "Impossibile generare il riassunto. Riprova."
+    const accountIds =
+      accountsToSync.length > 0
+        ? accountsToSync.map((account) => account.id)
+        : [null];
+    let changed = false;
+    let index = 0;
+
+    const runWorker = async () => {
+      while (index < targets.length) {
+        const contact = targets[index];
+        index += 1;
+        if (!contact) continue;
+
+        const synced = await runBackfillForContact(
+          contact.id,
+          contact.email,
+          accountIds,
+          { quiet: true }
         );
-        setSummaryLoading(false);
-        return;
+        if (!synced) continue;
+
+        changed = true;
+        if (selectedIdRef.current === contact.id) {
+          void loadEmails(contact.id, contact.email, {
+            background: true,
+            syncGmail: false,
+          });
+        }
       }
+    };
 
-      const payload = (await response.json()) as {
-        summary?: string;
-        updated_at?: string | null;
-        last_email_at?: string | null;
-        model?: string | null;
-        rate_limited?: boolean;
-      };
+    const workerCount = Math.min(OPEN_SYNC_CONCURRENCY, targets.length);
+    await Promise.all(
+      Array.from({ length: workerCount }, () => runWorker())
+    );
 
-      if (summaryRequestIdRef.current !== requestId) return;
-      const raw = payload.summary ?? "";
-      setSummary({
-        raw,
-        parsed: parseSummary(raw),
-        updatedAt: payload.updated_at ?? null,
-        lastEmailAt: payload.last_email_at ?? null,
-        model: payload.model ?? null,
-        rateLimited: payload.rate_limited ?? false,
+    if (changed) {
+      await loadContacts({ silent: true });
+      const selectedContact = contactsToSync.find(
+        (contact) => contact.id === selectedIdRef.current
+      );
+      if (selectedContact) {
+        await loadEmails(selectedContact.id, selectedContact.email, {
+          background: true,
+          syncGmail: false,
+        });
+      }
+    }
+  };
+
+  const refreshContactEmailHistory = async (
+    contactId: string,
+    email?: string | null
+  ) => {
+    const backfilled = await runBackfillForContact(
+      contactId,
+      email,
+      emailAccounts.length > 0
+        ? emailAccounts.map((account) => account.id)
+        : [null],
+      { force: true }
+    );
+
+    if (selectedIdRef.current === contactId) {
+      await loadEmails(contactId, email, {
+        background: true,
+        syncGmail: false,
       });
-      setSummaryLoading(false);
-    } catch (error) {
-      console.error(error);
-      if (summaryRequestIdRef.current !== requestId) return;
-      setSummaryError("Impossibile generare il riassunto. Riprova.");
-      setSummaryLoading(false);
+    }
+
+    if (backfilled) {
+      await loadContacts({ silent: true });
     }
   };
 
   const handleSelectContact = (contact: Contact) => {
     const scrollY = window.scrollY;
     const shouldResetConversation = selectedId !== contact.id;
+    selectedIdRef.current = contact.id;
     setSelectedId(contact.id);
     setDraft(buildDraft(contact));
     requestAnimationFrame(() => window.scrollTo(0, scrollY));
@@ -1551,6 +1978,8 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           subject: emailContent.subject,
           text: emailContent.body,
           html: emailContent.html,
+          emailAccountId: selectedEmailAccountId || undefined,
+          notificationKind: "maintain",
         };
         if (lastEmail?.id) {
           sendPayload.replyToEmailId = lastEmail.id;
@@ -1567,6 +1996,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
           setMaintainRapportPending(null);
           return;
         }
+        notifyCrmNotificationsUpdated();
 
         // Aggiorna contatto
         const today = getTodayDateInputValue();
@@ -1587,7 +2017,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
         setMaintainRapportMessage("✓ Email di mantenimento rapporto inviata!");
         if (contact.id && contact.email) {
-          loadEmails(contact.id, contact.email, { background: true });
+          loadEmails(contact.id, contact.email, {
+            background: true,
+            syncGmail: false,
+          });
         }
       } else {
         // Schedulazione: imposta next_action_at + note
@@ -1786,6 +2219,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       ? buildReplySubject(replyTarget.subject, emailSubject)
       : emailSubject.trim();
     const resolvedBody = emailBody.trim();
+    const looksLikeFollowUp = /follow[\s-]?up/i.test(
+      `${resolvedSubject} ${resolvedBody}`
+    );
 
     if (!resolvedSubject && !resolvedBody) {
       setEmailsError("Scrivi almeno un oggetto o un messaggio.");
@@ -1804,6 +2240,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         subject: resolvedSubject || undefined,
         text: resolvedBody || undefined,
         replyToEmailId: replyTarget?.id ?? undefined,
+        emailAccountId: selectedEmailAccountId || undefined,
+        notificationKind:
+          emailPreset !== "custom" || looksLikeFollowUp
+            ? "follow_up"
+            : undefined,
       }),
     });
 
@@ -1812,6 +2253,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
       setSendingEmail(false);
       return;
     }
+    notifyCrmNotificationsUpdated();
 
     const responsePayload = (await response.json().catch(() => null)) as
       | { messageId?: string }
@@ -1820,7 +2262,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setEmailPreset("custom");
     setEmailSubject("");
     setEmailBody("");
-    const refreshedEmails = await loadEmails(selected.id, selected.email);
+    const refreshedEmails = await loadEmails(selected.id, selected.email, {
+      syncGmail: false,
+    });
     const sentEmail = responsePayload?.messageId
       ? refreshedEmails?.find(
           (email) => email.message_id_header === responsePayload.messageId
@@ -1842,12 +2286,16 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
 
   const handleRefreshConversation = async () => {
     if (!selected || conversationRefreshing) return;
-    await runBackfillForContact(selected.id, selected.email);
-    await loadEmails(selected.id, selected.email);
+    await loadEmails(selected.id, selected.email, {
+      resetConversation: true,
+      syncAllEmailAccounts: !selectedEmailAccountId,
+      forceSync: true,
+    });
   };
 
   useEffect(() => {
-    loadContacts();
+    void loadContacts();
+    void loadEmailAccounts();
   }, []);
 
   const handleAdd = async (event: FormEvent) => {
@@ -1904,6 +2352,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setError(null);
 
     const { id, ...updates } = draft;
+    const previousEmailKey = extractEmails(
+      contacts.find((contact) => contact.id === id)?.email
+    ).join(",");
     const response = await fetch(`/api/contacts/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1942,6 +2393,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     );
     setDraft(buildDraft(updated));
     setSaving(false);
+
+    const updatedEmailKey = extractEmails(updated.email).join(",");
+    if (updatedEmailKey && updatedEmailKey !== previousEmailKey) {
+      void refreshContactEmailHistory(updated.id, updated.email);
+    }
   };
 
   const handleDelete = async () => {
@@ -1966,6 +2422,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     }
 
     setContacts((prev) => prev.filter((contact) => contact.id !== selected.id));
+    selectedIdRef.current = null;
     setSelectedId(null);
     setDraft(null);
     setEmails([]);
@@ -1978,6 +2435,15 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     const remindersDisabled =
       draft.status === "Non interessato" ||
       draft.status === "Collaborazione stabilita";
+    const scheduledCountdown = getScheduledCountdown(
+      draft.next_action_at,
+      draft.next_action_note,
+      countdownNow
+    );
+    const autoCountdown =
+      scheduledCountdown?.kind === "auto" ? scheduledCountdown : null;
+    const maintainCountdown =
+      scheduledCountdown?.kind === "maintain" ? scheduledCountdown : null;
 
     return (
       <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel-strong)] p-4 shadow-sm">
@@ -2118,6 +2584,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     );
                   })}
                 </div>
+                {autoCountdown && (
+                  <p className="mt-3 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300">
+                    Countdown follow-up: {autoCountdown.label}
+                  </p>
+                )}
               </div>
 
               {/* Gruppo: Risposta ricevuta */}
@@ -2246,6 +2717,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                     </button>
                   ))}
                 </div>
+                {maintainCountdown && (
+                  <p className="mt-3 text-[11px] font-semibold text-teal-700 dark:text-teal-300">
+                    Countdown mantenimento: {maintainCountdown.label}
+                  </p>
+                )}
                 {maintainRapportMessage && (
                   <p className="mt-2 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
                     {maintainRapportMessage}
@@ -2442,10 +2918,167 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             type="button"
             onClick={handleRefreshConversation}
             disabled={conversationRefreshing}
-            className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)] disabled:opacity-60"
+            className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
           >
-            {conversationRefreshing ? "Aggiorno..." : "Aggiorna"}
+            {conversationRefreshing ? "Sync..." : "Sync mail"}
           </button>
+        </div>
+
+        <div className="grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+                Caselle email
+              </div>
+              <div className="text-xs font-semibold text-[var(--ink)]">
+                Sync da: {activeEmailAccountLabel}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowEmailAccountForm((prev) => !prev);
+                setEmailAccountMessage(null);
+                setEmailAccountsError(null);
+              }}
+              className="rounded-full border border-[var(--line)] px-3 py-1 text-xs font-semibold text-[var(--muted)]"
+            >
+              {showEmailAccountForm ? "Chiudi" : "Aggiungi casella"}
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="max-w-sm text-xs"
+              value={selectedEmailAccountId}
+              disabled={emailAccountsLoading}
+              onChange={(event) => setSelectedEmailAccountId(event.target.value)}
+            >
+              <option value="">
+                {emailAccounts.length > 0 ? "Tutte le caselle" : "Gmail attuale"}
+              </option>
+              {emailAccounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.display_name || account.email} · {account.provider}
+                </option>
+              ))}
+            </select>
+            {emailAccountsLoading && (
+              <span className="text-xs text-[var(--muted)]">Carico...</span>
+            )}
+          </div>
+
+          {showEmailAccountForm && (
+            <div className="grid gap-3 border-t border-[var(--line)] pt-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <select
+                  value={emailAccountDraft.provider}
+                  onChange={(event) =>
+                    handleEmailProviderChange(event.target.value as EmailProvider)
+                  }
+                >
+                  <option value="gmail">Gmail</option>
+                  <option value="outlook">Outlook</option>
+                  <option value="imap">Altra mail IMAP</option>
+                </select>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={emailAccountDraft.email}
+                  onChange={(event) =>
+                    setEmailAccountDraft((prev) => ({
+                      ...prev,
+                      email: event.target.value,
+                    }))
+                  }
+                />
+                <input
+                  placeholder="Username se diverso"
+                  value={emailAccountDraft.username}
+                  onChange={(event) =>
+                    setEmailAccountDraft((prev) => ({
+                      ...prev,
+                      username: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <input
+                type="password"
+                placeholder="Password o app password"
+                value={emailAccountDraft.password}
+                onChange={(event) =>
+                  setEmailAccountDraft((prev) => ({
+                    ...prev,
+                    password: event.target.value,
+                  }))
+                }
+              />
+              {emailAccountDraft.provider === "imap" && (
+                <div className="grid gap-2 sm:grid-cols-[1fr_120px_1fr]">
+                  <input
+                    placeholder="Host IMAP"
+                    value={emailAccountDraft.imapHost}
+                    onChange={(event) =>
+                      setEmailAccountDraft((prev) => ({
+                        ...prev,
+                        imapHost: event.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    inputMode="numeric"
+                    placeholder="Porta"
+                    value={emailAccountDraft.imapPort}
+                    onChange={(event) =>
+                      setEmailAccountDraft((prev) => ({
+                        ...prev,
+                        imapPort: event.target.value,
+                      }))
+                    }
+                  />
+                  <input
+                    placeholder="Mailbox opzionale"
+                    value={emailAccountDraft.mailbox}
+                    onChange={(event) =>
+                      setEmailAccountDraft((prev) => ({
+                        ...prev,
+                        mailbox: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTestEmailAccount}
+                  disabled={emailAccountTesting || emailAccountSaving}
+                  className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--muted)] disabled:opacity-60"
+                >
+                  {emailAccountTesting ? "Test..." : "Test connessione"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEmailAccount}
+                  disabled={emailAccountSaving || emailAccountTesting}
+                  className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {emailAccountSaving ? "Salvo..." : "Salva account"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(emailAccountsError || emailAccountMessage) && (
+            <div
+              className={`rounded-xl border px-3 py-2 text-xs ${
+                emailAccountsError ? toneStyles.error : toneStyles.success
+              }`}
+            >
+              {emailAccountsError || emailAccountMessage}
+            </div>
+          )}
         </div>
 
         {emailsLoading && emails.length === 0 && (
@@ -2457,80 +3090,6 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
         {!emailsLoading && emails.length === 0 && (
           <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-sm text-[var(--muted)]">
             Nessuna email per questo contatto.
-          </div>
-        )}
-
-        {!emailsLoading && summaryMeta && (
-          <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Riassunto conversazione (AI)
-                </div>
-                <div className="text-sm font-semibold text-[var(--ink)]">
-                  Ultima attivita {formatDateTime(summaryMeta.lastActivity)}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--muted)]">
-                  {summaryMeta.threadCount} thread
-                </span>
-                {summaryMeta.unreadCount > 0 && (
-                  <span className="rounded-full border border-[var(--accent)] bg-[var(--panel-strong)] px-2 py-0.5 font-semibold text-[var(--accent)]">
-                    {summaryMeta.unreadCount} non letti
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => refreshSummary(selected.id, true)}
-                  disabled={summaryLoading}
-                  className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] transition hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--panel-strong)] disabled:opacity-60"
-                >
-                  {summaryLoading ? "Riassumo..." : "Aggiorna riassunto"}
-                </button>
-              </div>
-            </div>
-
-            {summaryError && (
-              <div
-                className={`mt-3 rounded-xl border px-3 py-2 text-xs ${toneStyles.error}`}
-              >
-                {summaryError}
-              </div>
-            )}
-
-            {!summary && !summaryLoading && !summaryError && (
-              <div className="mt-3 text-sm text-[var(--muted)]">
-                Nessun riassunto disponibile. Premi “Aggiorna riassunto”.
-              </div>
-            )}
-
-            {summary && (
-              <div className="mt-3 grid gap-3 text-sm text-[var(--ink)]">
-                {summary.parsed ? (
-                  <div className="grid gap-2">
-                    {summary.parsed.one_liner && (
-                      <div className="text-base font-semibold text-[var(--ink)]">
-                        {summary.parsed.one_liner}
-                      </div>
-                    )}
-                    {summary.rateLimited && (
-                      <div
-                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${toneStyles.warning}`}
-                      >
-                        Quota AI esaurita · mostrato ultimo riassunto disponibile
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  summary.raw && (
-                    <div className="whitespace-pre-wrap text-[var(--muted)]">
-                      {summary.raw}
-                    </div>
-                  )
-                )}
-              </div>
-            )}
           </div>
         )}
 
@@ -2711,7 +3270,9 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               {STATUS_GROUPS["In attesa di risposta"].map((status) => (
                 <div
                   key={status}
-                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}`}
+                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${statusStyles[status]}${
+                    status === "Attiva auto follow-up" ? " auto-follow-pulse" : ""
+                  }`}
                 >
                   <span>{getStatusLabel(status)}</span>
                   <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
@@ -2885,6 +3446,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                   .map(({ contact, label, tone }) => {
                     const pending = followUpActionByContact[contact.id];
                     const keepWarm = isKeepInTouchNote(contact.next_action_note);
+                    const sendStatus = getFollowUpSendStatus(
+                      contact,
+                      countdownNow
+                    );
                     return (
                       <div
                         key={`${label}-${contact.id}`}
@@ -2906,6 +3471,15 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                             <div className="text-xs text-[var(--muted)]">
                               {formatDate(contact.next_action_at)}
                             </div>
+                            <div
+                              className={`mt-1 text-[11px] font-semibold ${
+                                sendStatus.sent
+                                  ? "text-emerald-600 dark:text-emerald-300"
+                                  : "text-amber-700 dark:text-amber-300"
+                              }`}
+                            >
+                              {sendStatus.label}
+                            </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             {keepWarm && (
@@ -2916,9 +3490,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                               </span>
                             )}
                             <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${tone}`}
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                                sendStatus.sent ? toneStyles.success : tone
+                              }`}
                             >
-                              {label}
+                              {sendStatus.sent ? "Inviato" : label}
                             </span>
                           </div>
                         </button>
@@ -3188,6 +3764,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             {selected && (
               <div
                 className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}${
+                  selected.status === "Attiva auto follow-up"
+                    ? " auto-follow-pulse"
+                    : ""
+                }${
                   selected.status === "Mantenimento rapporto"
                     ? " maintain-rapport-pulse"
                     : ""

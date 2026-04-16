@@ -284,7 +284,7 @@ const getFollowUpDays = () => {
 };
 
 const shouldSkipFollowUp = (status?: string | null) =>
-  status === "Non interessato" || status === "Collaborazione stabilita";
+  status === "Non interessato" || status === "Collaborazione stabilita" || status === "Contatto morto";
 
 const updateContactAfterOutbound = async (
   contactId: string,
@@ -295,6 +295,7 @@ const updateContactAfterOutbound = async (
     .from("contacts")
     .select("id, status, last_action_at, next_action_at, next_action_note")
     .eq("id", contactId)
+    .is("owner_id", null)
     .maybeSingle();
 
   if (!contact || shouldSkipFollowUp(contact.status)) return;
@@ -348,7 +349,8 @@ const updateContactAfterOutbound = async (
   await supabase
     .from("contacts")
     .update(updatePayload)
-    .eq("id", contactId);
+    .eq("id", contactId)
+    .is("owner_id", null);
 };
 
 const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
@@ -390,6 +392,7 @@ const findContactIdsFromAddresses = async (
     const { data: contactRows } = await supabase
       .from("contacts")
       .select("id, email")
+      .is("owner_id", null)
       .or(contactFilter)
       .limit(2000);
 
@@ -410,6 +413,7 @@ const findContactIdsFromAddresses = async (
       .from("emails")
       .select("contact_id, direction, from_email, to_email, raw")
       .not("contact_id", "is", null)
+      .is("owner_id", null)
       .or(emailFilter)
       .limit(2000);
 
@@ -449,6 +453,7 @@ const findContactIdsFromThread = async (
       .select("contact_id")
       .in("message_id_header", chunk)
       .not("contact_id", "is", null)
+      .is("owner_id", null)
       .limit(2000);
 
     data?.forEach((row) => {
@@ -462,6 +467,9 @@ const findContactIdsFromThread = async (
 const insertEmail = async (payload: {
   contact_id: string | null;
   direction: "inbound" | "outbound";
+  email_account_id?: string | null;
+  provider?: string | null;
+  provider_uid?: string | null;
   gmail_uid: number;
   message_id_header: string | null;
   in_reply_to: string | null;
@@ -582,6 +590,8 @@ export const runSync = async (request: Request) => {
         const { data: existing } = await supabase
           .from("emails")
           .select("id, contact_id, from_email, to_email")
+          .is("email_account_id", null)
+          .is("owner_id", null)
           .eq("gmail_uid", message.uid)
           .maybeSingle();
 
@@ -593,6 +603,7 @@ export const runSync = async (request: Request) => {
             .from("emails")
             .select("id")
             .eq("message_id_header", parsed.messageId)
+            .is("owner_id", null)
             .maybeSingle();
           if (dupByMsgId) continue;
         }
@@ -677,7 +688,8 @@ export const runSync = async (request: Request) => {
                     }
                   : {}),
               })
-              .eq("id", existing.id);
+              .eq("id", existing.id)
+              .is("owner_id", null);
           }
           if (direction === "outbound") {
             const outboundContactIds = new Set<string>();
@@ -695,6 +707,9 @@ export const runSync = async (request: Request) => {
         const { data: insertedEmail, error } = await insertEmail({
           contact_id: contactId,
           direction,
+          email_account_id: null,
+          provider: "gmail",
+          provider_uid: String(message.uid),
           gmail_uid: message.uid,
           message_id_header: parsed.messageId,
           in_reply_to: parsed.inReplyTo,
