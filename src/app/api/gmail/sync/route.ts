@@ -597,13 +597,13 @@ export const runSync = async (request: Request) => {
 
         const parsed = await parseEmail(message.source as Buffer | Uint8Array);
 
-        // Skip if same message_id_header already exists (prevents cross-folder dupes)
+        // Skip if same message_id_header already exists (prevents cross-folder dupes
+        // and dupes from reminders/run which saves emails directly)
         if (!existing && parsed.messageId) {
           const { data: dupByMsgId } = await supabase
             .from("emails")
             .select("id")
             .eq("message_id_header", parsed.messageId)
-            .is("owner_id", null)
             .maybeSingle();
           if (dupByMsgId) continue;
         }
@@ -646,7 +646,10 @@ export const runSync = async (request: Request) => {
         const direction = isOutbound ? "outbound" : "inbound";
 
         if (direction === "inbound" && contactId) {
-          await handleContactInbound(supabase, contactId);
+          await handleContactInbound(supabase, contactId, {
+            subject: parsed.subject,
+            fromEmail,
+          });
         }
 
         if (existing) {

@@ -211,6 +211,7 @@ export async function POST(request: Request) {
         .from("contacts")
         .select("id")
         .ilike("email", fromEmail)
+        .is("owner_id", null)
         .maybeSingle();
       contactId = contactData?.id ?? null;
     }
@@ -245,6 +246,7 @@ export async function POST(request: Request) {
       .from("emails")
       .select("id, contact_id")
       .eq("message_id_header", messageId)
+      .is("owner_id", null)
       .maybeSingle();
 
     if (existing) {
@@ -263,7 +265,10 @@ export async function POST(request: Request) {
     }
 
     if (insertedEmail?.contact_id) {
-      await handleContactInbound(supabase, insertedEmail.contact_id);
+      await handleContactInbound(supabase, insertedEmail.contact_id, {
+        subject,
+        fromEmail,
+      });
     }
 
     if (insertedEmail?.id) {

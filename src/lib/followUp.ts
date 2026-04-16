@@ -292,10 +292,47 @@ Un saluto,${finalSignature}</div>`;
   };
 };
 
+const AUTO_REPLY_PATTERNS = [
+  /^auto[\s-]*reply/i,
+  /^automatic[\s-]*reply/i,
+  /^out[\s-]*of[\s-]*office/i,
+  /^fuori[\s-]*ufficio/i,
+  /^assenza[\s-]*automatica/i,
+  /^risposta[\s-]*automatica/i,
+  /^undeliverable/i,
+  /^mail[\s-]*delivery/i,
+  /^delivery[\s-]*status/i,
+  /^returned[\s-]*mail/i,
+  /^failure[\s-]*notice/i,
+];
+
+const AUTO_REPLY_FROM_PATTERNS = [
+  /mailer-daemon/i,
+  /postmaster@/i,
+  /noreply@/i,
+  /no-reply@/i,
+  /do-not-reply@/i,
+];
+
+export const isAutoReply = (subject?: string | null, fromEmail?: string | null) => {
+  if (fromEmail) {
+    if (AUTO_REPLY_FROM_PATTERNS.some((pattern) => pattern.test(fromEmail))) return true;
+  }
+  if (subject) {
+    const cleaned = subject.replace(/^re:\s*/i, "").trim();
+    if (AUTO_REPLY_PATTERNS.some((pattern) => pattern.test(cleaned))) return true;
+  }
+  return false;
+};
+
 export const handleContactInbound = async (
   supabase: SupabaseClient,
-  contactId: string
+  contactId: string,
+  options?: { subject?: string | null; fromEmail?: string | null }
 ) => {
+  if (options && isAutoReply(options.subject, options.fromEmail)) {
+    return;
+  }
   const { data: contact } = await supabase
     .from("contacts")
     .select("status, next_action_note")
