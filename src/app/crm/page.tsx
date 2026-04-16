@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import CrmApp, { type CrmTheme } from "@/components/CrmApp";
+import CrmNotificationsBell from "@/components/CrmNotificationsBell";
 import LogoutButton from "@/components/LogoutButton";
 
 const CRM_THEME_STORAGE_KEY = "crm-theme";
@@ -33,6 +34,7 @@ export default function CrmPage() {
           ← Home
         </Link>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <CrmNotificationsBell />
           <button
             type="button"
             onClick={() =>
