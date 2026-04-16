@@ -297,6 +297,8 @@ const buildBody = (
 const getContactLabel = (item: { name: string | null; email: string | null }) =>
   item.name || item.email || "Contatto";
 
+const BATCH_LIMIT = 10;
+
 const handleReminderRun = async (request: Request) => {
   const cronSecret = getCronSecretFromRequest(request);
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
@@ -314,7 +316,8 @@ const handleReminderRun = async (request: Request) => {
     )
     .lte("next_action_at", today)
     .neq("status", "Non interessato")
-    .neq("status", "Collaborazione stabilita");
+    .neq("status", "Collaborazione stabilita")
+    .order("next_action_at", { ascending: true });
 
   if (error) {
     return NextResponse.json(
@@ -324,10 +327,12 @@ const handleReminderRun = async (request: Request) => {
   }
 
   if (!dueContacts || dueContacts.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0 });
+    return NextResponse.json({ ok: true, sent: 0, remaining: 0 });
   }
 
-  const contacts = ((dueContacts ?? []) as DueContact[]);
+  const allContacts = (dueContacts ?? []) as DueContact[];
+  const contacts = allContacts.slice(0, BATCH_LIMIT);
+  const remaining = Math.max(allContacts.length - BATCH_LIMIT, 0);
   const contactLanguageMap = await loadContactLanguageMap(
     supabase,
     contacts.map((contact) => contact.id)
@@ -629,7 +634,7 @@ const handleReminderRun = async (request: Request) => {
     }
   }
 
-  return NextResponse.json({ ok: true, sent });
+  return NextResponse.json({ ok: true, sent, remaining });
 };
 
 export async function GET(request: Request) {
