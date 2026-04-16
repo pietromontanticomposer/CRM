@@ -125,49 +125,17 @@ export async function PATCH(request: Request) {
     const user = await requireCurrentUser(supabase);
     const ownerFilter = getOwnerFilter(user);
     if (markAll) {
-      let candidatesQuery = supabase
+      let updateQuery = supabase
         .from("notifications")
-        .select("id, type, title, is_read")
+        .update({ is_read: true })
+        .eq("is_read", false)
         .or(ownerFilter);
 
       if (scope === AUTOMATION_SCOPE) {
-        candidatesQuery = candidatesQuery.eq("type", "email_sent");
+        updateQuery = updateQuery.eq("type", "email_sent");
       }
 
-      const { data: candidateRows, error: candidatesError } = await candidatesQuery;
-
-      if (candidatesError) {
-        console.error(
-          "PATCH /api/notifications markAll candidates fetch failed",
-          candidatesError
-        );
-        return NextResponse.json(
-          {
-            error: getErrorMessage(
-              candidatesError,
-              "Impossibile segnare le notifiche come lette."
-            ),
-          },
-          { status: 500 }
-        );
-      }
-
-      const candidateIds = (candidateRows ?? [])
-        .filter((row) => row.is_read !== true)
-        .filter((row) =>
-          scope === AUTOMATION_SCOPE ? isAutomationNotification(row) : true
-        )
-        .map((row) => row.id)
-        .filter((id): id is string => typeof id === "string" && id.length > 0);
-
-      if (!candidateIds.length) {
-        return NextResponse.json({ ok: true, updated: 0 });
-      }
-
-      const { error } = await supabase
-        .from("notifications")
-        .update({ is_read: true })
-        .in("id", candidateIds);
+      const { error, count } = await updateQuery;
 
       if (error) {
         console.error("PATCH /api/notifications markAll failed", error);
@@ -181,7 +149,7 @@ export async function PATCH(request: Request) {
           { status: 500 }
         );
       }
-      return NextResponse.json({ ok: true, updated: candidateIds.length });
+      return NextResponse.json({ ok: true, updated: count ?? 0 });
     }
 
     const { data: current, error: currentError } = await supabase
