@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
-import path from "path";
 import {
   KEEP_IN_TOUCH_MONTHS,
   KEEP_IN_TOUCH_NOTE,
@@ -17,10 +16,31 @@ import {
   type FollowUpLanguage,
 } from "@/lib/followUp";
 import { detectLanguageFromEmail, stripHtml } from "@/lib/languageDetection";
+import { buildOutboundAttachments, buildOutboundHtml } from "@/lib/outboundEmail";
+import { resolveEmailAccount, type EmailProvider } from "@/lib/server/emailAccounts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const REMINDER_RECIPIENT = "pietromontanticomposer@gmail.com";
+
+type DueContact = {
+  id: string;
+  owner_id: string | null;
+  name: string | null;
+  email: string | null;
+  company: string | null;
+  role: string | null;
+  status: string | null;
+  next_action_at: string | null;
+  next_action_note: string | null;
+};
+
+type SendContext = {
+  transport: ReturnType<typeof nodemailer.createTransport>;
+  fromAddress: string;
+  emailAccountId: string | null;
+  provider: EmailProvider | "gmail" | null;
+};
 
 const getEnv = (key: string) => {
   const value = process.env[key];
@@ -30,7 +50,8 @@ const getEnv = (key: string) => {
 
 const getOptionalEnv = (key: string) => {
   const value = process.env[key];
-  return value && value.trim().length > 0 ? value : null;
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
 };
 
 const getCronSecretFromRequest = (request: Request) => {
@@ -97,6 +118,101 @@ const getSmtpConfig = () => {
     secure: port === 465,
     auth: user && pass ? { user, pass } : undefined,
   };
+};
+
+const buildLegacySendContext = (): SendContext => {
+  const transportConfig = getSmtpConfig();
+  const transport = transportConfig
+    ? nodemailer.createTransport(transportConfig)
+    : nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: getEnv("GMAIL_USER"),
+          pass: getEnv("GMAIL_APP_PASSWORD"),
+        },
+      });
+
+  return {
+    transport,
+    fromAddress:
+      getOptionalEnv("MAIL_FROM") ||
+      getOptionalEnv("GMAIL_USER") ||
+      "crm@local.test",
+    emailAccountId: null,
+    provider: "gmail",
+  };
+};
+
+const getDefaultEmailAccountId = async (
+  supabase: ReturnType<typeof getSupabase>,
+  ownerId: string
+) => {
+  const { data, error } = await supabase
+    .from("email_accounts")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("sync_enabled", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return typeof data?.id === "string" ? data.id : null;
+};
+
+const buildOwnerSendContext = async (
+  supabase: ReturnType<typeof getSupabase>,
+  ownerId: string
+): Promise<SendContext | null> => {
+  const accountId = await getDefaultEmailAccountId(supabase, ownerId);
+  if (!accountId) return null;
+
+  const account = await resolveEmailAccount(supabase, accountId, ownerId, false);
+  if (!account.smtpHost || !account.smtpPort) return null;
+
+  return {
+    transport: nodemailer.createTransport({
+      host: account.smtpHost,
+      port: account.smtpPort,
+      secure: account.smtpSecure ?? account.smtpPort === 465,
+      auth: { user: account.username, pass: account.password },
+    }),
+    fromAddress: account.email,
+    emailAccountId: account.id,
+    provider: account.provider,
+  };
+};
+
+const getOwnerNotificationEmail = async () => {
+  return REMINDER_RECIPIENT;
+};
+
+const sendNotificationEmail = async (
+  transport: ReturnType<typeof nodemailer.createTransport>,
+  from: string,
+  to: string,
+  title: string,
+  body?: string | null
+) => {
+  await transport.sendMail({
+    from,
+    to,
+    subject: `CRM: ${title}`,
+    text: [title, body ? `Dettaglio: ${body}` : null]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
+};
+
+const updateContactForOwner = (
+  supabase: ReturnType<typeof getSupabase>,
+  contact: Pick<DueContact, "id" | "owner_id">,
+  payload: Record<string, unknown>
+) => {
+  const query = supabase.from("contacts").update(payload).eq("id", contact.id);
+  return contact.owner_id
+    ? query.eq("owner_id", contact.owner_id)
+    : query.is("owner_id", null);
 };
 
 type InboundEmailRow = {
@@ -178,6 +294,9 @@ const buildBody = (
   return lines.join("\n").trim();
 };
 
+const getContactLabel = (item: { name: string | null; email: string | null }) =>
+  item.name || item.email || "Contatto";
+
 const handleReminderRun = async (request: Request) => {
   const cronSecret = getCronSecretFromRequest(request);
   if (!cronSecret || cronSecret !== process.env.CRON_SECRET) {
@@ -191,9 +310,9 @@ const handleReminderRun = async (request: Request) => {
   const { data: dueContacts, error } = await supabase
     .from("contacts")
     .select(
-      "id, name, email, company, role, status, next_action_at, next_action_note"
+      "id, owner_id, name, email, company, role, status, next_action_at, next_action_note"
     )
-    .eq("next_action_at", today)
+    .lte("next_action_at", today)
     .neq("status", "Non interessato")
     .neq("status", "Collaborazione stabilita");
 
@@ -208,46 +327,106 @@ const handleReminderRun = async (request: Request) => {
     return NextResponse.json({ ok: true, sent: 0 });
   }
 
+  const contacts = ((dueContacts ?? []) as DueContact[]);
   const contactLanguageMap = await loadContactLanguageMap(
     supabase,
-    dueContacts.map((contact) => contact.id)
+    contacts.map((contact) => contact.id)
   );
 
-  const transportConfig = getSmtpConfig();
-  const transport = transportConfig
-    ? nodemailer.createTransport(transportConfig)
-    : nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: getEnv("GMAIL_USER"),
-          pass: getEnv("GMAIL_APP_PASSWORD"),
-        },
-      });
-
-  const fromAddress =
-    getOptionalEnv("MAIL_FROM") ||
-    getOptionalEnv("GMAIL_USER") ||
-    "crm@local.test";
+  const legacySendContext = buildLegacySendContext();
+  const ownerSendContextCache = new Map<string, SendContext | null>();
+  const notificationRecipients = new Map<string, string>();
 
   let sent = 0;
   const signatureHtml = getOptionalEnv("EMAIL_SIGNATURE_HTML");
 
-  for (const contact of dueContacts) {
+  const getSendContext = async (contact: DueContact) => {
+    if (!contact.owner_id) return legacySendContext;
+    if (!ownerSendContextCache.has(contact.owner_id)) {
+      ownerSendContextCache.set(
+        contact.owner_id,
+        await buildOwnerSendContext(supabase, contact.owner_id)
+      );
+    }
+    return ownerSendContextCache.get(contact.owner_id) ?? null;
+  };
+
+  const getNotificationRecipient = async (contact: DueContact) => {
+    const key = contact.owner_id || "legacy";
+    if (!notificationRecipients.has(key)) {
+      notificationRecipients.set(
+        key,
+        await getOwnerNotificationEmail()
+      );
+    }
+    return notificationRecipients.get(key) ?? REMINDER_RECIPIENT;
+  };
+
+  const insertNotificationAndSendEmail = async (
+    contact: DueContact,
+    emailId: string | null | undefined,
+    title: string,
+    body: string | null
+  ) => {
+    await supabase.from("notifications").insert({
+      type: "email_sent",
+      owner_id: contact.owner_id ?? null,
+      contact_id: contact.id,
+      email_id: emailId ?? null,
+      title,
+      body,
+    });
+
+    const recipient = await getNotificationRecipient(contact);
+    await sendNotificationEmail(
+      legacySendContext.transport,
+      legacySendContext.fromAddress,
+      recipient,
+      title,
+      body
+    ).catch((error) => {
+      console.error("Reminder notification email failed", error);
+    });
+  };
+
+  for (const contact of contacts) {
     const stage = getAutomaticFollowUpStage(contact.next_action_note);
     const language = contactLanguageMap.get(contact.id) ?? "it";
+    const ownerFilter = contact.owner_id
+      ? `owner_id.eq.${contact.owner_id}`
+      : "owner_id.is.null";
+    const sendContext = await getSendContext(contact);
 
     if (stage && contact.email) {
+      if (!sendContext) {
+        console.error(
+          `No email account available for automatic follow-up contact ${contact.id}`
+        );
+        continue;
+      }
       // Automatic Follow-up
+      const contactLabel = getContactLabel(contact);
       const emailContent =
         stage === 1
-          ? buildAutoFollowUpEmail1(contact.name, signatureHtml, language, contact.role)
-          : buildAutoFollowUpEmail2(contact.name, signatureHtml, language, contact.role);
+          ? buildAutoFollowUpEmail1(
+              contact.name ?? "",
+              signatureHtml,
+              language,
+              contact.role
+            )
+          : buildAutoFollowUpEmail2(
+              contact.name ?? "",
+              signatureHtml,
+              language,
+              contact.role
+            );
 
       // Try to find the last email for threading
       const { data: lastEmail } = await supabase
         .from("emails")
         .select("message_id_header, references, subject")
         .eq("contact_id", contact.id)
+        .or(ownerFilter)
         .order("received_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -268,74 +447,72 @@ const handleReminderRun = async (request: Request) => {
         }
       }
 
-      const sigAttach1 = emailContent.html?.includes("cid:firma_pietro")
-        ? [{
-            filename: "firma_pietro.png",
-            path: path.join(process.cwd(), "public", "firma_pietro.png"),
-            cid: "firma_pietro",
-          }]
-        : [];
+      const htmlBody = buildOutboundHtml(emailContent.html, emailContent.body);
+      const outboundAttachments = buildOutboundAttachments(htmlBody);
 
-      const info = await transport.sendMail({
-        from: fromAddress,
+      const info = await sendContext.transport.sendMail({
+        from: sendContext.fromAddress,
         to: contact.email,
         subject,
         text: emailContent.body,
-        html: emailContent.html,
+        html: htmlBody,
         headers,
-        attachments: sigAttach1,
+        attachments: outboundAttachments,
       });
 
       // Save the sent email
       const { data: insertedFollowUp } = await supabase.from("emails").insert({
         contact_id: contact.id,
+        owner_id: contact.owner_id ?? null,
         direction: "outbound",
+        email_account_id: sendContext.emailAccountId,
+        provider: sendContext.provider,
         message_id_header: info.messageId,
         in_reply_to: lastEmail?.message_id_header || null,
         references: headers["References"] || null,
-        from_email: fromAddress,
+        from_email: sendContext.fromAddress,
         from_name: "Pietro Montanti",
         to_email: contact.email,
         subject,
         text_body: emailContent.body,
-        html_body: emailContent.html,
+        html_body: htmlBody ?? null,
         received_at: new Date().toISOString(),
       }).select("id").single();
 
       // Update contact state
       if (stage === 1) {
-        await supabase
-          .from("contacts")
-          .update({
+        await updateContactForOwner(supabase, contact, {
             next_action_at: addDaysToDateOnly(today, SECOND_FOLLOW_UP_DAYS),
             next_action_note: AUTO_FOLLOW_UP_2_NOTE,
             last_action_at: today,
             last_action_note: "Follow-up automatico 1/2 inviato",
-          })
-          .eq("id", contact.id);
+          });
       } else {
-        await supabase
-          .from("contacts")
-          .update({
+        await updateContactForOwner(supabase, contact, {
             next_action_at: null,
             next_action_note: null,
             last_action_at: today,
             last_action_note: "Follow-up automatico 2/2 inviato (fine)",
-          })
-          .eq("id", contact.id);
+          });
       }
 
-      await supabase.from("notifications").insert({
-        type: "email_sent",
-        contact_id: contact.id,
-        email_id: insertedFollowUp?.id ?? null,
-        title: `Follow-up automatico inviato a ${contact.name}`,
-        body: emailContent.body.slice(0, 100) + "...",
-      });
+      await insertNotificationAndSendEmail(
+        contact,
+        insertedFollowUp?.id,
+        `Follow-up automatico inviato a ${contactLabel}`,
+        emailContent.body.slice(0, 100) + "..."
+      );
     } else if (isMaintainRapportNote(contact.next_action_note) && contact.email) {
+      if (!sendContext) {
+        console.error(
+          `No email account available for maintain rapport contact ${contact.id}`
+        );
+        continue;
+      }
       // Mantenimento rapporto schedulato
+      const contactLabel = getContactLabel(contact);
       const emailContent = buildMaintainRapportEmail(
-        contact.name,
+        contact.name ?? "",
         signatureHtml,
         language,
         contact.role
@@ -345,6 +522,7 @@ const handleReminderRun = async (request: Request) => {
         .from("emails")
         .select("message_id_header, references, subject")
         .eq("contact_id", contact.id)
+        .or(ownerFilter)
         .order("received_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -365,57 +543,51 @@ const handleReminderRun = async (request: Request) => {
         }
       }
 
-      const sigAttach2 = emailContent.html?.includes("cid:firma_pietro")
-        ? [{
-            filename: "firma_pietro.png",
-            path: path.join(process.cwd(), "public", "firma_pietro.png"),
-            cid: "firma_pietro",
-          }]
-        : [];
+      const htmlBody = buildOutboundHtml(emailContent.html, emailContent.body);
+      const outboundAttachments = buildOutboundAttachments(htmlBody);
 
-      const info = await transport.sendMail({
-        from: fromAddress,
+      const info = await sendContext.transport.sendMail({
+        from: sendContext.fromAddress,
         to: contact.email,
         subject,
         text: emailContent.body,
-        html: emailContent.html,
+        html: htmlBody,
         headers,
-        attachments: sigAttach2,
+        attachments: outboundAttachments,
       });
 
       const { data: insertedMR } = await supabase.from("emails").insert({
         contact_id: contact.id,
+        owner_id: contact.owner_id ?? null,
         direction: "outbound",
+        email_account_id: sendContext.emailAccountId,
+        provider: sendContext.provider,
         message_id_header: info.messageId,
         in_reply_to: lastEmail?.message_id_header || null,
         references: headers["References"] || null,
-        from_email: fromAddress,
+        from_email: sendContext.fromAddress,
         from_name: "Pietro Montanti",
         to_email: contact.email,
         subject,
         text_body: emailContent.body,
-        html_body: emailContent.html,
+        html_body: htmlBody ?? null,
         received_at: new Date().toISOString(),
       }).select("id").single();
 
-      await supabase
-        .from("contacts")
-        .update({
+      await updateContactForOwner(supabase, contact, {
           next_action_at: null,
           next_action_note: buildMaintainRapportNote(0),
           last_action_at: today,
           last_action_note: "Mantenimento rapporto inviato",
           status: "Mantenimento rapporto",
-        })
-        .eq("id", contact.id);
-
-      await supabase.from("notifications").insert({
-        type: "email_sent",
-        contact_id: contact.id,
-        email_id: insertedMR?.id ?? null,
-        title: `Mantenimento rapporto inviato a ${contact.name}`,
-        body: emailContent.body.slice(0, 100) + "...",
       });
+
+      await insertNotificationAndSendEmail(
+        contact,
+        insertedMR?.id,
+        `Mantenimento rapporto inviato a ${contactLabel}`,
+        emailContent.body.slice(0, 100) + "..."
+      );
     } else {
       // Manual Reminder to Pietro
       const body = buildBody(today, {
@@ -426,9 +598,10 @@ const handleReminderRun = async (request: Request) => {
         note: contact.next_action_note,
       });
       const subjectLabel = contact.name || contact.email || "Contatto";
-      await transport.sendMail({
-        from: fromAddress,
-        to: reminderEmail,
+      const recipient = await getNotificationRecipient(contact);
+      await legacySendContext.transport.sendMail({
+        from: legacySendContext.fromAddress,
+        to: recipient || reminderEmail,
         subject: `Follow-up da fare: ${subjectLabel}`,
         text: body,
       });
@@ -437,7 +610,7 @@ const handleReminderRun = async (request: Request) => {
   }
 
   // Handle Keep in Touch separately if needed (though they are usually in dueContacts)
-  const keepInTouchContacts = dueContacts.filter((contact) =>
+  const keepInTouchContacts = contacts.filter((contact) =>
     isKeepInTouchNote(contact.next_action_note)
   );
 
@@ -449,13 +622,10 @@ const handleReminderRun = async (request: Request) => {
           ? contact.next_action_at.slice(0, 10)
           : today;
       const nextDate = addMonthsToDateOnly(baseDate, KEEP_IN_TOUCH_MONTHS);
-      await supabase
-        .from("contacts")
-        .update({
+      await updateContactForOwner(supabase, contact, {
           next_action_at: nextDate,
           next_action_note: KEEP_IN_TOUCH_NOTE,
-        })
-        .eq("id", contact.id);
+        });
     }
   }
 
