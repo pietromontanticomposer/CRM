@@ -23,10 +23,10 @@ const STATUS_OPTIONS = [
   "In attesa",
   "Azione richiesta",
   "Non interessato",
-  "Contatto morto",
   "Mantenimento rapporto",
-  "Collaborazione stabilita",
   "Call prenotata",
+  "Contatto morto",
+  "Collaborazione stabilita",
 ] as const;
 
 type Status = (typeof STATUS_OPTIONS)[number];
@@ -36,9 +36,9 @@ const STATUS_GROUPS = {
   "Risposta ricevuta": [
     "Azione richiesta",
     "Non interessato",
-    "Contatto morto",
     "Mantenimento rapporto",
     "Call prenotata",
+    "Contatto morto",
     "Collaborazione stabilita",
   ],
 } as const;
