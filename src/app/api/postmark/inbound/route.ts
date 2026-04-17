@@ -205,6 +205,11 @@ export async function POST(request: Request) {
   try {
     const supabase = getSupabase();
 
+    // Skip bounce notifications (Mail Delivery Subsystem)
+    if (fromEmail && /^mailer-daemon@/i.test(fromEmail)) {
+      return NextResponse.json({ ok: true });
+    }
+
     let contactId: string | null = null;
     if (fromEmail) {
       const { data: contactData } = await supabase

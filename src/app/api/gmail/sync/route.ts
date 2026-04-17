@@ -627,6 +627,12 @@ export const runSync = async (request: Request) => {
 
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
+
+        // Skip bounce notifications (Mail Delivery Subsystem)
+        if (fromEmail && /^mailer-daemon@/i.test(fromEmail)) {
+          continue;
+        }
+
         const threadMatchedContactIds = await findContactIdsFromThread([
           parsed.inReplyTo,
           parsed.references,
