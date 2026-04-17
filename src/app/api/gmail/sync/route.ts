@@ -741,7 +741,7 @@ export const runSync = async (request: Request) => {
           continue;
         }
 
-        if (insertedEmail) {
+        if (insertedEmail && contactId) {
           if (direction === "inbound") {
             const titleBase = fromName || fromEmail || "Mittente sconosciuto";
             await insertNotification({

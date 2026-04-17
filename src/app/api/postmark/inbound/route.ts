@@ -269,9 +269,7 @@ export async function POST(request: Request) {
         subject,
         fromEmail,
       });
-    }
 
-    if (insertedEmail?.id) {
       const titleBase = fromName || fromEmail || "Mittente sconosciuto";
       const title = `Nuova email da ${titleBase}`;
       const body = subject || payload.TextBody?.slice(0, 140) || null;
@@ -280,7 +278,7 @@ export async function POST(request: Request) {
         .from("notifications")
         .insert({
           type: "email_received",
-          contact_id: insertedEmail.contact_id ?? null,
+          contact_id: insertedEmail.contact_id,
           email_id: insertedEmail.id,
           title,
           body,
