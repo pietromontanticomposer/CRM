@@ -645,6 +645,11 @@ export const runSync = async (request: Request) => {
           matchedContactIds.length === 1 ? (matchedContactIds[0] ?? null) : null;
         const direction = isOutbound ? "outbound" : "inbound";
 
+        // Skip inbound emails from senders not saved as contacts
+        if (direction === "inbound" && !contactId) {
+          continue;
+        }
+
         if (direction === "inbound" && contactId) {
           await handleContactInbound(supabase, contactId, {
             subject: parsed.subject,

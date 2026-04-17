@@ -216,6 +216,11 @@ export async function POST(request: Request) {
       contactId = contactData?.id ?? null;
     }
 
+    // Skip inbound emails from senders not saved as contacts
+    if (!contactId) {
+      return NextResponse.json({ ok: true });
+    }
+
     const attachmentsMeta = payload.Attachments?.length
       ? await uploadPostmarkAttachments(payload.Attachments, messageId)
       : [];
