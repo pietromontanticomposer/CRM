@@ -382,6 +382,7 @@ const findContactIdsFromAddresses = async (
   const supabase = getSupabase();
   const found = new Set<string>();
   const addressSet = new Set(candidates);
+  const accountEmail = normalizeEmail(process.env.GMAIL_USER);
   const chunkSize = 25;
 
   for (let index = 0; index < candidates.length; index += chunkSize) {
@@ -398,6 +399,8 @@ const findContactIdsFromAddresses = async (
 
     contactRows?.forEach((row) => {
       const exactContactEmails = extractEmails(row.email);
+      // Skip contacts whose email is the account email (e.g. test contacts)
+      if (accountEmail && exactContactEmails.includes(accountEmail)) return;
       if (row.id && exactContactEmails.some((email) => addressSet.has(email))) {
         found.add(row.id);
       }

@@ -209,11 +209,18 @@ export async function POST(request: Request) {
     if (fromEmail) {
       const { data: contactData } = await supabase
         .from("contacts")
-        .select("id")
+        .select("id, email")
         .ilike("email", fromEmail)
         .is("owner_id", null)
         .maybeSingle();
-      contactId = contactData?.id ?? null;
+      // Skip contacts whose email is the account email
+      const accountEmail = (process.env.GMAIL_USER ?? "").trim().toLowerCase();
+      const contactEmails = (contactData?.email ?? "")
+        .toLowerCase()
+        .match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/g) ?? [];
+      if (contactData?.id && !(accountEmail && contactEmails.includes(accountEmail))) {
+        contactId = contactData.id;
+      }
     }
 
     // Skip inbound emails from senders not saved as contacts
