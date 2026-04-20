@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 import { getAutomaticFollowUpStage } from "@/lib/followUp";
 import { detectLanguageFromEmail, stripHtml } from "@/lib/languageDetection";
 import { extractEmails, normalizeEmail } from "@/lib/server/emailMatching";
+import { linkExistingEmailsToContact } from "@/lib/server/linkContactEmails";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -143,28 +145,44 @@ const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const detectLanguageForContactEmail = async (
   supabase: ReturnType<typeof getSupabaseAdmin>,
-  email?: string | null
+  email?: string | null,
+  ownerId?: string | null,
+  includeLegacy = false
 ) => {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
 
   const escaped = escapeIlike(normalized);
-  const { data, error } = await supabase
-    .from("emails")
-    .select(
-      "direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
-    )
-    .or(`from_email.ilike.%${escaped}%,to_email.ilike.%${escaped}%`)
-    .limit(120);
+  const ownerModes =
+    ownerId && includeLegacy ? ["owner", "legacy"] : ownerId ? ["owner"] : ["all"];
+  const rows: LanguageCandidateRow[] = [];
 
-  if (error) {
-    throw error;
+  for (const ownerMode of ownerModes) {
+    let query = supabase
+      .from("emails")
+      .select(
+        "direction, from_email, to_email, subject, text_body, html_body, received_at, created_at"
+      )
+      .or(`from_email.ilike.%${escaped}%,to_email.ilike.%${escaped}%`)
+      .limit(120);
+
+    if (ownerMode === "owner" && ownerId) {
+      query = query.eq("owner_id", ownerId);
+    } else if (ownerMode === "legacy") {
+      query = query.is("owner_id", null);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw error;
+    }
+    rows.push(...(((data ?? []) as unknown) as LanguageCandidateRow[]));
   }
 
   let bestText: string | null = null;
   let bestTimestamp = 0;
 
-  (data as LanguageCandidateRow[] | null)?.forEach((row) => {
+  rows.forEach((row) => {
     const participants = new Set([
       ...extractEmails(row.from_email),
       ...extractEmails(row.to_email),
@@ -186,18 +204,67 @@ const detectLanguageForContactEmail = async (
   return detectLanguageFromEmail(bestText);
 };
 
+const detectLanguageFromEmailDomain = (email?: string | null) => {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
+  const domain = normalized.split("@")[1]?.toLowerCase() ?? "";
+  if (!domain) return null;
+  if (domain.endsWith(".it")) return "it" as const;
+  if (
+    domain.endsWith(".com") ||
+    domain.endsWith(".co.uk") ||
+    domain.endsWith(".uk") ||
+    domain.endsWith(".us") ||
+    domain.endsWith(".ca") ||
+    domain.endsWith(".au")
+  ) {
+    return "en" as const;
+  }
+  return null;
+};
+
+const detectLanguageForContactProfile = (contact: unknown) => {
+  const source =
+    contact && typeof contact === "object"
+      ? (contact as Record<string, unknown>)
+      : {};
+
+  const profileText = [
+    normalizeString(source.name),
+    normalizeString(source.company),
+    normalizeString(source.role),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const profileDetected = detectLanguageFromEmail(profileText);
+  if (profileDetected) return profileDetected;
+
+  const domainDetected = detectLanguageFromEmailDomain(
+    normalizeNullableString(source.email)
+  );
+  if (domainDetected) return domainDetected;
+
+  return "it" as const;
+};
+
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
+    const ownerFilter = getOwnerFilter(user);
     const [{ data, error }, { data: contactEmails, error: emailsError }] =
       await Promise.all([
         supabase
           .from("contacts")
           .select(CONTACT_SELECT_FIELDS)
+          .or(ownerFilter)
           .order("updated_at", { ascending: false }),
         supabase
           .from("emails")
           .select("id, contact_id, direction, received_at, created_at")
+          .or(ownerFilter)
           .not("contact_id", "is", null),
       ]);
 
@@ -259,6 +326,7 @@ export async function GET() {
           await supabase
             .from("emails")
             .select("id, subject, text_body, html_body")
+            .or(ownerFilter)
             .in("id", chunk);
 
         if (inboundContentError) {
@@ -319,6 +387,18 @@ export async function GET() {
         }
       });
 
+      const detectedFromLatestInbound = detectLanguageFromEmail(
+        latestInboundTextByEmailId.get(
+          latestInboundEmailIdByContactId.get(contact.id) ?? ""
+        ) ?? null
+      );
+      const detectedFromLatestOutbound = detectLanguageFromEmail(
+        latestInboundTextByEmailId.get(
+          latestOutboundEmailIdByContactId.get(contact.id) ?? ""
+        ) ?? null
+      );
+      const fallbackLanguage = detectLanguageForContactProfile(contact);
+
       return {
         ...contact,
         status: effectiveStatus,
@@ -326,16 +406,7 @@ export async function GET() {
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
         activity_at: best,
         language:
-          detectLanguageFromEmail(
-            latestInboundTextByEmailId.get(
-              latestInboundEmailIdByContactId.get(contact.id) ?? ""
-            ) ?? null
-          ) ??
-          detectLanguageFromEmail(
-            latestInboundTextByEmailId.get(
-              latestOutboundEmailIdByContactId.get(contact.id) ?? ""
-            ) ?? null
-          ),
+          detectedFromLatestInbound ?? detectedFromLatestOutbound ?? fallbackLanguage,
       };
     });
 
@@ -362,9 +433,10 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
     const { data, error } = await supabase
       .from("contacts")
-      .insert(payload)
+      .insert({ ...payload, owner_id: user.id })
       .select("*")
       .single();
 
@@ -376,7 +448,26 @@ export async function POST(request: Request) {
       );
     }
 
-    const language = await detectLanguageForContactEmail(supabase, data.email);
+    try {
+      await linkExistingEmailsToContact(
+        supabase,
+        data.id,
+        data.email,
+        user.id,
+        user.canAccessLegacyData
+      );
+    } catch (linkError) {
+      console.error("POST /api/contacts email link failed", linkError);
+    }
+
+    const language =
+      (await detectLanguageForContactEmail(
+        supabase,
+        data.email,
+        user.id,
+        user.canAccessLegacyData
+      )) ??
+      detectLanguageForContactProfile(data);
 
     return NextResponse.json(
       {

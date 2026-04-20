@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
-import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import {
   SECOND_FOLLOW_UP_DAYS,
@@ -9,9 +8,13 @@ import {
   isKeepInTouchNote,
   toFollowUpDateOnly,
 } from "@/lib/followUp";
+import { buildOutboundAttachments, buildOutboundHtml } from "@/lib/outboundEmail";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { resolveEmailAccount } from "@/lib/server/emailAccounts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+const CRM_NOTIFICATION_EMAIL = "pietromontanticomposer@gmail.com";
 
 type SendPayload = {
   contactId?: string;
@@ -20,6 +23,8 @@ type SendPayload = {
   text?: string;
   html?: string;
   replyToEmailId?: string;
+  emailAccountId?: string;
+  notificationKind?: string;
 };
 
 const getEnv = (key: string) => {
@@ -30,7 +35,8 @@ const getEnv = (key: string) => {
 
 const getOptionalEnv = (key: string) => {
   const value = process.env[key];
-  return value && value.trim().length > 0 ? value : null;
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
 };
 
 const getSupabase = () =>
@@ -64,7 +70,9 @@ const uniqueEmails = (values: Array<string | null | undefined>) => {
 const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 const findContactIdsFromAddresses = async (
-  addresses: Array<string | null | undefined>
+  addresses: Array<string | null | undefined>,
+  ownerId?: string | null,
+  includeLegacy = false
 ) => {
   const candidates = uniqueEmails(addresses);
   if (!candidates.length) return [];
@@ -72,20 +80,32 @@ const findContactIdsFromAddresses = async (
   const supabase = getSupabase();
   const found = new Set<string>();
   const chunkSize = 25;
+  const ownerModes =
+    ownerId && includeLegacy ? ["owner", "legacy"] : ownerId ? ["owner"] : ["all"];
 
   for (let index = 0; index < candidates.length; index += chunkSize) {
     const chunk = candidates.slice(index, index + chunkSize);
     const filter = chunk
       .map((email) => `email.ilike.%${escapeIlike(email)}%`)
       .join(",");
-    const { data } = await supabase
-      .from("contacts")
-      .select("id")
-      .or(filter)
-      .limit(2000);
-    data?.forEach((row) => {
-      if (row.id) found.add(row.id);
-    });
+    for (const ownerMode of ownerModes) {
+      let query = supabase
+        .from("contacts")
+        .select("id")
+        .or(filter)
+        .limit(2000);
+
+      if (ownerMode === "owner" && ownerId) {
+        query = query.eq("owner_id", ownerId);
+      } else if (ownerMode === "legacy") {
+        query = query.is("owner_id", null);
+      }
+
+      const { data } = await query;
+      data?.forEach((row) => {
+        if (row.id) found.add(row.id);
+      });
+    }
   }
 
   return Array.from(found);
@@ -171,14 +191,20 @@ const shouldSkipFollowUp = (status?: string | null) =>
 
 const updateContactAfterOutbound = async (
   contactId: string,
-  sentAt: string
+  sentAt: string,
+  ownerFilter?: string | null
 ) => {
   const supabase = getSupabase();
-  const { data: contact } = await supabase
+  let contactQuery = supabase
     .from("contacts")
     .select("id, status, last_action_at, next_action_at, next_action_note")
-    .eq("id", contactId)
-    .maybeSingle();
+    .eq("id", contactId);
+
+  if (ownerFilter) {
+    contactQuery = contactQuery.or(ownerFilter);
+  }
+
+  const { data: contact } = await contactQuery.maybeSingle();
 
   if (!contact || shouldSkipFollowUp(contact.status)) return;
 
@@ -229,10 +255,16 @@ const updateContactAfterOutbound = async (
     return;
   }
 
-  await supabase
+  let updateQuery = supabase
     .from("contacts")
     .update(updatePayload)
     .eq("id", contactId);
+
+  if (ownerFilter) {
+    updateQuery = updateQuery.or(ownerFilter);
+  }
+
+  await updateQuery;
 };
 
 const getSmtpConfig = () => {
@@ -255,8 +287,91 @@ const getSmtpConfig = () => {
   };
 };
 
+const buildSentNotificationTitle = (payload: SendPayload) => {
+  const to = payload.to?.trim() || "contatto";
+  if (payload.notificationKind === "maintain") {
+    return `Mantenimento rapporto inviato a ${to}`;
+  }
+  if (payload.notificationKind === "follow_up") {
+    return `Follow-up inviato a ${to}`;
+  }
+  return `Email inviata a ${to}`;
+};
+
+const shouldEmailNotification = (payload: SendPayload) =>
+  payload.notificationKind === "maintain" ||
+  payload.notificationKind === "follow_up";
+
+const buildCrmNotificationSendContext = () => {
+  const smtpConfig = getSmtpConfig();
+  const transport = smtpConfig
+    ? nodemailer.createTransport(smtpConfig)
+    : nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: getEnv("GMAIL_USER"),
+          pass: getEnv("GMAIL_APP_PASSWORD"),
+        },
+      });
+
+  return {
+    transport,
+    fromAddress:
+      getOptionalEnv("MAIL_FROM") ||
+      getOptionalEnv("GMAIL_USER") ||
+      "crm@local.test",
+  };
+};
+
+const sendCrmNotificationEmail = async ({
+  transport,
+  from,
+  to,
+  title,
+  body,
+}: {
+  transport: ReturnType<typeof nodemailer.createTransport>;
+  from: string;
+  to: string;
+  title: string;
+  body: string | null;
+}) => {
+  await transport.sendMail({
+    from,
+    to,
+    subject: `CRM: ${title}`,
+    text: [title, body ? `Oggetto: ${body}` : null]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
+};
+
+const normalizeId = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : null;
+};
+
+const getDefaultEmailAccountId = async (
+  supabase: ReturnType<typeof getSupabase>,
+  ownerId: string
+) => {
+  const { data, error } = await supabase
+    .from("email_accounts")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .eq("sync_enabled", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.id ?? null;
+};
+
 export async function POST(request: Request) {
   let payload: SendPayload;
+  let notificationEmailSent = false;
+  let notificationEmailError: string | null = null;
   try {
     payload = (await request.json()) as SendPayload;
   } catch {
@@ -268,6 +383,8 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabase();
+  const currentUser = await requireCurrentUser(supabase);
+  const ownerFilter = getOwnerFilter(currentUser);
 
   let replyMessageId: string | null = null;
   let replyReferences: string | null = null;
@@ -278,6 +395,7 @@ export async function POST(request: Request) {
       .from("emails")
       .select("message_id_header, references, subject, raw")
       .eq("id", payload.replyToEmailId)
+      .or(ownerFilter)
       .maybeSingle();
 
     replyMessageId =
@@ -302,41 +420,72 @@ export async function POST(request: Request) {
     : payload.subject?.trim() || "";
 
   const smtpConfig = getSmtpConfig();
-  const transport = smtpConfig
-    ? nodemailer.createTransport(smtpConfig)
-    : nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: getEnv("GMAIL_USER"),
-          pass: getEnv("GMAIL_APP_PASSWORD"),
-        },
-      });
+  const requestedEmailAccountId = normalizeId(payload.emailAccountId);
+  const emailAccountId =
+    requestedEmailAccountId ||
+    (!currentUser.canAccessLegacyData
+      ? await getDefaultEmailAccountId(supabase, currentUser.id)
+      : null);
+
+  let transport: ReturnType<typeof nodemailer.createTransport>;
+  let fromAddress: string;
+
+  if (emailAccountId) {
+    const account = await resolveEmailAccount(
+      supabase,
+      emailAccountId,
+      currentUser.id,
+      currentUser.canAccessLegacyData
+    );
+    if (!account.smtpHost || !account.smtpPort) {
+      return NextResponse.json(
+        { ok: false, error: "SMTP non configurato per questa casella." },
+        { status: 400 }
+      );
+    }
+    transport = nodemailer.createTransport({
+      host: account.smtpHost,
+      port: account.smtpPort,
+      secure: account.smtpSecure ?? account.smtpPort === 465,
+      auth: { user: account.username, pass: account.password },
+    });
+    fromAddress = account.email;
+  } else if (currentUser.canAccessLegacyData) {
+    transport = smtpConfig
+      ? nodemailer.createTransport(smtpConfig)
+      : nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: getEnv("GMAIL_USER"),
+            pass: getEnv("GMAIL_APP_PASSWORD"),
+          },
+        });
+    fromAddress =
+      getOptionalEnv("MAIL_FROM") ||
+      getOptionalEnv("GMAIL_USER") ||
+      "crm@local.test";
+  } else {
+    return NextResponse.json(
+      { ok: false, error: "Collega una casella email prima di inviare." },
+      { status: 400 }
+    );
+  }
 
   const headers: Record<string, string> = {};
   if (replyMessageId) headers["In-Reply-To"] = replyMessageId;
   if (replyReferences) headers["References"] = replyReferences;
 
-  const fromAddress =
-    getOptionalEnv("MAIL_FROM") ||
-    getOptionalEnv("GMAIL_USER") ||
-    "crm@local.test";
-
-  const signatureAttachments = payload.html?.includes("cid:firma_pietro")
-    ? [{
-        filename: "firma_pietro.png",
-        path: path.join(process.cwd(), "public", "firma_pietro.png"),
-        cid: "firma_pietro",
-      }]
-    : [];
+  const htmlBody = buildOutboundHtml(payload.html, payload.text);
+  const outboundAttachments = buildOutboundAttachments(htmlBody);
 
   const info = await transport.sendMail({
     from: fromAddress,
     to: payload.to,
     subject: subject || undefined,
     text: payload.text,
-    html: payload.html,
+    html: htmlBody,
     headers,
-    attachments: signatureAttachments,
+    attachments: outboundAttachments,
   });
 
   const explicitContactId =
@@ -347,17 +496,35 @@ export async function POST(request: Request) {
   const matchedContactIds = explicitContactId
     ? []
     : await findContactIdsFromAddresses(
-      recipientAddresses.length ? recipientAddresses : [payload.to]
+      recipientAddresses.length ? recipientAddresses : [payload.to],
+      currentUser.id,
+      currentUser.canAccessLegacyData
     );
   const contactId =
     explicitContactId ??
     (matchedContactIds.length === 1 ? matchedContactIds[0] : null);
   const now = new Date().toISOString();
 
+  if (explicitContactId) {
+    const { data: contact } = await supabase
+      .from("contacts")
+      .select("id")
+      .eq("id", explicitContactId)
+      .or(ownerFilter)
+      .maybeSingle();
+    if (!contact) {
+      return NextResponse.json(
+        { ok: false, error: "Contatto non trovato." },
+        { status: 404 }
+      );
+    }
+  }
+
   const { data: insertedEmail, error: insertedEmailError } = await supabase
     .from("emails")
     .insert({
       contact_id: contactId,
+      owner_id: currentUser.id,
       direction: "outbound",
       gmail_uid: null,
       message_id_header: info.messageId ?? null,
@@ -368,7 +535,7 @@ export async function POST(request: Request) {
       to_email: payload.to,
       subject: subject || null,
       text_body: payload.text ?? null,
-      html_body: payload.html ?? null,
+      html_body: htmlBody ?? null,
       received_at: now,
       raw: {
         messageId: info.messageId ?? null,
@@ -387,13 +554,37 @@ export async function POST(request: Request) {
   }
 
   if (insertedEmail?.id) {
-    await supabase.from("notifications").insert({
+    const notificationTitle = buildSentNotificationTitle(payload);
+    const notificationBody = subject || null;
+    const { error: notificationError } = await supabase.from("notifications").insert({
       type: "email_sent",
+      owner_id: currentUser.id,
       contact_id: contactId,
       email_id: insertedEmail.id,
-      title: `Email inviata a ${payload.to}`,
-      body: subject || null,
+      title: notificationTitle,
+      body: notificationBody,
     });
+
+    if (notificationError) {
+      console.error("POST /api/gmail/send notification insert failed", notificationError);
+    }
+
+    if (!notificationError && shouldEmailNotification(payload)) {
+      const notificationContext = buildCrmNotificationSendContext();
+      await sendCrmNotificationEmail({
+        transport: notificationContext.transport,
+        from: notificationContext.fromAddress,
+        to: CRM_NOTIFICATION_EMAIL,
+        title: notificationTitle,
+        body: notificationBody,
+      }).then(() => {
+        notificationEmailSent = true;
+      }).catch((error) => {
+        notificationEmailError =
+          error instanceof Error ? error.message : "Invio notifica email fallito.";
+        console.error("POST /api/gmail/send notification email failed", error);
+      });
+    }
   }
 
   const outboundContactIds = explicitContactId
@@ -402,8 +593,13 @@ export async function POST(request: Request) {
       ? matchedContactIds
       : [];
   for (const matchedId of outboundContactIds) {
-    await updateContactAfterOutbound(matchedId, now);
+    await updateContactAfterOutbound(matchedId, now, ownerFilter);
   }
 
-  return NextResponse.json({ ok: true, messageId: info.messageId });
+  return NextResponse.json({
+    ok: true,
+    messageId: info.messageId,
+    notificationEmailSent,
+    notificationEmailError,
+  });
 }

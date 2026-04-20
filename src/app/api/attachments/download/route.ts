@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -167,10 +168,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = getSupabase();
+  const user = await requireCurrentUser(supabase);
   const { data: emailRow, error } = await supabase
     .from("emails")
-    .select("id, raw, gmail_uid")
+    .select("id, raw, gmail_uid, email_account_id")
     .eq("id", emailId)
+    .or(getOwnerFilter(user))
     .maybeSingle();
 
   if (error || !emailRow) {
@@ -239,7 +242,12 @@ export async function GET(request: Request) {
     }
   }
 
-  if (!buffer && emailRow.gmail_uid) {
+  if (
+    !buffer &&
+    emailRow.gmail_uid &&
+    user.canAccessLegacyData &&
+    !emailRow.email_account_id
+  ) {
     const gmailResult = await downloadFromGmail(
       Number(emailRow.gmail_uid),
       index

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadContactEmailHistory } from "@/lib/server/contactEmailHistory";
 import { callConfiguredAiChat } from "@/lib/server/aiClient";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -178,10 +179,13 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabase();
+  const user = await requireCurrentUser(supabase);
+  const ownerFilter = getOwnerFilter(user);
   const { data: contact } = await supabase
     .from("contacts")
     .select("id, name, email, status")
     .eq("id", payload.contactId)
+    .or(ownerFilter)
     .maybeSingle();
 
   if (!contact) {
@@ -210,6 +214,8 @@ export async function POST(request: Request) {
       select:
         "id, direction, from_email, to_email, subject, text_body, html_body, received_at, created_at, raw",
       limit: Math.max(emailLimit, recentCount),
+      ownerId: user.id,
+      includeLegacy: user.canAccessLegacyData,
     });
 
   if (emailsError) {
@@ -263,7 +269,8 @@ export async function POST(request: Request) {
         await supabase
           .from("contacts")
           .update(updatePayload)
-          .eq("id", contact.id);
+          .eq("id", contact.id)
+          .or(ownerFilter);
       }
       return NextResponse.json({
         ok: true,

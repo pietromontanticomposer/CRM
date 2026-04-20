@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,9 +64,11 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
     const { data, error } = await supabase
       .from("todo_tasks")
       .select("*")
+      .or(getOwnerFilter(user))
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -99,9 +102,10 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
     const { data, error } = await supabase
       .from("todo_tasks")
-      .insert(payload)
+      .insert({ ...payload, owner_id: user.id })
       .select("*")
       .single();
 

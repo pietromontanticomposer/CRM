@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
+import { linkExistingEmailsToContact } from "@/lib/server/linkContactEmails";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,10 +109,13 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const { mark_followup_read: markFollowUpRead, ...updates } = payload;
     const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
+    const ownerFilter = getOwnerFilter(user);
     const { data, error } = await supabase
       .from("contacts")
-      .update(updates)
+      .update({ ...updates, owner_id: user.id })
       .eq("id", id)
+      .or(ownerFilter)
       .select("*")
       .single();
 
@@ -122,13 +127,28 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
 
+    if (payload.email !== undefined) {
+      try {
+        await linkExistingEmailsToContact(
+          supabase,
+          data.id,
+          data.email,
+          user.id,
+          user.canAccessLegacyData
+        );
+      } catch (linkError) {
+        console.error(`PATCH /api/contacts/${id} email link failed`, linkError);
+      }
+    }
+
     if (markFollowUpRead) {
       const { error: notificationError } = await supabase
         .from("notifications")
         .update({ is_read: true })
         .eq("contact_id", id)
         .eq("type", "followup_due")
-        .eq("is_read", false);
+        .eq("is_read", false)
+        .or(ownerFilter);
 
       if (notificationError) {
         console.error(
@@ -152,7 +172,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("contacts").delete().eq("id", id);
+    const user = await requireCurrentUser(supabase);
+    const { error } = await supabase
+      .from("contacts")
+      .delete()
+      .eq("id", id)
+      .or(getOwnerFilter(user));
 
     if (error) {
       console.error(`DELETE /api/contacts/${id} failed`, error);

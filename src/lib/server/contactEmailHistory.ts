@@ -24,6 +24,13 @@ const getTimestamp = (value?: string | null) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+const sortRowsByActivity = <TRow extends EmailHistoryRow>(rows: TRow[]) =>
+  [...rows].sort((a, b) => {
+    const aTime = getTimestamp(a.received_at ?? a.created_at ?? null);
+    const bTime = getTimestamp(b.received_at ?? b.created_at ?? null);
+    return bTime - aTime;
+  });
+
 export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
   supabase: SupabaseClient,
   options: {
@@ -31,21 +38,36 @@ export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
     emailText?: string | null;
     select: string;
     limit: number;
+    ownerId?: string | null;
+    includeLegacy?: boolean;
   }
 ) => {
-  const { contactId, emailText, select, limit } = options;
+  const { contactId, emailText, select, limit, ownerId, includeLegacy } = options;
+  const ownerModes =
+    ownerId && includeLegacy ? ["owner", "legacy"] : ownerId ? ["owner"] : ["all"];
 
-  const { data: linkedRows, error: linkedError } = await supabase
-    .from("emails")
-    .select(select)
-    .eq("contact_id", contactId)
-    .order("received_at", { ascending: false })
-    .limit(limit);
+  const linkedData: TRow[] = [];
 
-  if (linkedError) {
-    return { data: null as TRow[] | null, error: linkedError };
+  for (const ownerMode of ownerModes) {
+    let linkedQuery = supabase
+      .from("emails")
+      .select(select)
+      .eq("contact_id", contactId)
+      .order("received_at", { ascending: false })
+      .limit(limit);
+
+    if (ownerMode === "owner" && ownerId) {
+      linkedQuery = linkedQuery.eq("owner_id", ownerId);
+    } else if (ownerMode === "legacy") {
+      linkedQuery = linkedQuery.is("owner_id", null);
+    }
+
+    const { data: linkedRows, error: linkedError } = await linkedQuery;
+    if (linkedError) {
+      return { data: null as TRow[] | null, error: linkedError };
+    }
+    linkedData.push(...(((linkedRows ?? []) as unknown) as TRow[]));
   }
-  const linkedData = ((linkedRows ?? []) as unknown) as TRow[];
 
   const addresses = buildKnownContactAddresses(
     extractEmails(emailText),
@@ -59,9 +81,14 @@ export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
     }
     return rowMatchesAddresses(row, addressSet);
   };
+  const filteredLinkedData = linkedData.filter(shouldIncludeRow);
 
   if (!addresses.length) {
-    return { data: linkedData.filter(shouldIncludeRow), error: null };
+    return { data: sortRowsByActivity(filteredLinkedData).slice(0, limit), error: null };
+  }
+
+  if (filteredLinkedData.length > 0) {
+    return { data: sortRowsByActivity(filteredLinkedData).slice(0, limit), error: null };
   }
 
   const fallbackFilter = addresses
@@ -71,21 +98,32 @@ export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
     ])
     .join(",");
 
-  const { data: unlinkedRows, error: unlinkedError } = await supabase
-    .from("emails")
-    .select(select)
-    .or(fallbackFilter)
-    .order("received_at", { ascending: false })
-    .limit(limit);
+  const unlinkedData: TRow[] = [];
 
-  if (unlinkedError) {
-    return { data: null as TRow[] | null, error: unlinkedError };
+  for (const ownerMode of ownerModes) {
+    let unlinkedQuery = supabase
+      .from("emails")
+      .select(select)
+      .or(fallbackFilter)
+      .order("received_at", { ascending: false })
+      .limit(limit);
+
+    if (ownerMode === "owner" && ownerId) {
+      unlinkedQuery = unlinkedQuery.eq("owner_id", ownerId);
+    } else if (ownerMode === "legacy") {
+      unlinkedQuery = unlinkedQuery.is("owner_id", null);
+    }
+
+    const { data: unlinkedRows, error: unlinkedError } = await unlinkedQuery;
+    if (unlinkedError) {
+      return { data: null as TRow[] | null, error: unlinkedError };
+    }
+    unlinkedData.push(...(((unlinkedRows ?? []) as unknown) as TRow[]));
   }
 
   const merged = new Map<string, TRow>();
-  const unlinkedData = ((unlinkedRows ?? []) as unknown) as TRow[];
 
-  linkedData.filter(shouldIncludeRow).forEach((row) => {
+  filteredLinkedData.forEach((row) => {
     merged.set(row.id, row);
   });
 
@@ -95,13 +133,7 @@ export const loadContactEmailHistory = async <TRow extends EmailHistoryRow>(
       merged.set(row.id, row);
     });
 
-  const ordered = Array.from(merged.values())
-    .sort((a, b) => {
-      const aTime = getTimestamp(a.received_at ?? a.created_at ?? null);
-      const bTime = getTimestamp(b.received_at ?? b.created_at ?? null);
-      return bTime - aTime;
-    })
-    .slice(0, limit);
+  const ordered = sortRowsByActivity(Array.from(merged.values())).slice(0, limit);
 
   return { data: ordered, error: null };
 };

@@ -68,6 +68,8 @@ const verifyValue = async (value: string, signature: string, secret: string) => 
 export const isAuthConfigured = () =>
   Boolean(getLoginEmail() && getLoginPassword() && getSessionSecret());
 
+export const isSessionConfigured = () => Boolean(getSessionSecret());
+
 export const getConfiguredLoginEmail = () => getLoginEmail();
 
 export const validateLogin = async (email: string, password: string) => {

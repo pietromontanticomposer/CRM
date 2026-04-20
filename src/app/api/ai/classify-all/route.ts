@@ -254,7 +254,8 @@ const classifyContact = async (contact: {
         await supabase
           .from("contacts")
           .update(updatePayload)
-          .eq("id", contact.id);
+          .eq("id", contact.id)
+          .is("owner_id", null);
       }
       return { ok: true, cached: true };
     }
@@ -414,6 +415,7 @@ const handleClassifyAll = async (request: Request) => {
   const { data: contacts, error } = await supabase
     .from("contacts")
     .select("id, name, email, status, created_at")
+    .is("owner_id", null)
     .order("created_at", { ascending: true })
     .range(offset, offset + batchSize - 1);
 

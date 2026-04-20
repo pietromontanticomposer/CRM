@@ -186,6 +186,7 @@ export async function POST(request: Request) {
           .from("emails")
           .select("raw")
           .eq("gmail_uid", message.uid)
+          .is("owner_id", null)
           .maybeSingle();
 
         const currentRaw =
@@ -228,7 +229,8 @@ export async function POST(request: Request) {
         const { error: updateError } = await supabase
           .from("emails")
           .update({ raw: nextRaw })
-          .eq("gmail_uid", message.uid);
+          .eq("gmail_uid", message.uid)
+          .is("owner_id", null);
 
         if (updateError) {
           console.error("Backfill update error", updateError);

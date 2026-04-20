@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,10 +89,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
     const { data, error } = await supabase
       .from("todo_tasks")
-      .update(payload)
+      .update({ ...payload, owner_id: user.id })
       .eq("id", id)
+      .or(getOwnerFilter(user))
       .select("*")
       .single();
 
@@ -117,7 +120,12 @@ export async function DELETE(_request: Request, context: RouteContext) {
   try {
     const { id } = await context.params;
     const supabase = getSupabaseAdmin();
-    const { error } = await supabase.from("todo_tasks").delete().eq("id", id);
+    const user = await requireCurrentUser(supabase);
+    const { error } = await supabase
+      .from("todo_tasks")
+      .delete()
+      .eq("id", id)
+      .or(getOwnerFilter(user));
 
     if (error) {
       console.error(`DELETE /api/todo/${id} failed`, error);

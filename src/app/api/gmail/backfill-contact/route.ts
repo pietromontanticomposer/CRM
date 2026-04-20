@@ -1,5 +1,6 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { ImapFlow } from "imapflow";
+import { ImapFlow, type SearchObject } from "imapflow";
 import { simpleParser, type AddressObject } from "mailparser";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -8,6 +9,8 @@ import {
   normalizeEmail,
   uniqueEmails,
 } from "@/lib/server/emailMatching";
+import { resolveEmailAccount } from "@/lib/server/emailAccounts";
+import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 import {
   SECOND_FOLLOW_UP_DAYS,
   buildAutomaticFollowUpNote,
@@ -19,8 +22,9 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DEFAULT_LIMIT = 200;
-const MAX_LIMIT = 400;
+const DEFAULT_LIMIT = 6;
+const MAX_LIMIT = 30;
+const SYNC_STATE_TTL_MS = 10 * 60 * 1000;
 
 type ParsedAddress = {
   address?: string;
@@ -124,78 +128,6 @@ const parseEmail = async (source: Buffer | Uint8Array): Promise<ParsedEmail> => 
   };
 };
 
-const sanitizeFilename = (value?: string | null) => {
-  if (!value) return "allegato";
-  return value.replace(/[^\w.\-]+/g, "_");
-};
-
-const normalizeCid = (value?: string | null) => {
-  if (!value) return null;
-  return value.replace(/^<|>$/g, "");
-};
-
-const uploadAttachments = async (
-  attachments: ParsedEmail["attachments"],
-  gmailUid: number
-) => {
-  if (!attachments.length) return [];
-  const bucket =
-    process.env.EMAIL_ATTACHMENTS_BUCKET?.trim() || "email-attachments";
-  const supabase = getSupabase();
-
-  const results = await Promise.all(
-    attachments.map(async (attachment, index) => {
-      const filename = sanitizeFilename(attachment.filename);
-      const safeCid = normalizeCid(attachment.cid);
-      if (!attachment.content) {
-        return {
-          filename,
-          contentType: attachment.contentType,
-          size: attachment.size,
-          cid: safeCid,
-          inline:
-            Boolean(safeCid) || attachment.contentDisposition === "inline",
-          url: null,
-        };
-      }
-
-      const path = `gmail/${gmailUid}/${index}-${Date.now()}-${filename}`;
-      const { error } = await supabase.storage
-        .from(bucket)
-        .upload(path, attachment.content, {
-          contentType: attachment.contentType ?? undefined,
-          upsert: true,
-        });
-
-      if (error) {
-        console.error("Attachment upload error", error);
-        return {
-          filename,
-          contentType: attachment.contentType,
-          size: attachment.size,
-          cid: safeCid,
-          inline:
-            Boolean(safeCid) || attachment.contentDisposition === "inline",
-          url: null,
-        };
-      }
-
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      return {
-        filename,
-        contentType: attachment.contentType,
-        size: attachment.size,
-        cid: safeCid,
-        inline:
-          Boolean(safeCid) || attachment.contentDisposition === "inline",
-        url: data.publicUrl,
-      };
-    })
-  );
-
-  return results;
-};
-
 const buildRecipientList = (
   toList: string[],
   ccList: string[],
@@ -243,7 +175,8 @@ const buildMessageIdVariants = (values: Array<string | null | undefined>) =>
   );
 
 const findThreadContactIds = async (
-  messageIdValues: Array<string | null | undefined>
+  messageIdValues: Array<string | null | undefined>,
+  ownerFilter?: string | null
 ) => {
   const messageIds = buildMessageIdVariants(messageIdValues);
   if (!messageIds.length) return [];
@@ -254,12 +187,18 @@ const findThreadContactIds = async (
 
   for (let index = 0; index < messageIds.length; index += chunkSize) {
     const chunk = messageIds.slice(index, index + chunkSize);
-    const { data } = await supabase
+    let query = supabase
       .from("emails")
       .select("contact_id")
       .in("message_id_header", chunk)
       .not("contact_id", "is", null)
       .limit(2000);
+
+    if (ownerFilter) {
+      query = query.or(ownerFilter);
+    }
+
+    const { data } = await query;
 
     data?.forEach((row) => {
       if (row.contact_id) found.add(row.contact_id);
@@ -271,17 +210,25 @@ const findThreadContactIds = async (
 
 const getKnownSearchAddresses = async (
   contactId: string | null,
-  seedAddresses: string[]
+  seedAddresses: string[],
+  accountEmail: string,
+  ownerFilter?: string | null
 ) => {
   if (!contactId) return seedAddresses;
 
   const supabase = getSupabase();
-  const { data } = await supabase
+  let query = supabase
     .from("emails")
     .select("direction, from_email, to_email, raw")
     .eq("contact_id", contactId)
     .order("received_at", { ascending: false })
-    .limit(800);
+    .limit(80);
+
+  if (ownerFilter) {
+    query = query.or(ownerFilter);
+  }
+
+  const { data } = await query;
 
   return buildKnownContactAddresses(
     seedAddresses,
@@ -291,9 +238,33 @@ const getKnownSearchAddresses = async (
       to_email: string | null;
       raw: Record<string, unknown> | null;
     }>,
-    process.env.GMAIL_USER
-  );
+    accountEmail
+  ).slice(0, 5);
 };
+
+const cleanGmailRawAddress = (value: string) =>
+  value.replace(/[()"{}]/g, "").trim().toLowerCase();
+
+const buildGmailRawQuery = (addresses: string[], sinceDays: number) => {
+  const terms = addresses
+    .slice(0, 5)
+    .map(cleanGmailRawAddress)
+    .filter(Boolean)
+    .flatMap((address) => [
+      `from:${address}`,
+      `to:${address}`,
+      `cc:${address}`,
+      `bcc:${address}`,
+    ]);
+  if (!terms.length) return null;
+  return `newer_than:${Math.max(1, Math.floor(sinceDays))}d (${terms.join(" OR ")})`;
+};
+
+const hashEmailList = (emails: string[]) =>
+  crypto
+    .createHash("sha256")
+    .update([...emails].sort().join(","))
+    .digest("hex");
 
 const parsePayload = async (request: Request) => {
   try {
@@ -302,14 +273,27 @@ const parsePayload = async (request: Request) => {
       limit?: number;
       contactId?: string;
       beforeUid?: number;
+      sinceDays?: number;
+      emailAccountId?: string | null;
+      force?: boolean;
     };
     const emails = Array.isArray(body?.emails) ? body.emails : [];
     const limit = Number(body?.limit ?? DEFAULT_LIMIT);
     const beforeUid = Number(body?.beforeUid ?? 0);
+    const sinceDays = Number(body?.sinceDays ?? 60);
     return {
       emails,
       limit: Math.max(1, Math.min(MAX_LIMIT, Number.isFinite(limit) ? limit : DEFAULT_LIMIT)),
+      sinceDays: Math.max(
+        1,
+        Math.min(3650, Number.isFinite(sinceDays) ? Math.floor(sinceDays) : 60)
+      ),
       contactId: body?.contactId ?? null,
+      force: Boolean(body?.force),
+      emailAccountId:
+        typeof body?.emailAccountId === "string" && body.emailAccountId.trim()
+          ? body.emailAccountId.trim()
+          : null,
       beforeUid:
         Number.isFinite(beforeUid) && beforeUid > 0 ? beforeUid : null,
     };
@@ -317,7 +301,10 @@ const parsePayload = async (request: Request) => {
     return {
       emails: [],
       limit: DEFAULT_LIMIT,
+      sinceDays: 60,
       contactId: null,
+      force: false,
+      emailAccountId: null,
       beforeUid: null,
     };
   }
@@ -346,14 +333,20 @@ const shouldSkipFollowUp = (status?: string | null) =>
 
 const updateContactAfterOutbound = async (
   contactId: string,
-  sentAt?: string | null
+  sentAt?: string | null,
+  ownerFilter?: string | null
 ) => {
   const supabase = getSupabase();
-  const { data: contact } = await supabase
+  let contactQuery = supabase
     .from("contacts")
     .select("id, status, last_action_at, next_action_at, next_action_note")
-    .eq("id", contactId)
-    .maybeSingle();
+    .eq("id", contactId);
+
+  if (ownerFilter) {
+    contactQuery = contactQuery.or(ownerFilter);
+  }
+
+  const { data: contact } = await contactQuery.maybeSingle();
 
   if (!contact || shouldSkipFollowUp(contact.status)) return;
 
@@ -399,28 +392,106 @@ const updateContactAfterOutbound = async (
     return;
   }
 
-  await supabase
+  let updateQuery = supabase
     .from("contacts")
     .update(updatePayload)
     .eq("id", contactId);
+
+  if (ownerFilter) {
+    updateQuery = updateQuery.or(ownerFilter);
+  }
+
+  await updateQuery;
 };
 
 export async function POST(request: Request) {
-  const { emails, limit, contactId, beforeUid } = await parsePayload(request);
+  const startedAt = Date.now();
+  const { emails, limit, sinceDays, contactId, beforeUid, emailAccountId, force } =
+    await parsePayload(request);
   const cleaned = uniqueEmails(emails);
   if (!cleaned.length) {
     return NextResponse.json({ ok: false, error: "Missing emails" }, { status: 400 });
   }
 
-  const user = getEnv("GMAIL_USER");
-  const pass = getEnv("GMAIL_APP_PASSWORD");
-  const searchAddresses = await getKnownSearchAddresses(contactId, cleaned);
+  const supabase = getSupabase();
+  const currentUser = await requireCurrentUser(supabase);
+  if (!emailAccountId && !currentUser.canAccessLegacyData) {
+    return NextResponse.json(
+      { ok: false, error: "Collega una casella email prima del sync." },
+      { status: 400 }
+    );
+  }
+
+  const ownerFilter = getOwnerFilter(currentUser);
+  const account = await resolveEmailAccount(
+    supabase,
+    emailAccountId,
+    currentUser.id,
+    currentUser.canAccessLegacyData
+  );
+  const user = account.email;
+  const searchAddresses = await getKnownSearchAddresses(
+    contactId,
+    cleaned,
+    account.email,
+    ownerFilter
+  );
   const requestedAddressSet = new Set(searchAddresses);
+  const ownerKey = account.id ? currentUser.id : "legacy";
+  const emailAccountKey = account.id || "legacy";
+  const emailHash = hashEmailList(searchAddresses);
+
+  const buildResponse = (payload: Record<string, unknown>, status?: number) =>
+    NextResponse.json(
+      { ...payload, durationMs: Date.now() - startedAt },
+      status ? { status } : undefined
+    );
+
+  const touchSyncState = async (lastCursor?: number | null) => {
+    if (!contactId) return;
+    await supabase.from("contact_email_sync_state").upsert(
+      {
+        owner_key: ownerKey,
+        contact_id: contactId,
+        email_account_key: emailAccountKey,
+        email_hash: emailHash,
+        last_sync_at: new Date().toISOString(),
+        last_cursor: lastCursor ?? null,
+      },
+      { onConflict: "owner_key,contact_id,email_account_key,email_hash" }
+    );
+  };
+
+  if (!force && !beforeUid && contactId) {
+    const { data: syncState } = await supabase
+      .from("contact_email_sync_state")
+      .select("last_sync_at,last_cursor")
+      .eq("owner_key", ownerKey)
+      .eq("contact_id", contactId)
+      .eq("email_account_key", emailAccountKey)
+      .eq("email_hash", emailHash)
+      .maybeSingle();
+
+    const lastSyncAt = syncState?.last_sync_at
+      ? new Date(syncState.last_sync_at).getTime()
+      : 0;
+    if (lastSyncAt && Date.now() - lastSyncAt < SYNC_STATE_TTL_MS) {
+      return buildResponse({
+        ok: true,
+        skipped: true,
+        processed: 0,
+        inserted: 0,
+        updated: 0,
+        nextCursor: syncState?.last_cursor ?? null,
+      });
+    }
+  }
+
   const client = new ImapFlow({
-    host: "imap.gmail.com",
-    port: 993,
-    secure: true,
-    auth: { user, pass },
+    host: account.imapHost,
+    port: account.imapPort,
+    secure: account.imapSecure,
+    auth: { user: account.username, pass: account.password },
   });
 
   let processed = 0;
@@ -431,12 +502,13 @@ export async function POST(request: Request) {
     await client.connect();
     const mailboxes = await client.list();
     const allMail =
+      mailboxes.find((box) => account.mailbox && box.path === account.mailbox) ||
       mailboxes.find((box) => box.specialUse === "\\All") ||
       mailboxes.find((box) =>
         box.path?.toLowerCase().includes("all mail")
       ) ||
       mailboxes.find((box) => box.specialUse === "\\Inbox");
-    const mailboxPath = allMail?.path || "INBOX";
+    const mailboxPath = account.mailbox || allMail?.path || "INBOX";
 
     const lock = await client.getMailboxLock(mailboxPath);
     try {
@@ -446,15 +518,32 @@ export async function POST(request: Request) {
         { cc: address },
         { bcc: address },
       ]);
-      const query =
+      const addressQuery: SearchObject =
         orQueries.length === 1 ? orQueries[0] : { or: orQueries };
+      const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+      const query: SearchObject = beforeUid
+        ? addressQuery
+        : { ...addressQuery, since };
 
-      const allUids = await client.search(query, { uid: true });
+      const gmailRawQuery =
+        account.provider === "gmail" && !beforeUid
+          ? buildGmailRawQuery(searchAddresses, sinceDays)
+          : null;
+      const searchQuery: SearchObject = gmailRawQuery
+        ? { gmailraw: gmailRawQuery }
+        : query;
+      const allUids = await client
+        .search(searchQuery, { uid: true })
+        .catch((error) => {
+          if (!gmailRawQuery) throw error;
+          return client.search(query, { uid: true });
+        });
       const uidList = (Array.isArray(allUids) ? allUids : []).filter(
         (uid) => !beforeUid || uid < beforeUid
       );
       if (!uidList.length) {
-        return NextResponse.json({
+        await touchSyncState(null);
+        return buildResponse({
           ok: true,
           processed: 0,
           inserted: 0,
@@ -465,27 +554,84 @@ export async function POST(request: Request) {
 
       const slice = uidList.slice(-limit);
       const nextCursor = uidList.length > slice.length ? slice[0] : null;
+      let existingUidQuery = supabase
+        .from("emails")
+        .select(account.id ? "provider_uid, contact_id" : "gmail_uid, contact_id")
+        .or(ownerFilter)
+        .limit(slice.length);
+      if (account.id) {
+        existingUidQuery = existingUidQuery
+          .eq("email_account_id", account.id)
+          .in(
+            "provider_uid",
+            slice.map((uid) => String(uid))
+          );
+      } else {
+        existingUidQuery = existingUidQuery
+          .is("email_account_id", null)
+          .in("gmail_uid", slice);
+      }
+
+      const { data: existingUidRows } = await existingUidQuery;
+      const alreadyLinkedUids = new Set(
+        (existingUidRows ?? [])
+          .filter((row) => Boolean(row.contact_id))
+          .map((row) =>
+            account.id
+              ? String((row as { provider_uid?: string | null }).provider_uid)
+              : String((row as { gmail_uid?: number | null }).gmail_uid)
+          )
+      );
+      const fetchSlice = slice.filter(
+        (uid) => !alreadyLinkedUids.has(String(uid))
+      );
+
+      if (!fetchSlice.length) {
+        await touchSyncState(nextCursor);
+        return buildResponse({
+          ok: true,
+          processed: 0,
+          inserted: 0,
+          updated: 0,
+          nextCursor,
+        });
+      }
 
       for await (const message of client.fetch(
-        slice,
+        fetchSlice,
         { uid: true, source: true },
         { uid: true }
       )) {
         if (!message.uid || !message.source) continue;
         processed += 1;
 
-        const supabase = getSupabase();
-        const { data: existing } = await supabase
+        let existingQuery = supabase
           .from("emails")
           .select("id, contact_id, from_email, to_email, raw")
-          .eq("gmail_uid", message.uid)
-          .maybeSingle();
+          .limit(1);
+        if (ownerFilter) {
+          existingQuery = existingQuery.or(ownerFilter);
+        }
+
+        const { data: existing } = account.id
+          ? await existingQuery
+              .eq("email_account_id", account.id)
+              .eq("provider_uid", String(message.uid))
+              .maybeSingle()
+          : await existingQuery
+              .is("email_account_id", null)
+              .eq("gmail_uid", message.uid)
+              .maybeSingle();
 
         const parsed = await parseEmail(message.source as Buffer | Uint8Array);
-        const attachmentsMeta = await uploadAttachments(
-          parsed.attachments,
-          message.uid
-        );
+        const attachmentsMeta: Array<{
+          filename: string;
+          contentType: string | null;
+          size: number | null;
+          cid: string | null;
+          inline: boolean;
+          url: string | null;
+        }> = [];
         const fromEmail = parsed.from?.address ?? null;
         const fromName = parsed.from?.name ?? null;
         const recipients = buildRecipientList(
@@ -500,18 +646,23 @@ export async function POST(request: Request) {
         const isOutbound =
           normalizeEmail(fromEmail) === normalizeEmail(user);
         const direction = isOutbound ? "outbound" : "inbound";
-        const threadContactIds = await findThreadContactIds([
-          parsed.inReplyTo,
-          parsed.references,
-        ]);
-        const linkedContactId = shouldLinkContact({
+        const directlyLinked = shouldLinkContact({
           contactId,
           fromEmail,
           recipients,
           requestedAddresses: requestedAddressSet,
-        }) || threadContactIds.includes(contactId ?? "")
-          ? contactId
-          : null;
+        });
+        const threadContactIds =
+          directlyLinked || !contactId || (!parsed.inReplyTo && !parsed.references)
+            ? []
+            : await findThreadContactIds(
+                [parsed.inReplyTo, parsed.references],
+                ownerFilter
+              );
+        const linkedContactId =
+          contactId && (directlyLinked || threadContactIds.includes(contactId))
+            ? contactId
+            : null;
 
         if (existing) {
           const shouldUpdateContact =
@@ -552,6 +703,7 @@ export async function POST(request: Request) {
                   : existing.contact_id,
                 from_email: shouldUpdateFrom ? fromEmail : existing.from_email,
                 to_email: shouldUpdateTo ? recipientsDisplay : existing.to_email,
+                owner_id: currentUser.id,
                 ...(shouldUpdateAttachments
                   ? {
                       raw: {
@@ -568,14 +720,22 @@ export async function POST(request: Request) {
             updated += 1;
           }
           if (direction === "outbound" && linkedContactId) {
-            await updateContactAfterOutbound(linkedContactId, parsed.date);
+            await updateContactAfterOutbound(
+              linkedContactId,
+              parsed.date,
+              ownerFilter
+            );
           }
           continue;
         }
 
         const { error } = await supabase.from("emails").insert({
           contact_id: linkedContactId,
+          owner_id: currentUser.id,
           direction,
+          email_account_id: account.id,
+          provider: account.provider,
+          provider_uid: String(message.uid),
           gmail_uid: message.uid,
           message_id_header: parsed.messageId,
           in_reply_to: parsed.inReplyTo,
@@ -602,12 +762,17 @@ export async function POST(request: Request) {
           continue;
         }
         if (direction === "outbound" && linkedContactId) {
-          await updateContactAfterOutbound(linkedContactId, parsed.date);
+          await updateContactAfterOutbound(
+            linkedContactId,
+            parsed.date,
+            ownerFilter
+          );
         }
         inserted += 1;
       }
 
-      return NextResponse.json({
+      await touchSyncState(nextCursor);
+      return buildResponse({
         ok: true,
         processed,
         inserted,
@@ -619,12 +784,12 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error("Backfill contact error", error);
-    return NextResponse.json({ ok: false }, { status: 500 });
+    return buildResponse({ ok: false }, 500);
   } finally {
     await client.logout().catch(() => undefined);
   }
 
-  return NextResponse.json({
+  return buildResponse({
     ok: true,
     processed,
     inserted,

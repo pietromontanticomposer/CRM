@@ -1,7 +1,7 @@
 import LoginForm from "@/components/LoginForm";
 
 type LoginPageProps = {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; resetToken?: string; verified?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -34,7 +34,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         </section>
 
-        <LoginForm nextPath={params.next} />
+        <LoginForm
+          nextPath={params.next}
+          resetToken={params.resetToken}
+          verified={params.verified}
+        />
       </main>
     </div>
   );
