@@ -2376,7 +2376,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   };
 
   const handleCancelScheduledEmail = async (id: string) => {
-    await fetch(`/api/scheduled-emails/${id}`, { method: "DELETE" });
+    const response = await fetch(`/api/scheduled-emails/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      setEmailsError("Impossibile annullare l'email programmata.");
+    }
     await loadScheduledEmails();
   };
 
