@@ -960,6 +960,18 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [scheduleSendDate, setScheduleSendDate] = useState("");
+  const [schedulingEmail, setSchedulingEmail] = useState(false);
+  const [scheduledEmails, setScheduledEmails] = useState<
+    Array<{
+      id: string;
+      to_email: string;
+      subject: string | null;
+      text_body: string | null;
+      send_at: string;
+      contact_id: string | null;
+    }>
+  >([]);
   const [ensuredAttachments, setEnsuredAttachments] = useState<
     Record<string, "pending" | "done">
   >({});
@@ -2292,6 +2304,81 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     setSendingEmail(false);
   };
 
+  const loadScheduledEmails = async () => {
+    try {
+      const response = await fetch("/api/scheduled-emails");
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data?.items) setScheduledEmails(data.items);
+    } catch {
+      // silent
+    }
+  };
+
+  const handleScheduleEmail = async () => {
+    if (!selected?.email?.trim()) {
+      setEmailsError("Aggiungi un'email al contatto per poter programmare.");
+      return;
+    }
+    if (!scheduleSendDate) {
+      setEmailsError("Seleziona una data di invio.");
+      return;
+    }
+
+    const replyTarget = getReplyTarget();
+    const resolvedSubject = replyTarget
+      ? buildReplySubject(replyTarget.subject, emailSubject)
+      : emailSubject.trim();
+    const resolvedBody = emailBody.trim();
+
+    if (!resolvedSubject && !resolvedBody) {
+      setEmailsError("Scrivi almeno un oggetto o un messaggio.");
+      return;
+    }
+
+    setSchedulingEmail(true);
+    setEmailsError(null);
+
+    const looksLikeFollowUp = /follow[\s-]?up/i.test(
+      `${resolvedSubject} ${resolvedBody}`
+    );
+
+    const response = await fetch("/api/scheduled-emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contactId: selected.id,
+        to: selected.email.trim(),
+        subject: resolvedSubject || undefined,
+        text: resolvedBody || undefined,
+        replyToEmailId: replyTarget?.id ?? undefined,
+        emailAccountId: selectedEmailAccountId || undefined,
+        notificationKind:
+          emailPreset !== "custom" || looksLikeFollowUp
+            ? "follow_up"
+            : undefined,
+        sendAt: scheduleSendDate,
+      }),
+    });
+
+    if (!response.ok) {
+      setEmailsError("Programmazione fallita. Riprova.");
+      setSchedulingEmail(false);
+      return;
+    }
+
+    setEmailPreset("custom");
+    setEmailSubject("");
+    setEmailBody("");
+    setScheduleSendDate("");
+    await loadScheduledEmails();
+    setSchedulingEmail(false);
+  };
+
+  const handleCancelScheduledEmail = async (id: string) => {
+    await fetch(`/api/scheduled-emails/${id}`, { method: "DELETE" });
+    await loadScheduledEmails();
+  };
 
   const handleRefreshConversation = async () => {
     if (!selected || conversationRefreshing) return;
@@ -2305,6 +2392,7 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
   useEffect(() => {
     void loadContacts();
     void loadEmailAccounts();
+    void loadScheduledEmails();
     const onContactsRefresh = () => {
       void loadContacts({ silent: true });
     };
@@ -3237,17 +3325,70 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             <button
               type="button"
               onClick={handleSendEmail}
-              disabled={sendingEmail}
+              disabled={sendingEmail || schedulingEmail}
               className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
             >
               {sendingEmail ? "Invio..." : "Invia email"}
             </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                className="rounded-lg border px-2 py-1.5 text-sm"
+                value={scheduleSendDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(event) => setScheduleSendDate(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={handleScheduleEmail}
+                disabled={schedulingEmail || sendingEmail || !scheduleSendDate}
+                className="rounded-full border border-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-white disabled:opacity-60"
+              >
+                {schedulingEmail ? "Programmo..." : "Programma"}
+              </button>
+            </div>
             {getReplyTarget() && (
               <span className="text-xs text-[var(--muted)]">
                 Risposta collegata al thread esistente.
               </span>
             )}
           </div>
+          {scheduledEmails.filter((se) => se.contact_id === selected?.id).length > 0 && (
+            <div className="mt-4">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
+                Email programmate
+              </div>
+              <div className="mt-2 space-y-2">
+                {scheduledEmails
+                  .filter((se) => se.contact_id === selected?.id)
+                  .map((se) => (
+                    <div
+                      key={se.id}
+                      className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium">
+                          {se.subject || "(senza oggetto)"}
+                        </span>
+                        <span className="ml-2 text-[var(--muted)]">
+                          {new Date(se.send_at + "T00:00:00").toLocaleDateString(
+                            "it-IT",
+                            { day: "numeric", month: "short", year: "numeric" }
+                          )}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCancelScheduledEmail(se.id)}
+                        className="ml-3 shrink-0 text-red-500 hover:text-red-700"
+                      >
+                        Annulla
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

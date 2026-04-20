@@ -11,6 +11,10 @@
     {
       "path": "/api/ai/classify-all",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/scheduled-emails/send",
+      "schedule": "0 8 * * *"
     }
   ]
 }
