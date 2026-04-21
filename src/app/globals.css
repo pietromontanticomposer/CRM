@@ -141,8 +141,13 @@ summary::-webkit-details-marker {
   --pulse-rgb: 20 184 166;
 }
 
+.scheduled-email-pulse {
+  --pulse-rgb: 249 115 22;
+}
+
 .auto-follow-pulse,
-.maintain-rapport-pulse {
+.maintain-rapport-pulse,
+.scheduled-email-pulse {
   box-shadow: 0 0 var(--crm-pulse-blur) var(--crm-pulse-spread)
     rgb(var(--pulse-rgb) / var(--crm-pulse-alpha));
   transition-duration: 150ms;
