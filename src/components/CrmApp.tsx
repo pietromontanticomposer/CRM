@@ -2362,7 +2362,10 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
     });
 
     if (!response.ok) {
-      setEmailsError("Programmazione fallita. Riprova.");
+      const errorData = await response.json().catch(() => null);
+      setEmailsError(
+        errorData?.error || "Programmazione fallita. Riprova."
+      );
       setSchedulingEmail(false);
       return;
     }
@@ -3873,6 +3876,11 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
                           >
                             {getStatusLabel(contact.status)}
                           </span>
+                          {scheduledEmails.some((se) => se.contact_id === contact.id) && (
+                            <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${theme === "dark" ? "bg-orange-500/15 text-orange-200 border-orange-400/30" : "border-orange-500 bg-orange-100 text-orange-900"}`}>
+                              Email programmata
+                            </span>
+                          )}
                         </div>
                         <div className="break-words text-xs text-[var(--muted)]">
                           {contact.status === "Non interessato" ? (
@@ -3922,19 +3930,26 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
               </div>
             </div>
             {selected && (
-              <div
-                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}${
-                  selected.status === "Attiva auto follow-up"
-                    ? " auto-follow-pulse"
-                    : ""
-                }${
-                  selected.status === "Mantenimento rapporto"
-                    ? " maintain-rapport-pulse"
-                    : ""
-                }`}
-              >
-                {getStatusLabel(selected.status)}
-              </div>
+              <>
+                <div
+                  className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles[selected.status]}${
+                    selected.status === "Attiva auto follow-up"
+                      ? " auto-follow-pulse"
+                      : ""
+                  }${
+                    selected.status === "Mantenimento rapporto"
+                      ? " maintain-rapport-pulse"
+                      : ""
+                  }`}
+                >
+                  {getStatusLabel(selected.status)}
+                </div>
+                {scheduledEmails.some((se) => se.contact_id === selected.id) && (
+                  <div className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${theme === "dark" ? "bg-orange-500/15 text-orange-200 border-orange-400/30" : "border-orange-500 bg-orange-100 text-orange-900"}`}>
+                    Email programmata
+                  </div>
+                )}
+              </>
             )}
           </div>
 

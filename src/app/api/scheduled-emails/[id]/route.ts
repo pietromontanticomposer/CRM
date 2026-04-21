@@ -20,32 +20,41 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  if (!id?.trim()) {
-    return NextResponse.json({ ok: false }, { status: 400 });
-  }
+  try {
+    const { id } = await params;
+    if (!id?.trim()) {
+      return NextResponse.json({ ok: false }, { status: 400 });
+    }
 
-  const supabase = getSupabase();
-  const currentUser = await requireCurrentUser(supabase);
+    const supabase = getSupabase();
+    const currentUser = await requireCurrentUser(supabase);
 
-  const { data, error } = await supabase
-    .from("scheduled_emails")
-    .update({ status: "cancelled" })
-    .eq("id", id)
-    .eq("owner_id", currentUser.id)
-    .eq("status", "pending")
-    .select("id")
-    .maybeSingle();
+    const { data, error } = await supabase
+      .from("scheduled_emails")
+      .update({ status: "cancelled" })
+      .eq("id", id)
+      .eq("owner_id", currentUser.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
-  if (!data) {
+    if (error) {
+      console.error("DELETE /api/scheduled-emails/[id] failed", error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json(
+        { ok: false, error: "Email programmata non trovata." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("DELETE /api/scheduled-emails/[id] unexpected error", err);
     return NextResponse.json(
-      { ok: false, error: "Email programmata non trovata." },
-      { status: 404 }
+      { ok: false, error: err instanceof Error ? err.message : "Errore interno." },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({ ok: true });
 }

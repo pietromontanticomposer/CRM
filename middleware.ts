@@ -20,6 +20,7 @@ const EXEMPT_API_PATHS = new Set([
   "/api/gmail/backfill-attachments",
   "/api/reminders/run",
   "/api/ai/classify-all",
+  "/api/scheduled-emails/send",
 ]);
 
 const isPublicAsset = (pathname: string) =>
