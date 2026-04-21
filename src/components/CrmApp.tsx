@@ -3471,6 +3471,15 @@ export default function CrmApp({ theme }: { theme: CrmTheme }) {
             </div>
           </div>
 
+          {scheduledEmails.length > 0 && (
+            <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${theme === "dark" ? "bg-orange-500/15 text-orange-200 border-orange-400/30" : "border-orange-500 bg-orange-100 text-orange-900"}`}>
+              <span>Email programmata</span>
+              <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
+                {scheduledEmails.length}
+              </span>
+            </div>
+          )}
+
         </div>
       </header>
 
