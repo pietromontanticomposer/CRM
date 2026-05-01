@@ -333,6 +333,15 @@ export const handleContactInbound = async (
   if (options && isAutoReply(options.subject, options.fromEmail)) {
     return;
   }
+
+  // Annulla tutte le email programmate ancora pendenti per questo contatto:
+  // se ha risposto, non vogliamo che partano follow-up automatici.
+  await supabase
+    .from("scheduled_emails")
+    .update({ status: "cancelled" })
+    .eq("contact_id", contactId)
+    .eq("status", "pending");
+
   const { data: contact } = await supabase
     .from("contacts")
     .select("status, next_action_note")
