@@ -52,13 +52,6 @@ type ContactEmailRow = {
   created_at: string | null;
 };
 
-type ContactEmailContentRow = {
-  id: string;
-  subject: string | null;
-  text_body: string | null;
-  html_body: string | null;
-};
-
 type LanguageCandidateRow = {
   direction: "inbound" | "outbound" | null;
   from_email: string | null;
@@ -151,14 +144,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   }
 
   return fallback;
-};
-
-const chunkArray = <T,>(items: T[], chunkSize: number) => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += chunkSize) {
-    chunks.push(items.slice(index, index + chunkSize));
-  }
-  return chunks;
 };
 
 const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
@@ -312,76 +297,25 @@ export async function GET(request: Request) {
 
     const lastInboundAtByContactId = new Map<string, string>();
     const lastOutboundAtByContactId = new Map<string, string>();
-    const latestInboundEmailIdByContactId = new Map<string, string>();
-    const latestOutboundEmailIdByContactId = new Map<string, string>();
 
     (contactEmails ?? []).forEach((row) => {
       const email = row as unknown as ContactEmailRow;
       if (!email.contact_id) return;
       const candidate = email.received_at ?? email.created_at ?? null;
       if (!candidate) return;
-      
+
       if (email.direction === "inbound") {
         const current = lastInboundAtByContactId.get(email.contact_id);
         if (getTimestamp(candidate) > getTimestamp(current)) {
           lastInboundAtByContactId.set(email.contact_id, candidate);
-          latestInboundEmailIdByContactId.set(email.contact_id, email.id);
         }
       } else if (email.direction === "outbound") {
         const current = lastOutboundAtByContactId.get(email.contact_id);
         if (getTimestamp(candidate) > getTimestamp(current)) {
           lastOutboundAtByContactId.set(email.contact_id, candidate);
-          latestOutboundEmailIdByContactId.set(email.contact_id, email.id);
         }
       }
     });
-
-    const latestLanguageCandidateIds = Array.from(
-      new Set([
-        ...latestInboundEmailIdByContactId.values(),
-        ...latestOutboundEmailIdByContactId.values(),
-      ])
-    );
-    const latestInboundTextByEmailId = new Map<string, string>();
-
-    if (latestLanguageCandidateIds.length > 0) {
-      const idChunks = chunkArray(latestLanguageCandidateIds, 200);
-
-      for (const chunk of idChunks) {
-        const { data: inboundContentRows, error: inboundContentError } =
-          await supabase
-            .from("emails")
-            .select("id, subject, text_body, html_body")
-            .or(ownerFilter)
-            .in("id", chunk);
-
-        if (inboundContentError) {
-          console.error(
-            "GET /api/contacts latest inbound content fetch failed",
-            inboundContentError
-          );
-          return NextResponse.json(
-            {
-              error: getErrorMessage(
-                inboundContentError,
-                "Impossibile caricare i contatti."
-              ),
-            },
-            { status: 500 }
-          );
-        }
-
-        (inboundContentRows ?? []).forEach((row) => {
-          const inbound = row as unknown as ContactEmailContentRow;
-          latestInboundTextByEmailId.set(
-            inbound.id,
-            [inbound.text_body, stripHtml(inbound.html_body), inbound.subject]
-              .filter(Boolean)
-              .join(" ")
-          );
-        });
-      }
-    }
 
     const contacts = sortContactsByActivity(
       ((data ?? []) as unknown) as ContactRow[],
@@ -413,26 +347,13 @@ export async function GET(request: Request) {
         }
       });
 
-      const detectedFromLatestInbound = detectLanguageFromEmail(
-        latestInboundTextByEmailId.get(
-          latestInboundEmailIdByContactId.get(contact.id) ?? ""
-        ) ?? null
-      );
-      const detectedFromLatestOutbound = detectLanguageFromEmail(
-        latestInboundTextByEmailId.get(
-          latestOutboundEmailIdByContactId.get(contact.id) ?? ""
-        ) ?? null
-      );
-      const fallbackLanguage = detectLanguageForContactProfile(contact);
-
       return {
         ...contact,
         status: effectiveStatus,
         last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
         activity_at: best,
-        language:
-          detectedFromLatestInbound ?? detectedFromLatestOutbound ?? fallbackLanguage,
+        language: detectLanguageForContactProfile(contact),
       };
     });
 
