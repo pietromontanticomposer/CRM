@@ -93,9 +93,13 @@ export const isProductionOnly = (role?: string | null) =>
   role === "Produzione";
 
 export type FollowUpLanguage = "it" | "en";
+export type ContactSection = "cinema" | "live_music";
 
 const getFollowUpLanguage = (value?: string | null): FollowUpLanguage =>
   value === "en" ? "en" : "it";
+
+const getContactSection = (value?: ContactSection | string | null): ContactSection =>
+  value === "live_music" ? "live_music" : "cinema";
 
 export const DEFAULT_SIGNATURE_HTML = `
 <div style="margin-top: 25px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
@@ -113,12 +117,76 @@ export const buildAutoFollowUpEmail1 = (
   name: string,
   signatureHtml?: string | null,
   language?: FollowUpLanguage | null,
-  role?: string | null
+  role?: string | null,
+  section?: ContactSection | string | null
 ) => {
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
   const plural = isProductionOnly(role);
   const fullName = name.trim();
+  const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
+
+  if (getContactSection(section) === "live_music") {
+    const liveText =
+      selectedLanguage === "en"
+        ? `Hi ${firstName},
+
+just a quick follow-up to my previous email.
+
+I would be glad to connect and understand whether it could make sense to work together on future events or weddings.
+
+If convenient, I am available next Monday or Tuesday afternoon for a quick call.
+
+Best regards,`
+        : plural
+          ? `Buongiorno team di ${fullName}!
+
+Vi scrivo per riprendere velocemente la mia ultima mail.
+
+Mi farebbe piacere capire se può avere senso sentirci e conoscerci meglio per eventuali prossimi eventi o matrimoni.
+
+Se vi è comodo, sono disponibile lunedì o martedì prossimo nel pomeriggio per una breve call.
+
+Un saluto,`
+          : `Salve ${firstName}!
+
+Le scrivo per riprendere velocemente la mia ultima mail.
+
+Mi farebbe piacere capire se può avere senso sentirci e conoscerci meglio per eventuali prossimi eventi o matrimoni.
+
+Se le è comodo, sono disponibile lunedì o martedì prossimo nel pomeriggio per una breve call.
+
+Un saluto,`;
+
+    const liveHtml =
+      selectedLanguage === "en"
+        ? `<div>Hi ${firstName},<br><br>
+just a quick follow-up to my previous email.<br><br>
+I would be glad to connect and understand whether it could make sense to work together on future events or weddings.<br><br>
+If convenient, I am available next Monday or Tuesday afternoon for a quick call.<br><br>
+Best regards,${finalSignature}</div>`
+        : plural
+          ? `<div>Buongiorno team di ${fullName}!<br><br>
+Vi scrivo per riprendere velocemente la mia ultima mail.<br><br>
+Mi farebbe piacere capire se può avere senso sentirci e conoscerci meglio per eventuali prossimi eventi o matrimoni.<br><br>
+Se vi è comodo, sono disponibile lunedì o martedì prossimo nel pomeriggio per una breve call.<br><br>
+Un saluto,${finalSignature}</div>`
+          : `<div>Salve ${firstName}!<br><br>
+Le scrivo per riprendere velocemente la mia ultima mail.<br><br>
+Mi farebbe piacere capire se può avere senso sentirci e conoscerci meglio per eventuali prossimi eventi o matrimoni.<br><br>
+Se le è comodo, sono disponibile lunedì o martedì prossimo nel pomeriggio per una breve call.<br><br>
+Un saluto,${finalSignature}</div>`;
+
+    return {
+      subject:
+        selectedLanguage === "en"
+          ? "Live music for events and weddings"
+          : "Musica live per eventi e matrimoni",
+      body: liveText,
+      html: liveHtml,
+    };
+  }
+
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
@@ -137,8 +205,6 @@ ti scrivo per riprendere velocemente la mia ultima mail.
 Se può avere senso sentirci, io sono disponibile lunedì o martedì prossimo alle 16.
 Fammi sapere cosa ti è più comodo.
 A presto,`;
-
-  const finalSignature = signatureHtml || DEFAULT_SIGNATURE_HTML;
 
   const html =
     selectedLanguage === "en"
@@ -170,12 +236,76 @@ export const buildAutoFollowUpEmail2 = (
   name: string,
   signatureHtml?: string | null,
   language?: FollowUpLanguage | null,
-  role?: string | null
+  role?: string | null,
+  section?: ContactSection | string | null
 ) => {
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
   const plural = isProductionOnly(role);
   const fullName = name.trim();
+  const finalSignatureLive = signatureHtml || DEFAULT_SIGNATURE_HTML;
+
+  if (getContactSection(section) === "live_music") {
+    const liveText =
+      selectedLanguage === "en"
+        ? `Hi ${firstName},
+
+this is my last follow-up.
+
+Since I have not heard back, I assume you already have your preferred music contacts for weddings and events.
+
+If you would still like to connect in the future, I would be glad to stay in touch.
+
+Best regards,`
+        : plural
+          ? `Buongiorno team di ${fullName}!
+
+Vi scrivo per un ultimo follow-up.
+
+Non avendo ricevuto risposta, immagino che al momento abbiate già i vostri riferimenti musicali per eventi e matrimoni.
+
+Nel caso vi facesse comunque piacere entrare in contatto, resto volentieri a disposizione per sentirci quando preferite.
+
+Un saluto,`
+          : `Salve ${firstName}!
+
+Le scrivo per un ultimo follow-up.
+
+Non avendo ricevuto risposta, immagino che al momento abbiate già i vostri riferimenti musicali per eventi e matrimoni.
+
+Nel caso le facesse comunque piacere entrare in contatto, resto volentieri a disposizione per sentirci quando preferisce.
+
+Un saluto,`;
+
+    const liveHtml =
+      selectedLanguage === "en"
+        ? `<div>Hi ${firstName},<br><br>
+this is my last follow-up.<br><br>
+Since I have not heard back, I assume you already have your preferred music contacts for weddings and events.<br><br>
+If you would still like to connect in the future, I would be glad to stay in touch.<br><br>
+Best regards,${finalSignatureLive}</div>`
+        : plural
+          ? `<div>Buongiorno team di ${fullName}!<br><br>
+Vi scrivo per un ultimo follow-up.<br><br>
+Non avendo ricevuto risposta, immagino che al momento abbiate già i vostri riferimenti musicali per eventi e matrimoni.<br><br>
+Nel caso vi facesse comunque piacere entrare in contatto, resto volentieri a disposizione per sentirci quando preferite.<br><br>
+Un saluto,${finalSignatureLive}</div>`
+          : `<div>Salve ${firstName}!<br><br>
+Le scrivo per un ultimo follow-up.<br><br>
+Non avendo ricevuto risposta, immagino che al momento abbiate già i vostri riferimenti musicali per eventi e matrimoni.<br><br>
+Nel caso le facesse comunque piacere entrare in contatto, resto volentieri a disposizione per sentirci quando preferisce.<br><br>
+Un saluto,${finalSignatureLive}</div>`;
+
+    return {
+      subject:
+        selectedLanguage === "en"
+          ? "Live music for events and weddings"
+          : "Musica live per eventi e matrimoni",
+      body: liveText,
+      html: liveHtml,
+    };
+  }
+
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},
@@ -227,12 +357,106 @@ export const buildMaintainRapportEmail = (
   name: string,
   signatureHtml?: string | null,
   language?: FollowUpLanguage | null,
-  role?: string | null
+  role?: string | null,
+  section?: ContactSection | string | null
 ) => {
   const firstName = extractFirstName(name);
   const selectedLanguage = getFollowUpLanguage(language);
   const plural = isProductionOnly(role);
   const fullName = name.trim();
+  const finalSignatureLive = signatureHtml || DEFAULT_SIGNATURE_HTML;
+
+  if (getContactSection(section) === "live_music") {
+    const liveText =
+      selectedLanguage === "en"
+        ? `Hi ${firstName},
+
+I hope you are doing well.
+
+I wanted to reconnect and see how your event season has been going lately.
+
+In the meantime, I have been collecting more material related to weddings and live events, including sax & DJ sets, ceremony ensembles and small jazz groups.
+
+Event page:
+https://www.instagram.com/pietro_sax_experience
+
+Jazz ensemble examples:
+https://drive.google.com/drive/folders/1ZWQx-apHFf8Z8XfXN56ZvD28N1MC3diJ?usp=sharing
+
+I would be glad to stay in touch.
+
+Best regards,`
+        : plural
+          ? `Buongiorno team di ${fullName}!
+
+Spero stiate bene.
+
+Mi faceva piacere riallacciare il contatto e capire come stiano andando gli eventi in questo periodo.
+
+Nel frattempo sto raccogliendo sempre più materiali legati a matrimoni ed eventi, tra formule live con sax e DJ, cerimonie e piccoli ensemble jazz.
+
+Pagina eventi:
+https://www.instagram.com/pietro_sax_experience
+
+Esempi jazz ensemble:
+https://drive.google.com/drive/folders/1ZWQx-apHFf8Z8XfXN56ZvD28N1MC3diJ?usp=sharing
+
+Se vi farà piacere, resto volentieri in contatto.
+
+Un saluto,`
+          : `Salve ${firstName}!
+
+Spero stia bene.
+
+Mi faceva piacere riallacciare il contatto e capire come stiano andando gli eventi in questa stagione.
+
+Nel frattempo sto raccogliendo sempre più materiali legati a matrimoni ed eventi, tra formule live con sax e DJ, cerimonie e piccoli ensemble jazz.
+
+Pagina eventi:
+https://www.instagram.com/pietro_sax_experience
+
+Esempi jazz ensemble:
+https://drive.google.com/drive/folders/1ZWQx-apHFf8Z8XfXN56ZvD28N1MC3diJ?usp=sharing
+
+Se le farà piacere, resto volentieri in contatto.
+
+Un saluto,`;
+
+    const liveHtml =
+      selectedLanguage === "en"
+        ? `<div>Hi ${firstName},<br><br>
+I hope you are doing well.<br><br>
+I wanted to reconnect and see how your event season has been going lately.<br><br>
+In the meantime, I have been collecting more material related to weddings and live events, including sax &amp; DJ sets, ceremony ensembles and small jazz groups.<br><br>
+Event page: <a href="https://www.instagram.com/pietro_sax_experience">instagram.com/pietro_sax_experience</a><br><br>
+Jazz ensemble examples: <a href="https://drive.google.com/drive/folders/1ZWQx-apHFf8Z8XfXN56ZvD28N1MC3diJ?usp=sharing">Google Drive folder</a><br><br>
+I would be glad to stay in touch.<br><br>
+Best regards,${finalSignatureLive}</div>`
+        : plural
+          ? `<div>Buongiorno team di ${fullName}!<br><br>
+Spero stiate bene.<br><br>
+Mi faceva piacere riallacciare il contatto e capire come stiano andando gli eventi in questo periodo.<br><br>
+Nel frattempo sto raccogliendo sempre più materiali legati a matrimoni ed eventi, tra formule live con sax e DJ, cerimonie e piccoli ensemble jazz.<br><br>
+Pagina eventi: <a href="https://www.instagram.com/pietro_sax_experience">instagram.com/pietro_sax_experience</a><br><br>
+Esempi jazz ensemble: <a href="https://drive.google.com/drive/folders/1ZWQx-apHFf8Z8XfXN56ZvD28N1MC3diJ?usp=sharing">cartella Google Drive</a><br><br>
+Se vi farà piacere, resto volentieri in contatto.<br><br>
+Un saluto,${finalSignatureLive}</div>`
+          : `<div>Salve ${firstName}!<br><br>
+Spero stia bene.<br><br>
+Mi faceva piacere riallacciare il contatto e capire come stiano andando gli eventi in questa stagione.<br><br>
+Nel frattempo sto raccogliendo sempre più materiali legati a matrimoni ed eventi, tra formule live con sax e DJ, cerimonie e piccoli ensemble jazz.<br><br>
+Pagina eventi: <a href="https://www.instagram.com/pietro_sax_experience">instagram.com/pietro_sax_experience</a><br><br>
+Esempi jazz ensemble: <a href="https://drive.google.com/drive/folders/1ZWQx-apHFf8Z8XfXN56ZvD28N1MC3diJ?usp=sharing">cartella Google Drive</a><br><br>
+Se le farà piacere, resto volentieri in contatto.<br><br>
+Un saluto,${finalSignatureLive}</div>`;
+
+    return {
+      subject: selectedLanguage === "en" ? "Just saying hi" : "Un saluto",
+      body: liveText,
+      html: liveHtml,
+    };
+  }
+
   const text =
     selectedLanguage === "en"
       ? `Hi ${firstName},

@@ -36,6 +36,7 @@ type DueContact = {
   status: string | null;
   next_action_at: string | null;
   next_action_note: string | null;
+  section: string | null;
 };
 
 type SendContext = {
@@ -315,7 +316,7 @@ const handleReminderRun = async (request: Request) => {
   const { data: dueContacts, error } = await supabase
     .from("contacts")
     .select(
-      "id, owner_id, name, email, company, role, status, next_action_at, next_action_note"
+      "id, owner_id, name, email, company, role, status, next_action_at, next_action_note, section"
     )
     .lte("next_action_at", today)
     .neq("status", "Non interessato")
@@ -421,13 +422,15 @@ const handleReminderRun = async (request: Request) => {
               contact.name ?? "",
               signatureHtml,
               language,
-              contact.role
+              contact.role,
+              contact.section
             )
           : buildAutoFollowUpEmail2(
               contact.name ?? "",
               signatureHtml,
               language,
-              contact.role
+              contact.role,
+              contact.section
             );
 
       // Try to find the last email for threading
@@ -524,7 +527,8 @@ const handleReminderRun = async (request: Request) => {
         contact.name ?? "",
         signatureHtml,
         language,
-        contact.role
+        contact.role,
+        contact.section
       );
 
       const { data: lastEmail } = await supabase

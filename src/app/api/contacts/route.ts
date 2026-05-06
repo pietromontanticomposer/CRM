@@ -27,6 +27,13 @@ const parseSection = (value: unknown): ContactSection => {
   return "cinema";
 };
 
+const parseOptionalSection = (value: unknown): ContactSection | null => {
+  if (typeof value === "string" && (VALID_SECTIONS as readonly string[]).includes(value)) {
+    return value as ContactSection;
+  }
+  return null;
+};
+
 type ContactInsert = {
   name: string;
   email: string | null;
@@ -265,18 +272,21 @@ const detectLanguageForContactProfile = (contact: unknown) => {
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
-    const section = parseSection(url.searchParams.get("section"));
+    const section = parseOptionalSection(url.searchParams.get("section"));
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
     const ownerFilter = getOwnerFilter(user);
+    let contactsQuery = supabase
+      .from("contacts")
+      .select(CONTACT_SELECT_FIELDS)
+      .or(ownerFilter)
+      .order("updated_at", { ascending: false });
+    if (section) {
+      contactsQuery = contactsQuery.eq("section", section);
+    }
     const [{ data, error }, { data: contactEmails, error: emailsError }] =
       await Promise.all([
-        supabase
-          .from("contacts")
-          .select(CONTACT_SELECT_FIELDS)
-          .or(ownerFilter)
-          .eq("section", section)
-          .order("updated_at", { ascending: false }),
+        contactsQuery,
         supabase
           .from("emails")
           .select("id, contact_id, direction, received_at, created_at")

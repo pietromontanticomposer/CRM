@@ -80,6 +80,7 @@ type Contact = {
   next_action_at: string | null;
   next_action_note: string | null;
   notes: string | null;
+  section?: "cinema" | "live_music" | null;
   created_at: string;
   updated_at: string;
   last_inbound_email_at?: string | null;
@@ -977,6 +978,7 @@ export default function CrmApp({
       text_body: string | null;
       send_at: string;
       contact_id: string | null;
+      section?: "cinema" | "live_music" | null;
     }>
   >([]);
   const [ensuredAttachments, setEnsuredAttachments] = useState<
@@ -1218,11 +1220,22 @@ export default function CrmApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmail?.id, selectedEmailAttachments, selected?.id]);
 
+  const sectionContacts = useMemo(
+    () => contacts.filter((c) => (c.section ?? "cinema") === section),
+    [contacts, section]
+  );
+
+  const sectionScheduledEmails = useMemo(
+    () => scheduledEmails.filter((se) => (se.section ?? "cinema") === section),
+    [scheduledEmails, section]
+  );
+
   const counts = useMemo(() => {
     const statusCounts = STATUS_OPTIONS.reduce(
       (acc, status) => {
-        acc[status] = contacts.filter((contact) => contact.status === status)
-          .length;
+        acc[status] = sectionContacts.filter(
+          (contact) => contact.status === status
+        ).length;
         return acc;
       },
       {} as Record<Status, number>
@@ -1240,17 +1253,19 @@ export default function CrmApp({
     );
 
     return { ...statusCounts, ...groupCounts };
-  }, [contacts]);
+  }, [sectionContacts]);
 
   const followUpCount = useMemo(() => {
     const today = getTodayDateInputValue();
-    return contacts.filter((contact) => isOpenFollowUpContact(contact, today)).length;
-  }, [contacts]);
+    return sectionContacts.filter((contact) =>
+      isOpenFollowUpContact(contact, today)
+    ).length;
+  }, [sectionContacts]);
 
   const searchedContacts = useMemo(() => {
     const query = contactSearch.trim().toLowerCase();
-    if (!query) return contacts;
-    return contacts.filter((contact) => {
+    if (!query) return sectionContacts;
+    return sectionContacts.filter((contact) => {
       const candidates = [
         contact.name,
         contact.email,
@@ -1262,7 +1277,7 @@ export default function CrmApp({
         value?.toLowerCase().includes(query)
       );
     });
-  }, [contacts, contactSearch]);
+  }, [sectionContacts, contactSearch]);
 
   const filteredContacts = useMemo(() => {
     if (contactFolder === "Tutte") return searchedContacts;
@@ -1291,7 +1306,7 @@ export default function CrmApp({
       return getDisplayName(a).localeCompare(getDisplayName(b), "it");
     };
 
-    contacts.forEach((contact) => {
+    sectionContacts.forEach((contact) => {
       if (
         contact.status === "Non interessato" ||
         contact.status === "Mantenimento rapporto" ||
@@ -1318,7 +1333,7 @@ export default function CrmApp({
       dueToday,
       totalOpen: overdue.length + dueToday.length,
     };
-  }, [contacts]);
+  }, [sectionContacts]);
 
   const visibleEmails = useMemo(
     () =>
@@ -1332,7 +1347,7 @@ export default function CrmApp({
       setLoading(true);
     }
     setError(null);
-    const response = await fetch(`/api/contacts?section=${section}`, {
+    const response = await fetch(`/api/contacts`, {
       method: "GET",
       cache: "no-store",
     }).catch(() => null);
@@ -1992,7 +2007,8 @@ export default function CrmApp({
           contact.name ?? "",
           undefined,
           contact.language ?? undefined,
-          contact.role ?? undefined
+          contact.role ?? undefined,
+          contact.section ?? section
         );
 
         // Trova l'ultima email per il threading (Re:)
@@ -2313,7 +2329,7 @@ export default function CrmApp({
 
   const loadScheduledEmails = async () => {
     try {
-      const response = await fetch(`/api/scheduled-emails?section=${section}`);
+      const response = await fetch(`/api/scheduled-emails`);
       if (!response.ok) return;
       const data = await response.json();
       if (data?.items) setScheduledEmails(data.items);
@@ -2404,13 +2420,6 @@ export default function CrmApp({
 
   useEffect(() => {
     void loadEmailAccounts();
-  }, []);
-
-  useEffect(() => {
-    setContacts([]);
-    setSelectedId(null);
-    setDraft(null);
-    setScheduledEmails([]);
     void loadContacts();
     void loadScheduledEmails();
     const onContactsRefresh = () => {
@@ -2421,6 +2430,11 @@ export default function CrmApp({
       window.removeEventListener("crm:contacts-refresh", onContactsRefresh);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setSelectedId(null);
+    setDraft(null);
   }, [section]);
 
   const handleAdd = async (event: FormEvent) => {
@@ -3484,11 +3498,11 @@ export default function CrmApp({
                   </span>
                 </div>
               ))}
-              {scheduledEmails.length > 0 && (
+              {sectionScheduledEmails.length > 0 && (
                 <div className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-bold ${theme === "dark" ? "bg-orange-500/15 text-orange-200 border-orange-400/30" : "border-orange-500 bg-orange-100 text-orange-900"} scheduled-email-pulse`}>
                   <span>Email programmata</span>
                   <span className="bg-[var(--panel-strong)]/40 px-1.5 py-0.5 rounded-full text-[9px]">
-                    {scheduledEmails.length}
+                    {sectionScheduledEmails.length}
                   </span>
                 </div>
               )}
@@ -3721,8 +3735,8 @@ export default function CrmApp({
               <span>Contatti</span>
               <span>
                 {contactSearch.trim() || contactFolder !== "Tutte"
-                  ? `${filteredContacts.length} / ${contacts.length}`
-                  : contacts.length}
+                  ? `${filteredContacts.length} / ${sectionContacts.length}`
+                  : sectionContacts.length}
               </span>
             </div>
 
@@ -3739,7 +3753,7 @@ export default function CrmApp({
               >
                 <span>Tutte le schede</span>
                 <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent)]">
-                  {contacts.length}
+                  {sectionContacts.length}
                 </span>
               </button>
 
@@ -3841,14 +3855,14 @@ export default function CrmApp({
                   Caricamento...
                 </div>
               )}
-              {!loading && !error && contacts.length === 0 && (
+              {!loading && !error && sectionContacts.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
                   Nessun contatto ancora. Aggiungi il primo.
                 </div>
               )}
               {!loading &&
                 !error &&
-                contacts.length > 0 &&
+                sectionContacts.length > 0 &&
                 filteredContacts.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
                   Nessun risultato per “{contactSearch.trim()}”.
