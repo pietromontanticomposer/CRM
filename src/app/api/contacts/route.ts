@@ -16,17 +16,6 @@ type ContactRow = {
   [key: string]: unknown;
 };
 
-type ContactSection = "cinema" | "live_music";
-
-const VALID_SECTIONS: readonly ContactSection[] = ["cinema", "live_music"];
-
-const parseSection = (value: unknown): ContactSection => {
-  if (typeof value === "string" && (VALID_SECTIONS as readonly string[]).includes(value)) {
-    return value as ContactSection;
-  }
-  return "cinema";
-};
-
 type ContactInsert = {
   name: string;
   email: string | null;
@@ -34,7 +23,6 @@ type ContactInsert = {
   role: string | null;
   status: string;
   last_action_at: string | null;
-  section: ContactSection;
 };
 
 type ContactEmailRow = {
@@ -64,7 +52,7 @@ type LanguageCandidateRow = {
 };
 
 const CONTACT_SELECT_FIELDS =
-  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,section,created_at,updated_at";
+  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,created_at,updated_at";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") return "";
@@ -96,7 +84,6 @@ const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
     role: normalizeNullableString(payload.role),
     status,
     last_action_at: lastActionAt,
-    section: parseSection(payload.section),
   };
 };
 
@@ -262,10 +249,8 @@ const detectLanguageForContactProfile = (contact: unknown) => {
   return "it" as const;
 };
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const url = new URL(request.url);
-    const section = parseSection(url.searchParams.get("section"));
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
     const ownerFilter = getOwnerFilter(user);
@@ -275,7 +260,6 @@ export async function GET(request: Request) {
           .from("contacts")
           .select(CONTACT_SELECT_FIELDS)
           .or(ownerFilter)
-          .eq("section", section)
           .order("updated_at", { ascending: false }),
         supabase
           .from("emails")

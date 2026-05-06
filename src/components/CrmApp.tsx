@@ -172,7 +172,6 @@ type ComposePreset =
   | "first_follow_up_lei";
 
 export type CrmTheme = "light" | "dark";
-export type CrmSection = "cinema" | "live_music";
 
 const emptyNewContact: NewContact = {
   name: "",
@@ -924,13 +923,7 @@ const notifyCrmNotificationsUpdated = () => {
   window.dispatchEvent(new Event("crm:notifications-updated"));
 };
 
-export default function CrmApp({
-  theme,
-  section,
-}: {
-  theme: CrmTheme;
-  section: CrmSection;
-}) {
+export default function CrmApp({ theme }: { theme: CrmTheme }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1332,7 +1325,7 @@ export default function CrmApp({
       setLoading(true);
     }
     setError(null);
-    const response = await fetch(`/api/contacts?section=${section}`, {
+    const response = await fetch("/api/contacts", {
       method: "GET",
       cache: "no-store",
     }).catch(() => null);
@@ -2313,7 +2306,7 @@ export default function CrmApp({
 
   const loadScheduledEmails = async () => {
     try {
-      const response = await fetch(`/api/scheduled-emails?section=${section}`);
+      const response = await fetch("/api/scheduled-emails");
       if (!response.ok) return;
       const data = await response.json();
       if (data?.items) setScheduledEmails(data.items);
@@ -2403,15 +2396,8 @@ export default function CrmApp({
   };
 
   useEffect(() => {
-    void loadEmailAccounts();
-  }, []);
-
-  useEffect(() => {
-    setContacts([]);
-    setSelectedId(null);
-    setDraft(null);
-    setScheduledEmails([]);
     void loadContacts();
+    void loadEmailAccounts();
     void loadScheduledEmails();
     const onContactsRefresh = () => {
       void loadContacts({ silent: true });
@@ -2420,8 +2406,7 @@ export default function CrmApp({
     return () => {
       window.removeEventListener("crm:contacts-refresh", onContactsRefresh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section]);
+  }, []);
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
@@ -2448,7 +2433,6 @@ export default function CrmApp({
         role: newContact.role.trim() || null,
         status: selectedStatus,
         last_action_at: null,
-        section,
       }),
     }).catch(() => null);
 

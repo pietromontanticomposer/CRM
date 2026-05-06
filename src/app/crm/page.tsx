@@ -2,17 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import CrmApp, { type CrmTheme, type CrmSection } from "@/components/CrmApp";
+import CrmApp, { type CrmTheme } from "@/components/CrmApp";
 import CrmNotificationsBell from "@/components/CrmNotificationsBell";
 import LogoutButton from "@/components/LogoutButton";
 
 const CRM_THEME_STORAGE_KEY = "crm-theme";
-const CRM_SECTION_STORAGE_KEY = "crm-section";
-
-const SECTION_LABELS: Record<CrmSection, string> = {
-  cinema: "Cinema",
-  live_music: "Live Music",
-};
 
 export default function CrmPage() {
   const [theme, setTheme] = useState<CrmTheme>(() => {
@@ -23,21 +17,9 @@ export default function CrmPage() {
       : "light";
   });
 
-  const [section, setSection] = useState<CrmSection>(() => {
-    if (typeof window === "undefined") return "cinema";
-    const stored = window.localStorage.getItem(CRM_SECTION_STORAGE_KEY);
-    return stored === "live_music" || stored === "cinema" ? stored : "cinema";
-  });
-
   useEffect(() => {
     window.localStorage.setItem(CRM_THEME_STORAGE_KEY, theme);
   }, [theme]);
-
-  useEffect(() => {
-    window.localStorage.setItem(CRM_SECTION_STORAGE_KEY, section);
-  }, [section]);
-
-  const sections: CrmSection[] = ["cinema", "live_music"];
 
   return (
     <div
@@ -45,41 +27,14 @@ export default function CrmPage() {
       className={`${theme === "light" ? "crm-light-theme" : ""} relative min-h-screen`}
     >
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-6 pt-6 sm:px-10">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/"
-            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] shadow-sm transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-          >
-            ← Home
-          </Link>
-          <div
-            role="tablist"
-            aria-label="Sezioni CRM"
-            className="inline-flex rounded-full border border-[var(--line)] bg-[var(--panel)] p-0.5 shadow-sm"
-          >
-            {sections.map((value) => {
-              const active = section === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setSection(value)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                    active
-                      ? "bg-[var(--accent)] text-white shadow-sm"
-                      : "text-[var(--muted)] hover:text-[var(--ink)]"
-                  }`}
-                >
-                  {SECTION_LABELS[value]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <Link
+          href="/"
+          className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] shadow-sm transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
+        >
+          ← Home
+        </Link>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <CrmNotificationsBell section={section} />
+          <CrmNotificationsBell />
           <button
             type="button"
             onClick={() =>
@@ -95,7 +50,7 @@ export default function CrmPage() {
           </div>
         </div>
       </div>
-      <CrmApp theme={theme} section={section} />
+      <CrmApp theme={theme} />
     </div>
   );
 }

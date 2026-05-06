@@ -15,8 +15,6 @@ type NotificationsApiResponse = {
   error?: string;
 };
 
-export type CrmSection = "cinema" | "live_music";
-
 const NOTIFICATIONS_UPDATED_EVENT = "crm:notifications-updated";
 const CONTACTS_REFRESH_EVENT = "crm:contacts-refresh";
 
@@ -33,11 +31,7 @@ const formatDateTime = (value?: string | null) => {
   });
 };
 
-export default function CrmNotificationsBell({
-  section,
-}: {
-  section: CrmSection;
-}) {
+export default function CrmNotificationsBell() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
@@ -45,10 +39,6 @@ export default function CrmNotificationsBell({
   const [error, setError] = useState<string | null>(null);
   const [markingById, setMarkingById] = useState<Record<string, boolean>>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const sectionRef = useRef(section);
-  useEffect(() => {
-    sectionRef.current = section;
-  }, [section]);
 
   const unreadCount = useMemo(
     () =>
@@ -60,13 +50,10 @@ export default function CrmNotificationsBell({
   const loadNotifications = async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
-    const response = await fetch(
-      `/api/notifications?scope=all&limit=100&section=${sectionRef.current}`,
-      {
-        method: "GET",
-        cache: "no-store",
-      }
-    ).catch(() => null);
+    const response = await fetch("/api/notifications?scope=all&limit=100", {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => null);
 
     if (!response) {
       if (!silent) setLoading(false);
@@ -101,11 +88,7 @@ export default function CrmNotificationsBell({
     const response = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scope: "all",
-        notificationId,
-        section: sectionRef.current,
-      }),
+      body: JSON.stringify({ scope: "all", notificationId }),
     }).catch(() => null);
 
     if (response?.ok) {
@@ -134,11 +117,7 @@ export default function CrmNotificationsBell({
     const response = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scope: "all",
-        markAll: true,
-        section: sectionRef.current,
-      }),
+      body: JSON.stringify({ scope: "all", markAll: true }),
     }).catch(() => null);
 
     if (response?.ok) {
@@ -161,11 +140,6 @@ export default function CrmNotificationsBell({
       return next;
     });
   };
-
-  useEffect(() => {
-    void loadNotifications(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section]);
 
   useEffect(() => {
     const initialTimeoutId = window.setTimeout(() => {

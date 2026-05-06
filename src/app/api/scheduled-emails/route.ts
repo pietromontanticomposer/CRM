@@ -5,15 +5,6 @@ import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Section = "cinema" | "live_music";
-const VALID_SECTIONS: readonly Section[] = ["cinema", "live_music"];
-const parseSection = (value: unknown): Section => {
-  if (typeof value === "string" && (VALID_SECTIONS as readonly string[]).includes(value)) {
-    return value as Section;
-  }
-  return "cinema";
-};
-
 const getEnv = (key: string) => {
   const value = process.env[key];
   if (!value) throw new Error(`Missing env var ${key}`);
@@ -39,10 +30,8 @@ type SchedulePayload = {
 
 const isValidDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const url = new URL(request.url);
-    const section = parseSection(url.searchParams.get("section"));
     const supabase = getSupabase();
     const currentUser = await requireCurrentUser(supabase);
 
@@ -52,7 +41,6 @@ export async function GET(request: Request) {
         "id, to_email, subject, text_body, send_at, status, created_at, contact_id"
       )
       .eq("owner_id", currentUser.id)
-      .eq("section", section)
       .eq("status", "pending")
       .order("send_at", { ascending: true });
 
