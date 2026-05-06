@@ -20,7 +20,6 @@ import {
   isMaintainRapportNote,
   buildMaintainRapportNote,
   buildMaintainRapportEmail,
-  extractFirstName,
   isManualRecontactNote,
   buildManualRecontactNote,
 } from "@/lib/followUp";
@@ -214,7 +213,6 @@ const statusStylesByTheme: Record<CrmTheme, Record<Status, string>> = {
 };
 
 
-const QUICK_RECONTACT_DAYS = [7, 10, 15, 30] as const;
 const TWO_COLUMN_LAYOUT_MIN_WIDTH = 768;
 
 const toneStylesByTheme = {
@@ -299,9 +297,6 @@ const addDaysToDateInputValue = (dateInput: string, days: number) => {
   return `${year}-${month}-${day}`;
 };
 
-const buildRecontactReminderNote = (days: number) =>
-  `Azione richiesta - ricontattare tra ${days} giorni`;
-
 const AUTOMATION_RUN_HOUR = 10;
 const MINUTE_MS = 60 * 1000;
 const AUTO_SYNC_THROTTLE_MS = 5 * MINUTE_MS;
@@ -313,18 +308,6 @@ const toDateKey = (value?: string | null) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString().slice(0, 10);
-};
-
-const isOpenFollowUpContact = (contact: Contact, today: string) => {
-  if (
-    contact.status === "Non interessato" ||
-    contact.status === "Collaborazione stabilita"
-  ) {
-    return false;
-  }
-  const nextActionDate = toDateKey(contact.next_action_at);
-  if (!nextActionDate) return false;
-  return nextActionDate <= today;
 };
 
 const getAutomationTargetDate = (value?: string | null) => {
@@ -1265,13 +1248,6 @@ export default function CrmApp({
     );
 
     return { ...statusCounts, ...groupCounts };
-  }, [sectionContacts]);
-
-  const followUpCount = useMemo(() => {
-    const today = getTodayDateInputValue();
-    return sectionContacts.filter((contact) =>
-      isOpenFollowUpContact(contact, today)
-    ).length;
   }, [sectionContacts]);
 
   const searchedContacts = useMemo(() => {
@@ -2441,9 +2417,7 @@ export default function CrmApp({
     return () => {
       window.removeEventListener("crm:contacts-refresh", onContactsRefresh);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
@@ -2457,7 +2431,6 @@ export default function CrmApp({
     setAdding(true);
     setError(null);
     setAddError(null);
-    const today = getTodayDateInputValue();
     const selectedStatus = newContact.status;
 
     const response = await fetch("/api/contacts", {

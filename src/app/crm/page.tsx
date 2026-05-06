@@ -27,14 +27,16 @@ export default function CrmPage() {
   const [section, setSection] = useState<CrmSection>("cinema");
   const [hydrated, setHydrated] = useState(false);
 
+  // Sync state from localStorage on mount. setState in an effect is the
+  // canonical way to read browser-only state without breaking SSR.
   useEffect(() => {
     const storedTheme = window.localStorage.getItem(CRM_THEME_STORAGE_KEY);
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (isCrmTheme(storedTheme)) setTheme(storedTheme);
-
     const storedSection = window.localStorage.getItem(CRM_SECTION_STORAGE_KEY);
     if (isCrmSection(storedSection)) setSection(storedSection);
-
     setHydrated(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   useEffect(() => {
