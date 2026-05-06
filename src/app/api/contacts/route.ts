@@ -215,14 +215,19 @@ const detectLanguageFromEmailDomain = (email?: string | null) => {
 
   const domain = normalized.split("@")[1]?.toLowerCase() ?? "";
   if (!domain) return null;
+  // Italian ccTLD → strong signal for IT.
   if (domain.endsWith(".it")) return "it" as const;
+  // Country-specific anglophone ccTLDs → strong signal for EN. We
+  // intentionally do NOT treat .com/.org/.net as english — those are
+  // generic and used heavily by Italian companies (and by gmail.com).
   if (
-    domain.endsWith(".com") ||
     domain.endsWith(".co.uk") ||
     domain.endsWith(".uk") ||
     domain.endsWith(".us") ||
     domain.endsWith(".ca") ||
-    domain.endsWith(".au")
+    domain.endsWith(".au") ||
+    domain.endsWith(".ie") ||
+    domain.endsWith(".nz")
   ) {
     return "en" as const;
   }
