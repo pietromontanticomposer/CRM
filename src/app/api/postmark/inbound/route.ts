@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { handleContactInbound } from "@/lib/followUp";
+import { refreshContactLanguageFromInboundEmail } from "@/lib/server/contactLanguage";
 
 type PostmarkAddress = {
   Email?: string;
@@ -282,6 +283,15 @@ export async function POST(request: Request) {
     }
 
     if (insertedEmail?.contact_id) {
+      await refreshContactLanguageFromInboundEmail(
+        supabase,
+        insertedEmail.contact_id,
+        {
+          subject,
+          text_body: payload.TextBody ?? null,
+          html_body: payload.HtmlBody ?? null,
+        }
+      );
       await handleContactInbound(supabase, insertedEmail.contact_id, {
         subject,
         fromEmail,

@@ -17,6 +17,7 @@ import {
   toFollowUpDateOnly,
   handleContactInbound,
 } from "@/lib/followUp";
+import { refreshContactLanguageFromInboundEmail } from "@/lib/server/contactLanguage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -757,6 +758,11 @@ export const runSync = async (request: Request) => {
 
         if (insertedEmail && contactId) {
           if (direction === "inbound") {
+            await refreshContactLanguageFromInboundEmail(supabase, contactId, {
+              subject: parsed.subject,
+              text_body: parsed.text,
+              html_body: parsed.html,
+            });
             const titleBase = fromName || fromEmail || "Mittente sconosciuto";
             await insertNotification({
               type: "email_received",

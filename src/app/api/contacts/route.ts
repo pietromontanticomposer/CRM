@@ -64,7 +64,7 @@ type LanguageCandidateRow = {
 };
 
 const CONTACT_SELECT_FIELDS =
-  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,section,created_at,updated_at";
+  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,section,language,created_at,updated_at";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") return "";
@@ -352,13 +352,18 @@ export async function GET(request: Request) {
         }
       });
 
+      const cachedLanguage =
+        contact.language === "it" || contact.language === "en"
+          ? (contact.language as "it" | "en")
+          : null;
+
       return {
         ...contact,
         status: effectiveStatus,
         last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
         activity_at: best,
-        language: detectLanguageForContactProfile(contact),
+        language: cachedLanguage ?? detectLanguageForContactProfile(contact),
       };
     });
 
