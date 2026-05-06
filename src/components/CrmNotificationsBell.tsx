@@ -46,6 +46,7 @@ export default function CrmNotificationsBell({
   const [markingById, setMarkingById] = useState<Record<string, boolean>>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sectionRef = useRef(section);
+  const requestIdRef = useRef(0);
   useEffect(() => {
     sectionRef.current = section;
   }, [section]);
@@ -58,15 +59,26 @@ export default function CrmNotificationsBell({
   );
 
   const loadNotifications = async (silent = false) => {
+    const requestSection = sectionRef.current;
+    const requestId = ++requestIdRef.current;
     if (!silent) setLoading(true);
     setError(null);
     const response = await fetch(
-      `/api/notifications?scope=all&limit=100&section=${sectionRef.current}`,
+      `/api/notifications?scope=all&limit=100&section=${requestSection}`,
       {
         method: "GET",
         cache: "no-store",
       }
     ).catch(() => null);
+
+    // A faster section switch may have superseded this request, or the
+    // user may have switched sections mid-flight; drop the result.
+    if (
+      requestId !== requestIdRef.current ||
+      requestSection !== sectionRef.current
+    ) {
+      return;
+    }
 
     if (!response) {
       if (!silent) setLoading(false);

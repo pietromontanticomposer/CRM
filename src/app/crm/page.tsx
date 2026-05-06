@@ -14,28 +14,38 @@ const SECTION_LABELS: Record<CrmSection, string> = {
   live_music: "Live Music",
 };
 
+const isCrmSection = (value: unknown): value is CrmSection =>
+  value === "cinema" || value === "live_music";
+const isCrmTheme = (value: unknown): value is CrmTheme =>
+  value === "light" || value === "dark";
+
 export default function CrmPage() {
-  const [theme, setTheme] = useState<CrmTheme>(() => {
-    if (typeof window === "undefined") return "light";
+  // Always render the same defaults on server + first client render to
+  // avoid hydration mismatches; the persisted values land in a useEffect
+  // after mount.
+  const [theme, setTheme] = useState<CrmTheme>("light");
+  const [section, setSection] = useState<CrmSection>("cinema");
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
     const storedTheme = window.localStorage.getItem(CRM_THEME_STORAGE_KEY);
-    return storedTheme === "dark" || storedTheme === "light"
-      ? storedTheme
-      : "light";
-  });
+    if (isCrmTheme(storedTheme)) setTheme(storedTheme);
 
-  const [section, setSection] = useState<CrmSection>(() => {
-    if (typeof window === "undefined") return "cinema";
-    const stored = window.localStorage.getItem(CRM_SECTION_STORAGE_KEY);
-    return stored === "live_music" || stored === "cinema" ? stored : "cinema";
-  });
+    const storedSection = window.localStorage.getItem(CRM_SECTION_STORAGE_KEY);
+    if (isCrmSection(storedSection)) setSection(storedSection);
+
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     window.localStorage.setItem(CRM_THEME_STORAGE_KEY, theme);
-  }, [theme]);
+  }, [theme, hydrated]);
 
   useEffect(() => {
+    if (!hydrated) return;
     window.localStorage.setItem(CRM_SECTION_STORAGE_KEY, section);
-  }, [section]);
+  }, [section, hydrated]);
 
   const sections: CrmSection[] = ["cinema", "live_music"];
 
