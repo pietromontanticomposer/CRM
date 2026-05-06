@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   KEEP_IN_TOUCH_MONTHS,
   KEEP_IN_TOUCH_NOTE,
@@ -1089,7 +1096,7 @@ export default function CrmApp({
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!contacts.length || !emailAccountsReady) {
       return;
     }
@@ -1097,29 +1104,27 @@ export default function CrmApp({
     const sectionScoped = contacts.filter(
       (contact) => (contact.section ?? "cinema") === section
     );
-    if (!sectionScoped.length) {
+
+    if (selectedId && sectionScoped.some((c) => c.id === selectedId)) {
       return;
     }
 
-    const selectedStillPresent = selectedId
-      ? sectionScoped.some((contact) => contact.id === selectedId)
-      : false;
+    const defaultContact = sectionScoped.length
+      ? getMostRecentlyCreatedContact(sectionScoped)
+      : null;
 
-    if (selectedStillPresent) {
-      return;
+    if (defaultContact) {
+      selectedIdRef.current = defaultContact.id;
+      setSelectedId(defaultContact.id);
+      setDraft(buildDraft(defaultContact));
+      void loadEmails(defaultContact.id, defaultContact.email, {
+        resetConversation: true,
+      });
+    } else if (selectedId) {
+      selectedIdRef.current = null;
+      setSelectedId(null);
+      setDraft(null);
     }
-
-    const defaultContact = getMostRecentlyCreatedContact(sectionScoped);
-    if (!defaultContact) {
-      return;
-    }
-
-    selectedIdRef.current = defaultContact.id;
-    setSelectedId(defaultContact.id);
-    setDraft(buildDraft(defaultContact));
-    void loadEmails(defaultContact.id, defaultContact.email, {
-      resetConversation: true,
-    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contacts, selectedId, emailAccountsReady, section]);
 
@@ -2439,10 +2444,6 @@ export default function CrmApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    setSelectedId(null);
-    setDraft(null);
-  }, [section]);
 
   const handleAdd = async (event: FormEvent) => {
     event.preventDefault();
