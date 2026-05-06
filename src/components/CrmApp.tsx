@@ -1094,15 +1094,22 @@ export default function CrmApp({
       return;
     }
 
+    const sectionScoped = contacts.filter(
+      (contact) => (contact.section ?? "cinema") === section
+    );
+    if (!sectionScoped.length) {
+      return;
+    }
+
     const selectedStillPresent = selectedId
-      ? contacts.some((contact) => contact.id === selectedId)
+      ? sectionScoped.some((contact) => contact.id === selectedId)
       : false;
 
     if (selectedStillPresent) {
       return;
     }
 
-    const defaultContact = getMostRecentlyCreatedContact(contacts);
+    const defaultContact = getMostRecentlyCreatedContact(sectionScoped);
     if (!defaultContact) {
       return;
     }
@@ -1114,7 +1121,7 @@ export default function CrmApp({
       resetConversation: true,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contacts, selectedId, emailAccountsReady]);
+  }, [contacts, selectedId, emailAccountsReady, section]);
 
   useEffect(() => {
     if (!emailAccountsReady || !contacts.length || openSyncStartedRef.current) {
