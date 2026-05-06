@@ -18,11 +18,11 @@ export default function Home() {
             Scegli dove entrare
           </h1>
           <p className="mt-3 max-w-2xl text-sm text-[var(--muted)]">
-            Tre moduli separati: CRM, TODO e Calendario.
+            CRM con sezioni Cinema e Live Music.
           </p>
         </header>
 
-        <section className="grid gap-5 md:grid-cols-3">
+        <section className="grid gap-5 md:grid-cols-1">
           <Link
             href="/crm"
             className="group rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-lg transition hover:-translate-y-1 hover:border-[var(--accent)]"
@@ -38,42 +38,6 @@ export default function Home() {
             </p>
             <p className="mt-6 text-sm font-semibold text-[var(--accent)] transition group-hover:translate-x-0.5">
               Apri CRM →
-            </p>
-          </Link>
-
-          <Link
-            href="/todo"
-            className="group rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-lg transition hover:-translate-y-1 hover:border-emerald-400/50"
-          >
-            <p className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
-              Modulo 02
-            </p>
-            <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">
-              TODO
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Lista task semplice, chiara e indipendente dal CRM.
-            </p>
-            <p className="mt-6 text-sm font-semibold text-emerald-300 transition group-hover:translate-x-0.5">
-              Apri TODO →
-            </p>
-          </Link>
-
-          <Link
-            href="/calendario"
-            className="group rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-lg transition hover:-translate-y-1 hover:border-red-400/70"
-          >
-            <p className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
-              Modulo 03
-            </p>
-            <h2 className="mt-3 text-2xl font-semibold text-[var(--ink)]">
-              Calendario
-            </h2>
-            <p className="mt-2 text-sm text-[var(--muted)]">
-              Agenda settimanale per impegni ricorrenti divisi per giorno.
-            </p>
-            <p className="mt-6 text-sm font-semibold text-red-200 transition group-hover:translate-x-0.5">
-              Apri Calendario →
             </p>
           </Link>
         </section>

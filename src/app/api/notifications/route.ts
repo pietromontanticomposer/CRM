@@ -5,6 +5,15 @@ import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const AUTOMATION_SCOPE = "automation";
+
+type Section = "cinema" | "live_music";
+const VALID_SECTIONS: readonly Section[] = ["cinema", "live_music"];
+const parseSection = (value: unknown): Section => {
+  if (typeof value === "string" && (VALID_SECTIONS as readonly string[]).includes(value)) {
+    return value as Section;
+  }
+  return "cinema";
+};
 const getErrorMessage = (error: unknown, fallback: string) => {
   const details = [
     error instanceof Error ? error.message : "",
@@ -55,6 +64,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const scope = normalizeScope(url.searchParams.get("scope"));
     const limit = parseLimit(url.searchParams.get("limit"));
+    const section = parseSection(url.searchParams.get("section"));
 
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
@@ -63,6 +73,7 @@ export async function GET(request: Request) {
       .from("notifications")
       .select("id, type, contact_id, email_id, title, body, is_read, created_at")
       .or(ownerFilter)
+      .eq("section", section)
       .order("created_at", { ascending: false })
       .limit(scope === AUTOMATION_SCOPE ? Math.max(limit * 3, 100) : limit);
 
@@ -104,6 +115,7 @@ type PatchBody = {
   scope?: string;
   markAll?: boolean;
   notificationId?: string;
+  section?: string;
 };
 
 export async function PATCH(request: Request) {
@@ -113,6 +125,7 @@ export async function PATCH(request: Request) {
     const notificationId =
       typeof body?.notificationId === "string" ? body.notificationId.trim() : "";
     const markAll = Boolean(body?.markAll);
+    const section = parseSection(body?.section);
 
     if (!markAll && !notificationId) {
       return NextResponse.json(
@@ -129,6 +142,7 @@ export async function PATCH(request: Request) {
         .from("notifications")
         .update({ is_read: true })
         .eq("is_read", false)
+        .eq("section", section)
         .or(ownerFilter);
 
       if (scope === AUTOMATION_SCOPE) {
