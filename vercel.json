@@ -15,6 +15,10 @@
     {
       "path": "/api/scheduled-emails/send",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/emails/retention",
+      "schedule": "0 4 * * 1"
     }
   ]
 }
