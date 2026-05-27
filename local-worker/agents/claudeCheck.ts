@@ -1,4 +1,5 @@
 import {
+  VALIDATOR_PROMPT_FILENAME,
   buildFailedResult,
   buildValidationPrompt,
   getInlineSchema,
@@ -13,14 +14,21 @@ export const runClaudeCheck = async (
   workingDirectory: string
 ): Promise<AgentRunResult> => {
   try {
-    const prompt = await buildValidationPrompt("validator_claude.md", packet);
+    const prompt = await buildValidationPrompt(
+      VALIDATOR_PROMPT_FILENAME,
+      packet
+    );
+    // Web access: WebSearch + WebFetch sono i tool di Claude per cercare
+    // online e leggere pagine. Senza, il validatore non puo' verificare i
+    // claim contro fonti pubbliche.
     const args = [
       "-p",
       prompt,
-      "--tools",
-      "",
+      "--allowedTools",
+      "WebSearch",
+      "WebFetch",
       "--permission-mode",
-      "plan",
+      "acceptEdits",
       "--output-format",
       "text",
       "--no-session-persistence",

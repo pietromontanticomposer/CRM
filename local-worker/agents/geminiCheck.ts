@@ -1,4 +1,5 @@
 import {
+  VALIDATOR_PROMPT_FILENAME,
   buildFailedResult,
   buildValidationPrompt,
   parseAgentOutput,
@@ -12,7 +13,12 @@ export const runGeminiCheck = async (
   workingDirectory: string
 ): Promise<AgentRunResult> => {
   try {
-    const prompt = await buildValidationPrompt("validator_gemini.md", packet);
+    // Gemini CLI ha web grounding (Google Search) abilitato di default,
+    // quindi puo' verificare i claim online senza flag aggiuntivi.
+    const prompt = await buildValidationPrompt(
+      VALIDATOR_PROMPT_FILENAME,
+      packet
+    );
     const args = ["-p", prompt, "-o", "text"];
 
     if (process.env.GEMINI_MODEL?.trim()) {

@@ -73,6 +73,9 @@ const PROMPTS_DIR = path.resolve(AGENTS_DIR, "../prompts");
 
 export const VALIDATOR_PROMPT_FILENAME = "validator_full_check.md";
 
+// Tutti e 3 gli agenti devono fare ESATTAMENTE gli stessi controlli sullo
+// stesso prompt unico. Nessuna specializzazione: massima ridondanza.
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 

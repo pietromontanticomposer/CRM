@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  VALIDATOR_PROMPT_FILENAME,
   buildFailedResult,
   buildValidationPrompt,
   cleanupTempDirectory,
@@ -18,15 +19,21 @@ export const runCodexCheck = async (
   let tempDirectory: string | null = null;
 
   try {
-    const prompt = await buildValidationPrompt("validator_codex.md", packet);
+    const prompt = await buildValidationPrompt(
+      VALIDATOR_PROMPT_FILENAME,
+      packet
+    );
     const tempFiles = await createSchemaTempFile();
     tempDirectory = tempFiles.directory;
     const outputFile = path.join(tempFiles.directory, "last-message.json");
+    // Web access: il sandbox read-only blocca anche la rete su molte versioni
+    // del CLI. workspace-write permette network ed e' sicuro perche' la dir
+    // di lavoro e' temporanea.
     const args = [
       "exec",
       "--skip-git-repo-check",
       "--sandbox",
-      "read-only",
+      "workspace-write",
       "--output-schema",
       tempFiles.file,
       "--output-last-message",
