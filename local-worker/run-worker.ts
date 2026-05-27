@@ -55,11 +55,15 @@ const getRequiredEnv = (key: string) => {
 
 const WORKER_LIMIT = Math.max(
   1,
-  Number.parseInt(process.env.OUTREACH_WORKER_BATCH_SIZE ?? "10", 10) || 10
+  Number.parseInt(process.env.OUTREACH_WORKER_BATCH_SIZE ?? "30", 10) || 30
 );
 const WORKER_POLL_MS = Math.max(
   5000,
   Number.parseInt(process.env.OUTREACH_WORKER_POLL_MS ?? "15000", 10) || 15000
+);
+const WORKER_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.OUTREACH_WORKER_CONCURRENCY ?? "5", 10) || 5
 );
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -438,9 +442,11 @@ const runCycle = async () => {
     return 0;
   }
 
-  console.log(`[worker] fetched ${queue.length} contact(s)`);
+  console.log(
+    `[worker] fetched ${queue.length} contact(s), concurrency=${WORKER_CONCURRENCY}`
+  );
 
-  for (const contact of queue) {
+  const runOne = async (contact: ContactQueueRow) => {
     try {
       await processContact(supabase, contact);
     } catch (error) {
@@ -451,7 +457,19 @@ const runCycle = async () => {
       await setContactError(supabase, contact, summary);
       console.error(`${logPrefix(contact)} failed`, error);
     }
-  }
+  };
+
+  let cursor = 0;
+  const next = async (): Promise<void> => {
+    while (cursor < queue.length) {
+      const index = cursor;
+      cursor += 1;
+      await runOne(queue[index]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(WORKER_CONCURRENCY, queue.length) }, next)
+  );
 
   return queue.length;
 };
