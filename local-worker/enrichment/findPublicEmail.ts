@@ -1,4 +1,10 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { runCommand } from "../agents/shared";
+import {
+  cleanupTempDirectory,
+  createSchemaTempFile,
+} from "../agents/shared";
 
 export type EnrichmentInput = {
   name: string;
@@ -28,13 +34,19 @@ export type EnrichmentResult = {
   found_at: string | null;
 };
 
-const EMAIL_REGEX =
-  /([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g;
+type AgentEmailProposal = {
+  agent: "gemini" | "claude" | "codex";
+  found: boolean;
+  email: string | null;
+  source_url: string | null;
+  source_type: string | null;
+  reason: string;
+  raw_output: string;
+};
 
-const FETCH_TIMEOUT_MS = 8000;
-const GEMINI_TIMEOUT_MS = 30000;
-const FETCH_USER_AGENT =
-  "Mozilla/5.0 (compatible; PietroCRMBot/1.0; +https://pietromontanti.com)";
+const GEMINI_TIMEOUT_MS = 60_000;
+const CLAUDE_TIMEOUT_MS = 90_000;
+const CODEX_TIMEOUT_MS = 120_000;
 
 const JUNK_EMAIL_SUFFIXES = [
   ".png",
@@ -58,6 +70,7 @@ const PUBLIC_EXAMPLE_DOMAINS = new Set([
 ]);
 
 const looksLikeRealEmail = (raw: string): string | null => {
+  if (!raw) return null;
   const lower = raw.toLowerCase().trim();
   if (!lower) return null;
   if (JUNK_EMAIL_SUFFIXES.some((suffix) => lower.endsWith(suffix))) return null;
@@ -67,185 +80,48 @@ const looksLikeRealEmail = (raw: string): string | null => {
   if (PUBLIC_EXAMPLE_DOMAINS.has(domain)) return null;
   if (/sentry|wixpress|cdn|static|assets|noreply|no-reply|donotreply/.test(lower))
     return null;
+  if (!/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(lower)) return null;
   return lower;
 };
 
-const fetchWithTimeout = async (url: string): Promise<string | null> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+const normalizeEmailKey = (email: string | null): string | null => {
+  if (!email) return null;
+  const clean = looksLikeRealEmail(email);
+  return clean ? clean.toLowerCase() : null;
+};
+
+const stripCodeFences = (raw: string) =>
+  raw
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+const extractJsonObject = (raw: string): Record<string, unknown> | null => {
+  const cleaned = stripCodeFences(raw);
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace < 0 || lastBrace <= firstBrace) return null;
   try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": FETCH_USER_AGENT,
-        Accept: "text/html,application/xhtml+xml",
-      },
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    const text = await response.text();
-    return text.slice(0, 500_000);
+    const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
   } catch {
     return null;
-  } finally {
-    clearTimeout(timeoutId);
   }
 };
 
-const extractEmailsFromHtml = (html: string): string[] => {
-  const emails = new Set<string>();
-  const mailtoRegex = /mailto:([^"'?\s<>]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = mailtoRegex.exec(html)) !== null) {
-    const candidate = looksLikeRealEmail(decodeURIComponent(match[1]));
-    if (candidate) emails.add(candidate);
-  }
-  EMAIL_REGEX.lastIndex = 0;
-  while ((match = EMAIL_REGEX.exec(html)) !== null) {
-    const candidate = looksLikeRealEmail(match[1]);
-    if (candidate) emails.add(candidate);
-  }
-  return [...emails];
-};
-
-const tokenize = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-const scoreEmail = (
-  email: string,
-  input: EnrichmentInput,
-  sourceUrl: string
-): { score: number; sourceType: string; reason: string } => {
-  const [local, domain] = email.split("@");
-  const nameTokens = tokenize(input.name);
-  const companyTokens = input.company ? tokenize(input.company) : [];
-  const localTokens = tokenize(local);
-
-  const sharesNameToken = nameTokens.some(
-    (token) => token.length >= 3 && localTokens.includes(token)
-  );
-  const sharesCompanyToken = companyTokens.some(
-    (token) => token.length >= 3 && domain.includes(token)
-  );
-  const isGenericLocal = /^(info|hello|ciao|contact|contatti|press|stampa|booking|management|office|studio|admin|mail)$/i.test(
-    local
-  );
-  const sourceUrlLower = sourceUrl.toLowerCase();
-
-  if (sharesNameToken) {
-    return {
-      score: 0.92,
-      sourceType: "official_site",
-      reason: "Email contiene nome regista, fonte ufficiale.",
-    };
-  }
-  if (sharesCompanyToken && isGenericLocal) {
-    return {
-      score: 0.6,
-      sourceType: "production",
-      reason: "Email generica della produzione collegata al regista.",
-    };
-  }
-  if (sharesCompanyToken) {
-    return {
-      score: 0.78,
-      sourceType: "production",
-      reason: "Email di dominio produzione coerente col regista.",
-    };
-  }
-  if (isGenericLocal) {
-    return {
-      score: 0.52,
-      sourceType: sourceUrlLower.includes("imdb")
-        ? "imdb"
-        : sourceUrlLower.includes("vimeo")
-        ? "vimeo"
-        : sourceUrlLower.includes("filmfreeway")
-        ? "filmfreeway"
-        : "official_site",
-      reason: "Email generica ufficiale, fonte sito ufficiale.",
-    };
-  }
-  return {
-    score: 0.4,
-    sourceType: "unverified",
-    reason: "Email trovata ma coerenza con il destinatario non confermata.",
-  };
-};
-
-const buildCandidateUrls = (sourceLink: string | null): string[] => {
-  if (!sourceLink) return [];
-  const urls = new Set<string>();
-  urls.add(sourceLink);
-  try {
-    const url = new URL(sourceLink);
-    const origin = `${url.protocol}//${url.host}`;
-    [
-      "",
-      "/contact",
-      "/contacts",
-      "/contatti",
-      "/contatto",
-      "/about",
-      "/about-us",
-      "/chi-siamo",
-      "/press",
-      "/stampa",
-      "/info",
-    ].forEach((path) => urls.add(`${origin}${path}`));
-  } catch {
-    // ignore invalid URL
-  }
-  return [...urls];
-};
-
-const searchByFetch = async (
-  input: EnrichmentInput
-): Promise<EnrichmentResult | null> => {
-  const candidateUrls = buildCandidateUrls(input.source_link);
-  if (candidateUrls.length === 0) return null;
-
-  let best: EnrichmentResult | null = null;
-  for (const url of candidateUrls) {
-    const html = await fetchWithTimeout(url);
-    if (!html) continue;
-    const emails = extractEmailsFromHtml(html);
-    for (const email of emails) {
-      const scored = scoreEmail(email, input, url);
-      if (scored.score < 0.5) continue;
-      const candidate: EnrichmentResult = {
-        email,
-        source_url: url,
-        source_type: scored.sourceType,
-        confidence: scored.score,
-        status: scored.score >= 0.5 ? "found_public" : "needs_review",
-        reason: scored.reason,
-        found_at: new Date().toISOString(),
-      };
-      if (!best || candidate.confidence > best.confidence) {
-        best = candidate;
-      }
-      if (best.confidence >= 0.85) return best;
-    }
-  }
-  return best;
-};
-
-const buildGeminiPrompt = (input: EnrichmentInput): string => {
+const buildSearchPrompt = (input: EnrichmentInput): string => {
   const { pdf_full_text, source_file, ...identityFields } = input;
   const lines = [
     "Devi trovare UNA singola email pubblica del regista o filmmaker indicato.",
-    "Hai a disposizione il testo COMPLETO del documento da cui è stato estratto il nome.",
-    "Usalo per disambiguare: titoli di film, anno, festival, produzione, paese, biografia ti aiutano a identificare la persona giusta su internet.",
-    "Cerca solo fonti pubbliche e verificabili.",
-    "Non inventare email. Se non sei sicuro restituisci found:false.",
+    "Hai a disposizione il testo COMPLETO del documento da cui è stato estratto il nome (catalogo festival, lista registi, programma).",
+    "Usalo per disambiguare: titoli di film, anno, festival, sezione, paese, produzione, biografia.",
+    "Cerca SOLO fonti pubbliche e verificabili (sito ufficiale, IMDB, Vimeo, FilmFreeway, sito della produzione, sito del festival).",
+    "Non inventare email. Se non sei sicuro, found:false.",
     "Restituisci SOLO JSON valido, senza markdown.",
     "",
     "Dati identificativi del contatto:",
@@ -259,7 +135,7 @@ const buildGeminiPrompt = (input: EnrichmentInput): string => {
       pdf_full_text,
       "<<<DOCUMENT_END>>>",
       "",
-      "Cerca nel documento il contesto che riguarda specificamente questo regista (es. titoli dei suoi film, anno di partecipazione, sezione del festival, produzione, paese) e usalo per la ricerca web mirata.",
+      "Cerca nel documento il contesto specifico che riguarda questo regista (titoli dei suoi film, anno, sezione del festival, paese, produzione) e usa quel contesto per la ricerca web mirata."
     );
   }
   lines.push(
@@ -267,77 +143,289 @@ const buildGeminiPrompt = (input: EnrichmentInput): string => {
     "Schema di output obbligatorio:",
     '{"found": true, "email": "...", "source_url": "...", "source_type": "official_site|production|festival|imdb|vimeo|filmfreeway|other", "reason": "..."}',
     "oppure:",
-    '{"found": false, "reason": "..."}',
+    '{"found": false, "reason": "..."}'
   );
   return lines.join("\n");
 };
 
-const parseGeminiResponse = (raw: string): {
-  found: boolean;
-  email?: string;
-  source_url?: string;
-  source_type?: string;
-  reason?: string;
-} | null => {
-  const trimmed = raw
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
-  const firstBrace = trimmed.indexOf("{");
-  const lastBrace = trimmed.lastIndexOf("}");
-  if (firstBrace < 0 || lastBrace <= firstBrace) return null;
+const parseProposal = (
+  agent: AgentEmailProposal["agent"],
+  rawOutput: string
+): AgentEmailProposal => {
+  const parsed = extractJsonObject(rawOutput);
+  if (!parsed) {
+    return {
+      agent,
+      found: false,
+      email: null,
+      source_url: null,
+      source_type: null,
+      reason: `Output JSON non valido (${agent}).`,
+      raw_output: rawOutput,
+    };
+  }
+  const found = parsed.found === true;
+  const emailRaw =
+    typeof parsed.email === "string" && parsed.email.trim()
+      ? parsed.email.trim()
+      : null;
+  const email = found ? looksLikeRealEmail(emailRaw ?? "") : null;
+  return {
+    agent,
+    found: Boolean(email),
+    email,
+    source_url:
+      typeof parsed.source_url === "string" && parsed.source_url.trim()
+        ? parsed.source_url.trim()
+        : null,
+    source_type:
+      typeof parsed.source_type === "string" && parsed.source_type.trim()
+        ? parsed.source_type.trim()
+        : null,
+    reason:
+      typeof parsed.reason === "string" && parsed.reason.trim()
+        ? parsed.reason.trim()
+        : "",
+    raw_output: rawOutput,
+  };
+};
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  ms: number,
+  onTimeout: () => T
+): Promise<T> => {
+  let timer: NodeJS.Timeout | null = null;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(onTimeout()), ms);
+  });
   try {
-    return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
-  } catch {
-    return null;
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 };
 
-const searchByGeminiCli = async (
+const failedProposal = (
+  agent: AgentEmailProposal["agent"],
+  reason: string,
+  rawOutput = ""
+): AgentEmailProposal => ({
+  agent,
+  found: false,
+  email: null,
+  source_url: null,
+  source_type: null,
+  reason,
+  raw_output: rawOutput,
+});
+
+const searchByGemini = async (
   input: EnrichmentInput,
-  workingDirectory: string
-): Promise<EnrichmentResult | null> => {
-  if (process.env.ENRICHMENT_DISABLE_GEMINI === "1") return null;
-  const prompt = buildGeminiPrompt(input);
+  cwd: string
+): Promise<AgentEmailProposal> => {
+  if (process.env.ENRICHMENT_DISABLE_GEMINI === "1") {
+    return failedProposal("gemini", "Gemini disattivato via env.");
+  }
+  const prompt = buildSearchPrompt(input);
   const args = ["-p", prompt, "-o", "text"];
   if (process.env.GEMINI_MODEL?.trim()) {
     args.push("-m", process.env.GEMINI_MODEL.trim());
   }
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-    let result;
-    try {
-      result = await runCommand({
-        command: "gemini",
-        args,
-        cwd: workingDirectory,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-    if (result.code !== 0) return null;
-    const raw = result.stdout.trim() || result.stderr.trim();
-    const parsed = parseGeminiResponse(raw);
-    if (!parsed || !parsed.found || !parsed.email) return null;
-    const email = looksLikeRealEmail(parsed.email);
-    if (!email) return null;
-    const scored = scoreEmail(email, input, parsed.source_url ?? "gemini_cli");
-    const confidence = Math.min(scored.score, 0.7);
-    return {
-      email,
-      source_url: parsed.source_url ?? null,
-      source_type: parsed.source_type ?? scored.sourceType,
-      confidence,
-      status: confidence >= 0.5 ? "found_public" : "needs_review",
-      reason: parsed.reason ?? scored.reason,
-      found_at: new Date().toISOString(),
-    };
-  } catch {
-    return null;
+  return withTimeout(
+    (async () => {
+      try {
+        const result = await runCommand({ command: "gemini", args, cwd });
+        const raw = result.stdout.trim() || result.stderr.trim();
+        if (result.code !== 0) {
+          return failedProposal(
+            "gemini",
+            `Gemini CLI exited ${result.code ?? "unknown"}.`,
+            raw
+          );
+        }
+        return parseProposal("gemini", raw);
+      } catch (error) {
+        return failedProposal(
+          "gemini",
+          error instanceof Error ? error.message : "Errore Gemini."
+        );
+      }
+    })(),
+    GEMINI_TIMEOUT_MS,
+    () => failedProposal("gemini", `Timeout Gemini (${GEMINI_TIMEOUT_MS}ms).`)
+  );
+};
+
+const searchByClaude = async (
+  input: EnrichmentInput,
+  cwd: string
+): Promise<AgentEmailProposal> => {
+  if (process.env.ENRICHMENT_DISABLE_CLAUDE === "1") {
+    return failedProposal("claude", "Claude disattivato via env.");
   }
+  const prompt = buildSearchPrompt(input);
+  const args = [
+    "-p",
+    prompt,
+    "--output-format",
+    "text",
+    "--no-session-persistence",
+  ];
+  if (process.env.CLAUDE_MODEL?.trim()) {
+    args.push("--model", process.env.CLAUDE_MODEL.trim());
+  }
+  return withTimeout(
+    (async () => {
+      try {
+        const result = await runCommand({ command: "claude", args, cwd });
+        const raw = result.stdout.trim() || result.stderr.trim();
+        if (result.code !== 0) {
+          return failedProposal(
+            "claude",
+            `Claude CLI exited ${result.code ?? "unknown"}.`,
+            raw
+          );
+        }
+        return parseProposal("claude", raw);
+      } catch (error) {
+        return failedProposal(
+          "claude",
+          error instanceof Error ? error.message : "Errore Claude."
+        );
+      }
+    })(),
+    CLAUDE_TIMEOUT_MS,
+    () => failedProposal("claude", `Timeout Claude (${CLAUDE_TIMEOUT_MS}ms).`)
+  );
+};
+
+const searchByCodex = async (
+  input: EnrichmentInput,
+  cwd: string
+): Promise<AgentEmailProposal> => {
+  if (process.env.ENRICHMENT_DISABLE_CODEX === "1") {
+    return failedProposal("codex", "Codex disattivato via env.");
+  }
+  const prompt = buildSearchPrompt(input);
+  let tempDirectory: string | null = null;
+  return withTimeout(
+    (async () => {
+      try {
+        const tempFiles = await createSchemaTempFile();
+        tempDirectory = tempFiles.directory;
+        const outputFile = path.join(tempFiles.directory, "last-message.json");
+        const args = [
+          "exec",
+          "--skip-git-repo-check",
+          "--sandbox",
+          "read-only",
+          "--output-last-message",
+          outputFile,
+          "-",
+        ];
+        if (process.env.CODEX_MODEL?.trim()) {
+          args.splice(1, 0, "--model", process.env.CODEX_MODEL.trim());
+        }
+        const result = await runCommand({
+          command: "codex",
+          args,
+          cwd,
+          stdin: prompt,
+        });
+        const fileOutput = await readFile(outputFile, "utf8").catch(() => "");
+        const raw =
+          fileOutput.trim() || result.stdout.trim() || result.stderr.trim();
+        if (result.code !== 0) {
+          return failedProposal(
+            "codex",
+            `Codex CLI exited ${result.code ?? "unknown"}.`,
+            raw
+          );
+        }
+        return parseProposal("codex", raw);
+      } catch (error) {
+        return failedProposal(
+          "codex",
+          error instanceof Error ? error.message : "Errore Codex."
+        );
+      } finally {
+        if (tempDirectory) await cleanupTempDirectory(tempDirectory);
+      }
+    })(),
+    CODEX_TIMEOUT_MS,
+    () => failedProposal("codex", `Timeout Codex (${CODEX_TIMEOUT_MS}ms).`)
+  );
+};
+
+const summarizeProposals = (proposals: AgentEmailProposal[]) => {
+  const parts = proposals.map((p) => {
+    if (!p.found || !p.email) return `${p.agent}: nessuna (${p.reason})`;
+    return `${p.agent}: ${p.email}`;
+  });
+  return parts.join(" · ");
+};
+
+const consensusFromProposals = (
+  proposals: AgentEmailProposal[]
+): EnrichmentResult => {
+  const votes = new Map<string, AgentEmailProposal[]>();
+  proposals.forEach((p) => {
+    const key = normalizeEmailKey(p.email);
+    if (!key) return;
+    const bucket = votes.get(key) ?? [];
+    bucket.push(p);
+    votes.set(key, bucket);
+  });
+
+  const now = new Date().toISOString();
+  const debug = summarizeProposals(proposals);
+
+  if (votes.size === 0) {
+    return {
+      email: null,
+      source_url: null,
+      source_type: null,
+      confidence: 0,
+      status: "not_found",
+      reason: `Nessuna email pubblica trovata dai 3 agenti. ${debug}`,
+      found_at: null,
+    };
+  }
+
+  const ranked = Array.from(votes.entries())
+    .map(([key, bucket]) => ({ key, bucket, count: bucket.length }))
+    .sort((a, b) => b.count - a.count);
+
+  const top = ranked[0];
+  const sample = top.bucket[0];
+
+  if (top.count >= 2) {
+    const confidence = top.count === 3 ? 0.95 : 0.78;
+    return {
+      email: sample.email,
+      source_url: sample.source_url,
+      source_type: sample.source_type ?? "consensus",
+      confidence,
+      status: "found_public",
+      reason: `Consenso ${top.count}/3 (${top.bucket
+        .map((p) => p.agent)
+        .join("+")}). ${debug}`,
+      found_at: now,
+    };
+  }
+
+  // Disagreement: each agent proposes a different email. Mark needs_review and
+  // keep the first one as a starting point for manual review.
+  return {
+    email: sample.email,
+    source_url: sample.source_url,
+    source_type: sample.source_type ?? "single_agent",
+    confidence: 0.4,
+    status: "needs_review",
+    reason: `Disaccordo tra agenti, nessuna email ha 2+ voti. ${debug}`,
+    found_at: now,
+  };
 };
 
 export const findPublicEmail = async (
@@ -358,11 +446,12 @@ export const findPublicEmail = async (
   }
 
   try {
-    const direct = await searchByFetch(input);
-    if (direct && direct.email) return direct;
-
-    const viaGemini = await searchByGeminiCli(input, workingDirectory);
-    if (viaGemini && viaGemini.email) return viaGemini;
+    const proposals = await Promise.all([
+      searchByGemini(input, workingDirectory),
+      searchByClaude(input, workingDirectory),
+      searchByCodex(input, workingDirectory),
+    ]);
+    return consensusFromProposals(proposals);
   } catch (error) {
     return {
       email: null,
@@ -374,14 +463,4 @@ export const findPublicEmail = async (
       found_at: null,
     };
   }
-
-  return {
-    email: null,
-    source_url: null,
-    source_type: null,
-    confidence: 0,
-    status: "not_found",
-    reason: "Nessuna email pubblica trovata su fonti accessibili.",
-    found_at: null,
-  };
 };
