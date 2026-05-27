@@ -341,6 +341,25 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     }
   };
 
+  const deleteContact = async (contactId: string, silent = false) => {
+    if (!silent) setActionPendingId(contactId);
+    try {
+      const response = await fetch(`/api/contacts/${contactId}`, {
+        method: "DELETE",
+      }).catch(() => null);
+      if (!response || !response.ok) {
+        const message = response
+          ? await readApiError(response, "Cancellazione fallita.")
+          : "Server non raggiungibile.";
+        setError(message);
+        return false;
+      }
+      return true;
+    } finally {
+      if (!silent) setActionPendingId(null);
+    }
+  };
+
   const handleApprove = async (id: string) => {
     await patchContact(id, {
       ai_status: "approved",
@@ -349,10 +368,8 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   };
 
   const handleReject = async (id: string) => {
-    await patchContact(id, {
-      ai_status: "blocked",
-      ai_validation_status: "blocked",
-    });
+    const ok = await deleteContact(id);
+    if (ok) await loadBatch({ silent: true });
   };
 
   const startEdit = (contact: BatchContact) => {
@@ -405,11 +422,29 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     setBulkPending("reject");
     try {
       for (const id of ids) {
-        await patchContact(id, {
-          ai_status: "blocked",
-          ai_validation_status: "blocked",
-        });
+        await deleteContact(id, true);
       }
+      await loadBatch({ silent: true });
+    } finally {
+      setBulkPending(null);
+    }
+  };
+
+  const purgeUnapproved = async () => {
+    const ids = contacts
+      .filter((contact) => contact.ai_status !== "approved")
+      .map((contact) => contact.id);
+    if (!ids.length) return;
+    const confirmed = window.confirm(
+      `Cancello ${ids.length} contatti non approvati dal database. Procedo?`
+    );
+    if (!confirmed) return;
+    setBulkPending("reject");
+    try {
+      for (const id of ids) {
+        await deleteContact(id, true);
+      }
+      await loadBatch({ silent: true });
     } finally {
       setBulkPending(null);
     }
@@ -477,7 +512,18 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
               onClick={bulkReject}
               className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 font-semibold text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Conferma blocco {counts.blocked || ""}
+              Cancella bloccati {counts.blocked || ""}
+            </button>
+            <button
+              type="button"
+              disabled={
+                !!bulkPending || counts.total - counts.approved === 0
+              }
+              onClick={() => void purgeUnapproved()}
+              className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 font-semibold text-[var(--muted)] hover:border-red-500/40 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Cancella dal database tutti i contatti non ancora approvati"
+            >
+              Svuota non approvati
             </button>
           </div>
         </div>
@@ -794,8 +840,9 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                           disabled={pending}
                           onClick={() => void handleReject(contact.id)}
                           className="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-1.5 text-xs font-semibold text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          title="Rimuove il contatto dal database (non recuperabile)"
                         >
-                          Rifiuta
+                          Scarta · cancella
                         </button>
                       </>
                     ) : (
