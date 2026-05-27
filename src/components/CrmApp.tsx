@@ -3698,47 +3698,33 @@ export default function CrmApp({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-7xl px-0 pt-8 sm:px-2">
-        <section className="mb-10 grid gap-8 rounded-md border border-[var(--line)] bg-[var(--panel)] p-8 sm:p-10 md:grid-cols-[1.4fr_1fr] md:items-end">
-          <div>
-            <div className="brand-eyebrow brand-eyebrow--gold">Outreach · 3 AI</div>
-            <h1 className="brand-section-title mt-4">
-              Importa <em>PDF</em>,<br />
-              le AI fanno <em>il lavoro sporco</em>.
-            </h1>
-            <p className="brand-section-sub">
-              Trascina la lista registi · Gemini, Claude e Codex cercano i contatti, controllano, scrivono le mail. Tu approvi solo cosa parte.
-            </p>
-            <div className="mt-7 flex flex-wrap items-center gap-4">
-              <Link href="/crm/outreach/import" className="brand-cta-primary">
-                Carica un PDF <span aria-hidden>→</span>
-              </Link>
-              {outreachBatchSummaries.length > 0 && (
-                <Link
-                  href={`/crm/outreach/${outreachBatchSummaries[0].id}`}
-                  className="brand-link-gold"
-                >
-                  Vai all&apos;ultimo batch <span className="brand-link-arrow" aria-hidden>→</span>
-                </Link>
-              )}
+      <div className="mx-auto w-full max-w-7xl px-0 pt-4 sm:px-2">
+        <Link
+          href="/crm/outreach/import"
+          className="group mb-6 flex items-center justify-between gap-6 rounded-md border border-dashed border-[var(--line-strong)] bg-[var(--panel)] px-6 py-6 transition hover:border-[var(--gold)]"
+        >
+          <div className="flex items-center gap-5">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[var(--line-strong)] bg-[var(--panel-strong)] text-[var(--muted-strong)] transition group-hover:border-[var(--gold)] group-hover:text-[var(--gold)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3v12" />
+                <path d="m7 8 5-5 5 5" />
+                <path d="M5 21h14" />
+              </svg>
+            </div>
+            <div>
+              <div className="brand-eyebrow brand-eyebrow--gold">Outreach · 3 AI</div>
+              <div className="brand-serif mt-1.5 text-2xl font-semibold leading-tight text-[var(--ink)]">
+                Importa <em className="italic font-normal text-[var(--gold)]">PDF</em>
+              </div>
+              <div className="mt-1.5 text-sm text-[var(--muted-strong)]">
+                Trascina un PDF con la lista registi · le 3 AI cercano i contatti, controllano e scrivono le email. Tu approvi.
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Email cercate", value: outreachBatchSummaries.reduce((acc, b) => acc + b.totalContacts, 0) },
-              { label: "Bozze pronte", value: outreachBatchSummaries.reduce((acc, b) => acc + b.draftGenerated, 0) },
-              { label: "Approvate", value: outreachBatchSummaries.reduce((acc, b) => acc + b.passed, 0) },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-md border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-4 text-center"
-              >
-                <div className="brand-stat text-3xl text-[var(--gold)]">{stat.value}</div>
-                <div className="brand-eyebrow mt-2 text-[9px]">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </section>
+          <span className="brand-link-gold shrink-0">
+            Apri <span className="brand-link-arrow" aria-hidden>→</span>
+          </span>
+        </Link>
 
         {outreachBatchSummaries.length > 0 && (
           <div className="mb-6">
@@ -3798,99 +3784,85 @@ export default function CrmApp({
           </div>
         )}
 
-        <section className="mb-8">
-          <div className="brand-section-head">
-            <div className="brand-eyebrow brand-eyebrow--gold">Oggi</div>
-            <h2 className="brand-section-title">
-              Stato del <em>follow-up</em>
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {[
-              {
-                key: "overdue" as const,
-                label: "In ritardo",
-                value: followUpSummary.overdue.length,
-                tone: "text-red-400",
-                dot: "bg-red-500",
-                onClick: () => {
-                  setContactFolder("In attesa di risposta");
-                  contentSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                },
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            {
+              key: "overdue" as const,
+              label: "In ritardo",
+              value: followUpSummary.overdue.length,
+              tone: "text-red-400",
+              dot: "bg-red-500",
+              onClick: () => {
+                setContactFolder("In attesa di risposta");
+                contentSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
               },
-              {
-                key: "today" as const,
-                label: "Da fare oggi",
-                value: followUpSummary.dueToday.length,
-                tone: "text-sky-400",
-                dot: "bg-sky-500",
-                onClick: () => {
-                  setContactFolder("In attesa di risposta");
-                  contentSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                },
+            },
+            {
+              key: "today" as const,
+              label: "Oggi",
+              value: followUpSummary.dueToday.length,
+              tone: "text-sky-400",
+              dot: "bg-sky-500",
+              onClick: () => {
+                setContactFolder("In attesa di risposta");
+                contentSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
               },
-              {
-                key: "replies" as const,
-                label: "Risposte da gestire",
-                value: contacts.filter(
-                  (c) => c.status === "Azione richiesta" && (c.section ?? "cinema") === section
-                ).length,
-                tone: "text-amber-400",
-                dot: "bg-amber-500",
-                onClick: () => setContactFolder("Azione richiesta"),
-              },
-            ].map((card) => (
-              <button
-                key={card.key}
-                type="button"
-                onClick={card.onClick}
-                className="group flex flex-col items-start gap-4 rounded-md border border-[var(--line)] bg-[var(--panel)] px-6 py-6 text-left transition hover:border-[var(--gold)]"
-              >
-                <div className="flex items-center gap-2">
-                  <span className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
-                  <span className="brand-eyebrow text-[10px]">{card.label}</span>
-                </div>
-                <div className={`brand-stat text-5xl tabular-nums ${card.tone}`}>
-                  {card.value}
-                </div>
-                <span className="brand-link-gold opacity-0 transition group-hover:opacity-100">
-                  Apri <span className="brand-link-arrow" aria-hidden>→</span>
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+            },
+            {
+              key: "replies" as const,
+              label: "Risposte da gestire",
+              value: contacts.filter(
+                (c) => c.status === "Azione richiesta" && (c.section ?? "cinema") === section
+              ).length,
+              tone: "text-amber-400",
+              dot: "bg-amber-500",
+              onClick: () => setContactFolder("Azione richiesta"),
+            },
+          ].map((card) => (
             <button
+              key={card.key}
               type="button"
-              onClick={() => setAddContactOpen(true)}
-              className="brand-cta-ghost"
+              onClick={card.onClick}
+              className="flex flex-col items-start gap-2 rounded-md border border-[var(--line)] bg-[var(--panel)] px-5 py-4 text-left transition hover:border-[var(--gold)]"
             >
-              <span aria-hidden>+</span> Nuovo contatto
+              <div className="flex items-center gap-2">
+                <span className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
+                <span className="brand-eyebrow text-[10px]">{card.label}</span>
+              </div>
+              <div className={`brand-serif text-4xl font-semibold tabular-nums leading-none ${card.tone}`}>
+                {card.value}
+              </div>
             </button>
-          </div>
-        </section>
+          ))}
+        </div>
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddContactOpen(true)}
+            className="brand-cta-ghost"
+          >
+            <span aria-hidden>+</span> Nuovo contatto
+          </button>
+        </div>
       </div>
-      <main className="relative mx-auto grid w-full max-w-7xl flex-1 items-start gap-6 px-0 py-4 sm:px-2 md:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] md:gap-8">
+      <main className="relative mx-auto grid w-full max-w-7xl flex-1 items-start gap-4 px-0 py-4 sm:px-2 md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] md:gap-6">
         <section
           style={
             desktopSidebarHeight
               ? { height: `${desktopSidebarHeight}px` }
               : undefined
           }
-          className="min-w-0 rounded-md border border-[var(--line)] bg-[var(--panel)] p-4 md:overflow-y-auto md:pr-3"
+          className="min-w-0 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-3 md:overflow-y-auto md:pr-2"
         >
           <div>
-            <div className="sticky -top-5 z-30 -mx-4 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-4 pt-2 pb-4 rounded-t-md">
+            <div className="sticky -top-5 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-2 pb-3 rounded-t-3xl">
               <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="brand-eyebrow brand-eyebrow--gold">Rubrica</div>
-                  <h3 className="brand-serif mt-1 text-xl font-semibold text-[var(--ink)]">
-                    Contatti
-                  </h3>
-                </div>
-                <span className="brand-stat text-2xl tabular-nums text-[var(--muted-strong)]">
+                <span className="brand-eyebrow brand-eyebrow--gold">
+                  Contatti
+                </span>
+                <span className="text-[11px] tabular-nums text-[var(--muted)]">
                   {contactSearch.trim() || contactFolder !== "Tutte"
-                    ? `${filteredContacts.length}/${sectionContacts.length}`
+                    ? `${filteredContacts.length} / ${sectionContacts.length}`
                     : sectionContacts.length}
                 </span>
               </div>
@@ -3908,12 +3880,14 @@ export default function CrmApp({
                         key={folder}
                         type="button"
                         onClick={() => setContactFolder(folder)}
-                        className={`brand-nav-link whitespace-nowrap py-1 ${
-                          active ? "is-active" : ""
+                        className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                          active
+                            ? "bg-[var(--panel-strong)] text-[var(--ink)]"
+                            : "text-[var(--muted)] hover:text-[var(--ink)]"
                         }`}
                       >
-                        {folder === "Tutte" ? "Tutti" : folder.split(" ")[0]}
-                        <span className="ml-1.5 text-[10px] tabular-nums">
+                        {folder === "Tutte" ? "Tutti" : folder.split(" ")[0]}{" "}
+                        <span className="ml-1 tabular-nums text-[var(--muted-strong)]">
                           {count}
                         </span>
                       </button>

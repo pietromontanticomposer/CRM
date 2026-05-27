@@ -287,19 +287,19 @@ export function OutreachImportClient() {
   const hasContacts = totals.contacts > 0;
 
   return (
-    <div className="brand-page min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-      <header className="brand-topbar sticky top-0 z-30">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-6 px-6 py-4">
-          <div className="flex items-center gap-6">
-            <Link href="/crm" className="brand-nav-link">
-              ← CRM
-            </Link>
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
+      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--bg)]/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-6 py-3">
+          <div className="flex items-center gap-3">
             <Link
               href="/crm"
-              className="brand-serif text-xl font-semibold tracking-tight text-[var(--gold)]"
+              className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2.5 py-1 text-xs font-medium text-[var(--muted)] transition hover:text-[var(--ink)]"
             >
-              Pietro <em className="italic font-normal">CRM</em>
+              ← CRM
             </Link>
+            <h1 className="brand-serif text-lg font-semibold tracking-tight text-[var(--gold)]">
+              Importa <em className="italic font-normal">registi</em>
+            </h1>
           </div>
           <div className="flex items-center gap-2 text-[11px] tabular-nums text-[var(--muted)]">
             <span>{totals.files} file</span>
@@ -317,25 +317,14 @@ export function OutreachImportClient() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-6 py-16">
-        <div className="mb-14">
-          <div className="brand-eyebrow brand-eyebrow--gold">Outreach</div>
-          <h1 className="brand-section-title mt-4">
-            Carica una <em>lista registi</em>,<br />
-            le AI fanno tutto il resto.
-          </h1>
-          <p className="brand-section-sub">
-            PDF, CSV, TXT o JSON. Estraggo i nomi, le 3 AI cercano le email su internet, scrivono le bozze e i validatori controllano. Tu approvi solo cosa parte.
-          </p>
-        </div>
-
+      <main className="mx-auto w-full max-w-5xl px-6 py-8">
         {/* STEP 1 — DROPZONE */}
         <section>
-          <div className="mb-5 flex items-center gap-3">
-            <span className="grid h-7 w-7 place-items-center rounded-full border border-[var(--gold)] text-xs font-bold text-[var(--gold)]">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+            <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
               1
             </span>
-            <span className="brand-eyebrow">Carica i file</span>
+            <span>Carica i file</span>
           </div>
           <div
             role="button"
@@ -350,13 +339,13 @@ export function OutreachImportClient() {
             onDrop={onDrop}
             onDragOver={onDragOver}
             onDragLeave={onDragLeave}
-            className={`flex cursor-pointer select-none flex-col items-center justify-center gap-4 rounded-md border-2 border-dashed p-16 text-center transition ${
+            className={`flex cursor-pointer select-none flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition ${
               dragOver
-                ? "border-[var(--gold)] bg-[var(--gold-soft)]"
-                : "border-[var(--line-strong)] bg-[var(--panel)] hover:border-[var(--gold)]"
+                ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                : "border-[var(--line)] bg-[var(--panel)] hover:border-[var(--accent)]/50"
             }`}
           >
-            <div className="grid h-16 w-16 place-items-center rounded-full border border-[var(--line-strong)] bg-[var(--panel-strong)] text-[var(--gold)]">
+            <div className="grid h-14 w-14 place-items-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted-strong)]">
               <svg
                 width="24"
                 height="24"
@@ -374,19 +363,17 @@ export function OutreachImportClient() {
               </svg>
             </div>
             <div>
-              <div className="brand-serif text-2xl font-semibold text-[var(--ink)]">
+              <div className="text-base font-semibold text-[var(--ink)]">
                 {extracting
                   ? "Sto leggendo i file…"
                   : hasFiles
                   ? "Aggiungi altri file"
-                  : (
-                    <>
-                      Trascina qui la <em className="italic font-normal text-[var(--gold)]">lista registi</em>
-                    </>
-                  )}
+                  : "Trascina qui i file con la lista di registi"}
               </div>
-              <div className="mt-2 brand-eyebrow">
-                {extracting ? "Un attimo…" : "PDF · CSV · TXT · JSON"}
+              <div className="mt-1 text-xs text-[var(--muted)]">
+                {extracting
+                  ? "Un attimo…"
+                  : "PDF, CSV, TXT o JSON · oppure clicca per scegliere"}
               </div>
             </div>
             <input

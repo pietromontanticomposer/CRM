@@ -166,64 +166,6 @@
   border-color: var(--line-strong);
 }
 
-/* Pattern Academy: eyebrow + serif title + sub */
-.brand-section-head {
-  margin-bottom: 28px;
-  max-width: 720px;
-}
-.brand-section-head .brand-eyebrow {
-  margin-bottom: 14px;
-}
-.brand-section-title {
-  font-family: var(--font-serif);
-  font-weight: 700;
-  font-size: clamp(28px, 3.4vw, 44px);
-  line-height: 1.05;
-  letter-spacing: -0.015em;
-  color: var(--ink);
-}
-.brand-section-title em {
-  font-style: italic;
-  font-weight: 400;
-  color: var(--gold);
-}
-.brand-section-sub {
-  margin-top: 14px;
-  color: var(--muted-strong);
-  font-size: 15px;
-  line-height: 1.6;
-  max-width: 580px;
-}
-
-/* I numeri statistici prendono il serif */
-.brand-stat {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-/* Tutti i titoli H del CRM ereditano il serif (override puntuale: aggiungi .no-brand-serif) */
-.brand-page h1,
-.brand-page h2,
-.brand-page h3 {
-  font-family: var(--font-serif);
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: var(--ink);
-}
-.brand-page h1 em,
-.brand-page h2 em,
-.brand-page h3 em {
-  font-style: italic;
-  font-weight: 400;
-  color: var(--gold);
-}
-.brand-page .no-brand-serif {
-  font-family: var(--font-sans);
-  letter-spacing: 0;
-}
-
 body {
   background: var(--bg);
   color: var(--ink);
@@ -246,12 +188,11 @@ select,
 textarea {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   outline: none;
-  padding: 0.65rem 0.9rem;
+  padding: 0.5rem 0.75rem;
   width: 100%;
   min-width: 0;
   box-shadow: var(--field-shadow);
@@ -261,8 +202,8 @@ textarea {
 input:not([type="checkbox"]):not([type="radio"]):focus,
 select:focus,
 textarea:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 2px var(--gold-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 28%, transparent);
 }
 
 summary {
