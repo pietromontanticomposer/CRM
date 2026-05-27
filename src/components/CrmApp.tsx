@@ -1363,9 +1363,31 @@ export default function CrmApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEmail?.id, selectedEmailAttachments, selected?.id]);
 
-  const sectionContacts = useMemo(
+  const allSectionContacts = useMemo(
     () => contacts.filter((c) => (c.section ?? "cinema") === section),
     [contacts, section]
+  );
+
+  // Main contact list nasconde i contatti outreach in attesa di revisione.
+  // Compaiono solo dopo che Pietro li approva manualmente nella pagina batch
+  // (ai_status passa a "approved"). Doppio gate: prima approvi che entrino in
+  // CRM, poi approvi l'invio dell'email.
+  const PENDING_OUTREACH_STATUSES = new Set([
+    "imported",
+    "draft_ready",
+    "needs_review",
+    "blocked",
+    "error",
+  ]);
+  const sectionContacts = useMemo(
+    () =>
+      allSectionContacts.filter(
+        (c) =>
+          !c.ai_batch_id ||
+          !c.ai_status ||
+          !PENDING_OUTREACH_STATUSES.has(c.ai_status)
+      ),
+    [allSectionContacts]
   );
 
   const sectionScheduledEmails = useMemo(
