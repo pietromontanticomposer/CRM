@@ -688,82 +688,56 @@ export async function POST(request: Request) {
         );
       }
 
-      const ownerFilter = getOwnerFilter(user);
+      // ARCHITETTURA (Pietro 2026-05-27): i contatti outreach NON entrano nella
+      // tabella `contacts`. Vengono parcheggiati in `outreach_drafts` finche'
+      // Pietro non li approva manualmente nella pagina batch. L'approvazione
+      // promuove la draft in contacts e cancella la draft.
       const batchId = randomUUID();
-      const importedContacts: ContactRow[] = [];
+      const drafts: Record<string, unknown>[] = [];
+      const supabaseUrl = process.env.SUPABASE_URL?.trim();
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+      if (!supabaseUrl || !supabaseKey) {
+        return NextResponse.json(
+          {
+            error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env.",
+          },
+          { status: 500 }
+        );
+      }
 
       for (const row of importPayload.contacts) {
-        const existing = await findExistingOutreachContact(
-          supabase,
-          ownerFilter,
-          row
-        );
-        const contactPayload: ContactInsert & { owner_id: string } = {
+        const draftPayload = {
           owner_id: user.id,
+          batch_id: batchId,
+          batch_name: importPayload.batchName,
+          section: row.section,
           name: row.name,
           email: row.email,
           company: row.company,
           role: row.role || "Regista",
-          status: row.status,
           notes: row.notes,
-          last_action_at: null,
-          section: row.section,
-          ai_batch_id: batchId,
-          ai_batch_name: importPayload.batchName,
+          language: null,
+          source_link: row.source_link,
+          verified_facts_json: row.verified_facts_json,
+          prompt_master_rules: row.prompt_master_rules,
           ai_status: "imported",
+          ai_validation_status: "not_checked",
           ai_email_subject: row.draft_subject,
           ai_email_body: row.draft_body,
-          verified_facts_json: row.verified_facts_json,
-          source_link: row.source_link,
-          prompt_master_rules: row.prompt_master_rules,
           ai_agent_checks_json: {},
           ai_validation_summary: null,
-          ai_validation_status: "not_checked",
+          ai_send_allowed: false,
           email_source_url: row.email_source_url,
           email_source_type: row.email_source_type,
           email_confidence: row.email_confidence,
           email_enrichment_status:
-            row.email_enrichment_status ??
-            (row.email ? "present" : null),
+            row.email_enrichment_status ?? (row.email ? "present" : null),
           email_found_at: row.email ? new Date().toISOString() : null,
         };
 
-        let saved: ContactRow | null = null;
-        let saveError: unknown = null;
-
-        // Bypassiamo il client @supabase/supabase-js per l'INSERT/UPDATE outreach:
-        // ha mostrato cache stale su colonne aggiunte di recente. Andiamo direttamente al
-        // PostgREST endpoint con fetch nativo (gli stessi service_role headers).
-        const supabaseUrl = process.env.SUPABASE_URL?.trim();
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-        if (!supabaseUrl || !supabaseKey) {
-          saveError = new Error(
-            "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env."
-          );
-        } else if (existing?.id) {
-          const response = await fetch(
-            `${supabaseUrl}/rest/v1/contacts?id=eq.${existing.id}`,
-            {
-              method: "PATCH",
-              headers: {
-                apikey: supabaseKey,
-                Authorization: `Bearer ${supabaseKey}`,
-                "Content-Type": "application/json",
-                Prefer: "return=representation",
-              },
-              body: JSON.stringify(contactPayload),
-            }
-          );
-          if (response.ok) {
-            const data = (await response.json()) as ContactRow[];
-            saved = data[0] ?? null;
-          } else {
-            saveError = await response
-              .json()
-              .catch(() => ({ message: response.statusText }));
-          }
-        } else {
-          const response = await fetch(`${supabaseUrl}/rest/v1/contacts`, {
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/outreach_drafts`,
+          {
             method: "POST",
             headers: {
               apikey: supabaseKey,
@@ -771,46 +745,26 @@ export async function POST(request: Request) {
               "Content-Type": "application/json",
               Prefer: "return=representation",
             },
-            body: JSON.stringify(contactPayload),
-          });
-          if (response.ok) {
-            const data = (await response.json()) as ContactRow[];
-            saved = data[0] ?? null;
-          } else {
-            saveError = await response
-              .json()
-              .catch(() => ({ message: response.statusText }));
+            body: JSON.stringify(draftPayload),
           }
-        }
-
-        if (saveError || !saved) {
-          console.error("POST /api/contacts outreach import failed", saveError);
+        );
+        if (!response.ok) {
+          const errPayload = await response
+            .json()
+            .catch(() => ({ message: response.statusText }));
+          console.error("POST /api/contacts outreach draft insert failed", errPayload);
           return NextResponse.json(
             {
               error: getErrorMessage(
-                saveError,
-                "Impossibile importare il batch outreach."
+                errPayload,
+                "Impossibile creare le draft outreach."
               ),
             },
             { status: 500 }
           );
         }
-
-        if (saved.email) {
-          try {
-            await linkExistingEmailsToContact(
-              supabase,
-              saved.id,
-              saved.email as string,
-              user.id,
-              user.canAccessLegacyData
-            );
-          } catch (linkError) {
-            console.error("POST /api/contacts outreach link email failed", linkError);
-          }
-        }
-
-        importedContacts.push(withAiDefaults(saved));
+        const data = (await response.json()) as Record<string, unknown>[];
+        if (data[0]) drafts.push(data[0]);
       }
 
       return NextResponse.json(
@@ -818,9 +772,9 @@ export async function POST(request: Request) {
           batch: {
             id: batchId,
             name: importPayload.batchName,
-            total_contacts: importedContacts.length,
+            total_contacts: drafts.length,
           },
-          contacts: importedContacts,
+          drafts,
         },
         { status: 201 }
       );

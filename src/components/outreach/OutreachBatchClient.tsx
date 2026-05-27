@@ -15,13 +15,15 @@ type AgentSnapshot = {
   issues?: Array<{ message?: string } | string>;
 };
 
+// Una "BatchContact" e' una outreach_draft. Non e' un contact reale: il
+// contact reale viene creato solo all'approvazione (POST /approve).
 type BatchContact = {
   id: string;
   name: string;
   email: string | null;
   company: string | null;
-  ai_batch_id: string | null;
-  ai_batch_name: string | null;
+  batch_id: string | null;
+  batch_name: string | null;
   ai_status: string | null;
   ai_validation_status: string | null;
   ai_email_subject: string | null;
@@ -216,10 +218,10 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     async ({ silent = false }: { silent?: boolean } = {}) => {
       const requestId = ++requestIdRef.current;
       if (!silent) setLoading(true);
-      const response = await fetch(`/api/contacts`, {
-        method: "GET",
-        cache: "no-store",
-      }).catch(() => null);
+      const response = await fetch(
+        `/api/outreach/drafts?batchId=${encodeURIComponent(batchId)}`,
+        { method: "GET", cache: "no-store" }
+      ).catch(() => null);
       if (requestId !== requestIdRef.current) return;
       if (!response) {
         setError("Server non raggiungibile.");
@@ -232,14 +234,11 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
         return;
       }
       const payload = (await response.json().catch(() => ({}))) as {
-        contacts?: BatchContact[];
+        drafts?: BatchContact[];
       };
-      const all = payload.contacts ?? [];
-      const filtered = all.filter(
-        (contact) => contact.ai_batch_id === batchId
-      );
-      setContacts(filtered);
-      const name = filtered.find((c) => c.ai_batch_name)?.ai_batch_name ?? null;
+      const drafts = payload.drafts ?? [];
+      setContacts(drafts);
+      const name = drafts.find((c) => c.batch_name)?.batch_name ?? null;
       setBatchName(name);
       setError(null);
       if (!silent) setLoading(false);
@@ -322,7 +321,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   ) => {
     setActionPendingId(contactId);
     try {
-      const response = await fetch(`/api/contacts/${contactId}`, {
+      const response = await fetch(`/api/outreach/drafts/${contactId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -344,7 +343,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   const deleteContact = async (contactId: string, silent = false) => {
     if (!silent) setActionPendingId(contactId);
     try {
-      const response = await fetch(`/api/contacts/${contactId}`, {
+      const response = await fetch(`/api/outreach/drafts/${contactId}`, {
         method: "DELETE",
       }).catch(() => null);
       if (!response || !response.ok) {
@@ -360,11 +359,31 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     }
   };
 
+  // Promuove la draft a contact reale nella tabella contacts (e cancella la
+  // draft). Solo dopo questo passaggio il contatto compare in /crm.
+  const promoteDraft = async (id: string) => {
+    setActionPendingId(id);
+    try {
+      const response = await fetch(
+        `/api/outreach/drafts/${id}/approve`,
+        { method: "POST" }
+      ).catch(() => null);
+      if (!response || !response.ok) {
+        const message = response
+          ? await readApiError(response, "Approvazione fallita.")
+          : "Server non raggiungibile.";
+        setError(message);
+        return false;
+      }
+      return true;
+    } finally {
+      setActionPendingId(null);
+    }
+  };
+
   const handleApprove = async (id: string) => {
-    await patchContact(id, {
-      ai_status: "approved",
-      ai_validation_status: "passed",
-    });
+    const ok = await promoteDraft(id);
+    if (ok) await loadBatch({ silent: true });
   };
 
   const handleReject = async (id: string) => {
@@ -379,13 +398,17 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   };
 
   const handleSaveEdit = async (contact: BatchContact) => {
-    const ok = await patchContact(contact.id, {
+    // Salva le modifiche al subject/body sulla draft, poi promuovi.
+    const patched = await patchContact(contact.id, {
       ai_email_subject: editSubject.trim(),
       ai_email_body: editBody.trim(),
-      ai_status: "approved",
-      ai_validation_status: "passed",
     });
-    if (ok) setEditingId(null);
+    if (!patched) return;
+    const promoted = await promoteDraft(contact.id);
+    if (promoted) {
+      setEditingId(null);
+      await loadBatch({ silent: true });
+    }
   };
 
   const bulkApprove = async () => {
@@ -404,11 +427,9 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     setBulkPending("approve");
     try {
       for (const id of readyIds) {
-        await patchContact(id, {
-          ai_status: "approved",
-          ai_validation_status: "passed",
-        });
+        await promoteDraft(id);
       }
+      await loadBatch({ silent: true });
     } finally {
       setBulkPending(null);
     }

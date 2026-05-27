@@ -20,7 +20,9 @@ const PROJECT_ROOT = path.resolve(WORKER_DIR, "..");
 loadEnv({ path: path.join(PROJECT_ROOT, ".env.local"), override: false });
 loadEnv({ path: path.join(PROJECT_ROOT, ".env"), override: false });
 
-type ContactQueueRow = {
+// Il worker lavora sulla tabella outreach_drafts. I contatti non entrano in
+// `contacts` finche' Pietro non approva (POST /api/outreach/drafts/[id]/approve).
+type DraftQueueRow = {
   id: string;
   owner_id: string | null;
   name: string;
@@ -30,8 +32,8 @@ type ContactQueueRow = {
   notes: string | null;
   section: string | null;
   language: string | null;
-  ai_batch_id: string | null;
-  ai_batch_name: string | null;
+  batch_id: string | null;
+  batch_name: string | null;
   ai_status: string;
   ai_email_subject: string | null;
   ai_email_body: string | null;
@@ -113,7 +115,7 @@ const TEMPLATE_RULES: Record<string, string> = {
   C: "Template C: contatto senza materiale verificabile. Body senza claim su opere specifiche. Obbligatorio: 'Link visione: non disponibile' oppure omissione esplicita del link visione.",
 };
 
-const extractAllowedLinks = (contact: ContactQueueRow): string[] => {
+const extractAllowedLinks = (contact: DraftQueueRow): string[] => {
   const links = new Set<string>();
   if (isNonEmptyString(contact.source_link)) {
     links.add(contact.source_link.trim());
@@ -130,7 +132,7 @@ const extractAllowedLinks = (contact: ContactQueueRow): string[] => {
   return [...links];
 };
 
-const buildPacket = (contact: ContactQueueRow): ValidationPacket => {
+const buildPacket = (contact: DraftQueueRow): ValidationPacket => {
   const contact_data = {
     id: contact.id,
     owner_id: contact.owner_id,
@@ -141,8 +143,8 @@ const buildPacket = (contact: ContactQueueRow): ValidationPacket => {
     notes: contact.notes,
     section: contact.section,
     language: contact.language,
-    batch_id: contact.ai_batch_id,
-    batch_name: contact.ai_batch_name,
+    batch_id: contact.batch_id,
+    batch_name: contact.batch_name,
   };
   const normalized_contact_data = {
     name: contact.name?.trim() ?? "",
@@ -177,9 +179,9 @@ const buildPacket = (contact: ContactQueueRow): ValidationPacket => {
 
 const fetchQueue = async (supabase: ReturnType<typeof getSupabase>) => {
   const { data, error } = await supabase
-    .from("contacts")
+    .from("outreach_drafts")
     .select(
-      "id, owner_id, name, email, company, role, notes, section, language, ai_batch_id, ai_batch_name, ai_status, ai_email_subject, ai_email_body, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason"
+      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason"
     )
     .in("ai_status", ["imported", "draft_ready"])
     .order("updated_at", { ascending: true })
@@ -189,19 +191,19 @@ const fetchQueue = async (supabase: ReturnType<typeof getSupabase>) => {
     throw error;
   }
 
-  return (data ?? []) as ContactQueueRow[];
+  return (data ?? []) as DraftQueueRow[];
 };
 
-const logPrefix = (contact: ContactQueueRow) =>
-  `[worker][contact:${contact.id.slice(0, 8)}][batch:${contact.ai_batch_id?.slice(0, 8) ?? "none"}]`;
+const logPrefix = (contact: DraftQueueRow) =>
+  `[worker][contact:${contact.id.slice(0, 8)}][batch:${contact.batch_id?.slice(0, 8) ?? "none"}]`;
 
 const setContactError = async (
   supabase: ReturnType<typeof getSupabase>,
-  contact: ContactQueueRow,
+  contact: DraftQueueRow,
   summary: string
 ) => {
   await supabase
-    .from("contacts")
+    .from("outreach_drafts")
     .update({
       ai_status: "error",
       ai_validation_status: "error",
@@ -214,12 +216,13 @@ const setContactError = async (
 
 const persistAgentAudit = async (
   supabase: ReturnType<typeof getSupabase>,
-  contact: ContactQueueRow,
+  contact: DraftQueueRow,
   results: AgentRunResult[]
 ) => {
   const rows = results.map((result) => ({
-    contact_id: contact.id,
-    batch_id: contact.ai_batch_id,
+    contact_id: null,
+    draft_id: contact.id,
+    batch_id: contact.batch_id,
     agent_name: result.agent_name,
     approved: result.approved,
     risk_level: result.risk_level,
@@ -266,12 +269,12 @@ const numericToRiskLabel = (value: number) => {
 
 const persistDraft = async (
   supabase: ReturnType<typeof getSupabase>,
-  contact: ContactQueueRow,
+  contact: DraftQueueRow,
   draft: WriterDraftResult
 ) => {
   const generatedAt = new Date().toISOString();
   const { error } = await supabase
-    .from("contacts")
+    .from("outreach_drafts")
     .update({
       ai_email_subject: draft.subject,
       ai_email_body: draft.body,
@@ -294,7 +297,7 @@ const persistDraft = async (
 
 const persistEnrichment = async (
   supabase: ReturnType<typeof getSupabase>,
-  contact: ContactQueueRow,
+  contact: DraftQueueRow,
   enrichment: EnrichmentResult
 ) => {
   const updates: Record<string, unknown> = {
@@ -309,7 +312,7 @@ const persistEnrichment = async (
     updates.email = enrichment.email;
   }
   const { error } = await supabase
-    .from("contacts")
+    .from("outreach_drafts")
     .update(updates)
     .eq("id", contact.id);
   if (error) throw error;
@@ -325,7 +328,7 @@ const persistEnrichment = async (
 
 const processContact = async (
   supabase: ReturnType<typeof getSupabase>,
-  contact: ContactQueueRow
+  contact: DraftQueueRow
 ) => {
   console.log(`${logPrefix(contact)} processing`);
 
@@ -410,7 +413,7 @@ const processContact = async (
 
   if (contact.ai_status === "imported") {
     await supabase
-      .from("contacts")
+      .from("outreach_drafts")
       .update({ ai_status: "draft_ready" })
       .eq("id", contact.id);
   }
@@ -433,7 +436,7 @@ const processContact = async (
   );
 
   const { error } = await supabase
-    .from("contacts")
+    .from("outreach_drafts")
     .update({
       ai_status: aggregated.ai_status,
       ai_validation_status: aggregated.ai_validation_status,
@@ -468,7 +471,7 @@ const runCycle = async () => {
     `[worker] fetched ${queue.length} contact(s), concurrency=${WORKER_CONCURRENCY}`
   );
 
-  const runOne = async (contact: ContactQueueRow) => {
+  const runOne = async (contact: DraftQueueRow) => {
     try {
       await processContact(supabase, contact);
     } catch (error) {
