@@ -46,6 +46,14 @@ Usa solo i dati ricevuti.
 
 Se un dato non è presente o non è verificato, non usarlo.
 
+IMPORTANTE: dentro `verified_facts_json` potresti trovare un campo `pdf_full_text` che contiene il testo COMPLETO del documento da cui questo regista è stato estratto (es. catalogo festival, lista registi, programma). In quel caso:
+
+- Identifica nel testo la sezione che riguarda specificamente questo regista (nome esatto + contesto vicino: titolo del film, anno, sezione del festival, paese, produzione).
+- Usa quei dettagli per personalizzare la bozza in modo concreto e verificabile.
+- NON inventare dettagli che non sono nel testo.
+- Se nel testo non trovi materiale specifico su questo regista (es. solo nome citato senza contesto), usa template C o C_TEAM.
+- Il campo `source_file` indica il nome del file di origine, può aiutarti a capire il contesto (festival, anno, ecc.).
+
 ═══════════════════════════════════════════
 OUTPUT OBBLIGATORIO
 ═══════════════════════════════════════════

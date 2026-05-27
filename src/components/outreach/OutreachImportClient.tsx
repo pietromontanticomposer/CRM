@@ -39,6 +39,7 @@ type FileReport = {
   status: "parsed" | "needs_review" | "file_not_readable" | "error";
   rows: ImportedRow[];
   errors: string[];
+  raw_text: string | null;
 };
 
 type FileBlock = {
@@ -47,6 +48,7 @@ type FileBlock = {
   status: FileReport["status"];
   errors: string[];
   rows: ImportedRow[];
+  raw_text: string | null;
 };
 
 const readApiError = async (response: Response, fallback: string) => {
@@ -125,6 +127,7 @@ export function OutreachImportClient() {
         status: report.status,
         errors: report.errors,
         rows: report.rows,
+        raw_text: report.raw_text ?? null,
       }));
       setFiles((prev) => [...prev, ...newBlocks]);
     } catch (err) {
@@ -214,22 +217,35 @@ export function OutreachImportClient() {
         ? window.localStorage.getItem(SECTION_STORAGE_KEY) || "cinema"
         : "cinema";
 
+    const rowToBlock = new Map<ImportedRow, FileBlock>();
+    files.forEach((block) => {
+      block.rows.forEach((row) => rowToBlock.set(row, block));
+    });
+
     const contactsPayload = allRows
       .filter((row) => row.name?.trim() || row.email?.trim())
-      .map((row) => ({
-        name:
-          row.name?.trim() || row.email?.split("@")[0] || "(senza nome)",
-        email: row.email?.trim() || null,
-        company: row.company,
-        notes: row.notes,
-        section,
-        sourceLink: row.source_link,
-        verifiedFactsJson: {},
-        email_source_url: row.email_source_url,
-        email_confidence: row.email_confidence,
-        email_status: row.email_status,
-        role: "Regista",
-      }));
+      .map((row) => {
+        const block = rowToBlock.get(row);
+        return {
+          name:
+            row.name?.trim() || row.email?.split("@")[0] || "(senza nome)",
+          email: row.email?.trim() || null,
+          company: row.company,
+          notes: row.notes,
+          section,
+          sourceLink: row.source_link,
+          verifiedFactsJson: block?.raw_text
+            ? {
+                pdf_full_text: block.raw_text,
+                source_file: block.file_name,
+              }
+            : {},
+          email_source_url: row.email_source_url,
+          email_confidence: row.email_confidence,
+          email_status: row.email_status,
+          role: "Regista",
+        };
+      });
 
     const response = await fetch("/api/contacts", {
       method: "POST",

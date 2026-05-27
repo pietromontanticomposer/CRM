@@ -31,6 +31,7 @@ type FileReport = {
   status: "parsed" | "needs_review" | "file_not_readable" | "error";
   rows: ParsedRow[];
   errors: string[];
+  raw_text: string | null;
 };
 
 const EMAIL_REGEX = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -306,6 +307,7 @@ const parseFile = async (file: File): Promise<FileReport> => {
     status: "error",
     rows: [],
     errors: [],
+    raw_text: null,
   };
 
   try {
@@ -324,12 +326,14 @@ const parseFile = async (file: File): Promise<FileReport> => {
         );
         return report;
       }
+      report.raw_text = text;
       rows = extractFromFreeText(text);
     } else if (
       lowerName.endsWith(".txt") ||
       fileType.startsWith("text/")
     ) {
       const text = await file.text();
+      report.raw_text = text;
       rows = extractFromFreeText(text);
     } else {
       report.status = "error";

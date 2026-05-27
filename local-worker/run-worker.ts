@@ -309,6 +309,16 @@ const processContact = async (
     contact.email_enrichment_status !== "error"
   ) {
     console.log(`${logPrefix(contact)} email mancante, avvio enrichment`);
+    const facts =
+      contact.verified_facts_json &&
+      typeof contact.verified_facts_json === "object" &&
+      !Array.isArray(contact.verified_facts_json)
+        ? (contact.verified_facts_json as Record<string, unknown>)
+        : {};
+    const pdfFullText =
+      typeof facts.pdf_full_text === "string" ? facts.pdf_full_text : null;
+    const sourceFile =
+      typeof facts.source_file === "string" ? facts.source_file : null;
     const enrichment = await findPublicEmail(
       {
         name: contact.name,
@@ -317,6 +327,8 @@ const processContact = async (
         notes: contact.notes,
         city: null,
         language: contact.language,
+        pdf_full_text: pdfFullText,
+        source_file: sourceFile,
       },
       PROJECT_ROOT
     );

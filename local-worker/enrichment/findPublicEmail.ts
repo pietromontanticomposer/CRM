@@ -7,6 +7,8 @@ export type EnrichmentInput = {
   notes: string | null;
   city: string | null;
   language: string | null;
+  pdf_full_text?: string | null;
+  source_file?: string | null;
 };
 
 export type EnrichmentStatus =
@@ -237,20 +239,36 @@ const searchByFetch = async (
 };
 
 const buildGeminiPrompt = (input: EnrichmentInput): string => {
+  const { pdf_full_text, source_file, ...identityFields } = input;
   const lines = [
     "Devi trovare UNA singola email pubblica del regista o filmmaker indicato.",
+    "Hai a disposizione il testo COMPLETO del documento da cui è stato estratto il nome.",
+    "Usalo per disambiguare: titoli di film, anno, festival, produzione, paese, biografia ti aiutano a identificare la persona giusta su internet.",
     "Cerca solo fonti pubbliche e verificabili.",
     "Non inventare email. Se non sei sicuro restituisci found:false.",
     "Restituisci SOLO JSON valido, senza markdown.",
     "",
-    "Dati contatto:",
-    JSON.stringify(input, null, 2),
+    "Dati identificativi del contatto:",
+    JSON.stringify(identityFields, null, 2),
+  ];
+  if (pdf_full_text && pdf_full_text.trim()) {
+    lines.push(
+      "",
+      `Testo completo del documento di origine${source_file ? ` (${source_file})` : ""}:`,
+      "<<<DOCUMENT_START>>>",
+      pdf_full_text,
+      "<<<DOCUMENT_END>>>",
+      "",
+      "Cerca nel documento il contesto che riguarda specificamente questo regista (es. titoli dei suoi film, anno di partecipazione, sezione del festival, produzione, paese) e usalo per la ricerca web mirata.",
+    );
+  }
+  lines.push(
     "",
     "Schema di output obbligatorio:",
     '{"found": true, "email": "...", "source_url": "...", "source_type": "official_site|production|festival|imdb|vimeo|filmfreeway|other", "reason": "..."}',
     "oppure:",
     '{"found": false, "reason": "..."}',
-  ];
+  );
   return lines.join("\n");
 };
 
