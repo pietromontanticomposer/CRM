@@ -3701,37 +3701,35 @@ export default function CrmApp({
       <div className="mx-auto w-full max-w-7xl px-0 pt-4 sm:px-2">
         <Link
           href="/crm/outreach/import"
-          className="group mb-4 flex items-center justify-between gap-4 rounded-xl border-2 border-dashed border-[var(--line)] bg-[var(--panel)] px-5 py-5 transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
+          className="group mb-6 flex items-center justify-between gap-6 rounded-md border border-dashed border-[var(--line-strong)] bg-[var(--panel)] px-6 py-6 transition hover:border-[var(--gold)]"
         >
-          <div className="flex items-center gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted-strong)] transition group-hover:border-[var(--accent)] group-hover:text-[var(--accent)]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <div className="flex items-center gap-5">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[var(--line-strong)] bg-[var(--panel-strong)] text-[var(--muted-strong)] transition group-hover:border-[var(--gold)] group-hover:text-[var(--gold)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M12 3v12" />
                 <path d="m7 8 5-5 5 5" />
                 <path d="M5 21h14" />
               </svg>
             </div>
             <div>
-              <div className="text-base font-semibold text-[var(--ink)]">
-                Importa PDF · 3 AI lavorano per te
+              <div className="brand-eyebrow brand-eyebrow--gold">Outreach · 3 AI</div>
+              <div className="brand-serif mt-1.5 text-2xl font-semibold leading-tight text-[var(--ink)]">
+                Importa <em className="italic font-normal text-[var(--gold)]">PDF</em>
               </div>
-              <div className="mt-0.5 text-xs text-[var(--muted)]">
-                Trascina un PDF con la lista registi → cerco i contatti, controllo, scrivo le email. Tu approvi.
+              <div className="mt-1.5 text-sm text-[var(--muted-strong)]">
+                Trascina un PDF con la lista registi · le 3 AI cercano i contatti, controllano e scrivono le email. Tu approvi.
               </div>
             </div>
           </div>
-          <span
-            aria-hidden
-            className="shrink-0 rounded-md border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--muted-strong)] transition group-hover:border-[var(--accent)] group-hover:text-[var(--ink)]"
-          >
-            Apri →
+          <span className="brand-link-gold shrink-0">
+            Apri <span className="brand-link-arrow" aria-hidden>→</span>
           </span>
         </Link>
 
         {outreachBatchSummaries.length > 0 && (
-          <div className="mb-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+          <div className="mb-6">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="brand-eyebrow brand-eyebrow--gold">
                 Batch AI in lavorazione
               </span>
               <span className="text-[11px] tabular-nums text-[var(--muted)]">
@@ -3825,23 +3823,23 @@ export default function CrmApp({
               key={card.key}
               type="button"
               onClick={card.onClick}
-              className="flex flex-col items-start gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-left transition hover:border-[var(--line-strong)]"
+              className="flex flex-col items-start gap-2 rounded-md border border-[var(--line)] bg-[var(--panel)] px-5 py-4 text-left transition hover:border-[var(--gold)]"
             >
-              <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
+              <div className="flex items-center gap-2">
                 <span className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
-                {card.label}
+                <span className="brand-eyebrow text-[10px]">{card.label}</span>
               </div>
-              <div className={`text-2xl font-semibold tabular-nums ${card.tone}`}>
+              <div className={`brand-serif text-4xl font-semibold tabular-nums leading-none ${card.tone}`}>
                 {card.value}
               </div>
             </button>
           ))}
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setAddContactOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition hover:border-[var(--accent)]"
+            className="brand-cta-ghost"
           >
             <span aria-hidden>+</span> Nuovo contatto
           </button>
@@ -3859,7 +3857,7 @@ export default function CrmApp({
           <div>
             <div className="sticky -top-5 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-2 pb-3 rounded-t-3xl">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+                <span className="brand-eyebrow brand-eyebrow--gold">
                   Contatti
                 </span>
                 <span className="text-[11px] tabular-nums text-[var(--muted)]">

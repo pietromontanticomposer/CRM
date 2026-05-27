@@ -611,17 +611,17 @@ export function OutreachImportClient() {
                 type="button"
                 disabled={importing || extracting || totals.contacts === 0}
                 onClick={() => void handleImport()}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="brand-cta-primary mt-6 w-full"
               >
                 {importing ? (
                   <>
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-black/30 border-t-black" />
                     Avvio in corso…
                   </>
                 ) : (
                   <>
-                    Avvia ricerca email + bozze ({totals.contacts}{" "}
-                    {totals.contacts === 1 ? "contatto" : "contatti"})
+                    Avvia ricerca email + bozze · {totals.contacts}{" "}
+                    {totals.contacts === 1 ? "contatto" : "contatti"}
                     <span aria-hidden>→</span>
                   </>
                 )}

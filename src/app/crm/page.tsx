@@ -51,20 +51,19 @@ export default function CrmPage() {
       suppressHydrationWarning
       className={`${theme === "light" ? "crm-light-theme" : ""} relative min-h-screen`}
     >
-      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--bg)]/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-6 py-3">
-          <div className="flex items-center gap-4">
+      <header className="brand-topbar sticky top-0 z-40">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-6 px-6 py-3.5">
+          <div className="flex items-center gap-8">
             <Link
               href="/"
-              className="brand-serif text-base font-semibold tracking-tight text-[var(--gold)]"
+              className="brand-serif text-xl font-semibold tracking-tight text-[var(--gold)]"
             >
               Pietro <em className="italic font-normal">CRM</em>
             </Link>
-            <span className="text-[var(--line-strong)]">/</span>
             <div
               role="tablist"
               aria-label="Sezioni"
-              className="inline-flex items-center gap-0.5 rounded-md border border-[var(--line)] bg-[var(--panel)] p-0.5"
+              className="flex items-center gap-7"
             >
               {sections.map((value) => {
                 const active = section === value;
@@ -75,11 +74,7 @@ export default function CrmPage() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setSection(value)}
-                    className={`rounded-[5px] px-2.5 py-1 text-xs font-medium transition ${
-                      active
-                        ? "bg-[var(--panel-strong)] text-[var(--ink)]"
-                        : "text-[var(--muted)] hover:text-[var(--ink)]"
-                    }`}
+                    className={`brand-nav-link ${active ? "is-active" : ""}`}
                   >
                     {SECTION_LABELS[value]}
                   </button>
