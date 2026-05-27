@@ -16,10 +16,15 @@
   --success: #3fb950;
   --warning: #d29922;
   --danger: #f85149;
+  --gold: #c9a84c;
+  --gold-strong: #d4b356;
+  --gold-soft: rgba(201, 168, 76, 0.12);
   --field-shadow: none;
   --crm-pulse-blur: 0px;
   --crm-pulse-spread: 0px;
   --crm-pulse-alpha: 0.5;
+  --font-sans: var(--font-sans-brand), "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: var(--font-serif-brand), "Playfair Display", Georgia, "Times New Roman", serif;
 }
 
 /* Performance helpers */
@@ -36,8 +41,15 @@
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--ink);
-  --font-sans: var(--font-space);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
   --font-mono: var(--font-mono);
+}
+
+.font-serif,
+.brand-serif {
+  font-family: var(--font-serif);
+  letter-spacing: -0.015em;
 }
 
 body {

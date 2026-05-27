@@ -297,8 +297,8 @@ export function OutreachImportClient() {
             >
               ← CRM
             </Link>
-            <h1 className="text-sm font-semibold tracking-tight text-[var(--ink)]">
-              Importa registi
+            <h1 className="brand-serif text-lg font-semibold tracking-tight text-[var(--gold)]">
+              Importa <em className="italic font-normal">registi</em>
             </h1>
           </div>
           <div className="flex items-center gap-2 text-[11px] tabular-nums text-[var(--muted)]">

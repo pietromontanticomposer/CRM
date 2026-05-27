@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space",
+const inter = Inter({
+  variable: "--font-sans-brand",
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-serif-brand",
+  subsets: ["latin"],
+  weight: ["400", "600", "700", "900"],
+  style: ["normal", "italic"],
 });
 
 const jetBrainsMono = JetBrains_Mono({
@@ -25,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="it">
       <body
-        className={`${spaceGrotesk.variable} ${jetBrainsMono.variable} antialiased`}
+        className={`${inter.variable} ${playfair.variable} ${jetBrainsMono.variable} antialiased`}
       >
         {children}
       </body>

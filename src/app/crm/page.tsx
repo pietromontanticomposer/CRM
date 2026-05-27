@@ -56,9 +56,9 @@ export default function CrmPage() {
           <div className="flex items-center gap-4">
             <Link
               href="/"
-              className="text-sm font-semibold tracking-tight text-[var(--ink)]"
+              className="brand-serif text-base font-semibold tracking-tight text-[var(--gold)]"
             >
-              Pietro CRM
+              Pietro <em className="italic font-normal">CRM</em>
             </Link>
             <span className="text-[var(--line-strong)]">/</span>
             <div
