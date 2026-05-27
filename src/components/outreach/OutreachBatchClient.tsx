@@ -135,27 +135,56 @@ const filterPillClass = (active: boolean) =>
   }`;
 
 const agentBadge = (label: string, snap?: AgentSnapshot | null) => {
-  const cls = !snap
-    ? "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)]"
-    : snap.failed
+  if (!snap) return null;
+  const cls = snap.failed
     ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
     : snap.approved
     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
     : "border-red-500/40 bg-red-500/10 text-red-200";
-  const text = !snap
-    ? "—"
-    : snap.failed
-    ? "failed"
+  const text = snap.failed
+    ? "errore"
     : snap.approved
-    ? "approved"
-    : "rejected";
+    ? "ok"
+    : "no";
   return (
     <span
+      key={label}
       className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${cls}`}
     >
       {label} · {text}
     </span>
   );
+};
+
+const EMAIL_STATUS_LABEL: Record<string, string> = {
+  found_public: "Email trovata",
+  needs_review: "Email da controllare",
+  not_found: "Email non trovata",
+  error: "Errore ricerca email",
+  present: "Email presente",
+  missing: "Email mancante",
+};
+
+const EMAIL_STATUS_TONE: Record<string, string> = {
+  found_public: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+  needs_review: "border-amber-500/40 bg-amber-500/10 text-amber-200",
+  not_found: "border-red-500/40 bg-red-500/10 text-red-200",
+  error: "border-red-500/40 bg-red-500/10 text-red-200",
+  present: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+  missing: "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)]",
+};
+
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  official_site: "sito ufficiale",
+  production: "sito produzione",
+  festival: "sito festival",
+  imdb: "IMDb",
+  vimeo: "Vimeo",
+  filmfreeway: "FilmFreeway",
+  file_import: "file importato",
+  consensus: "3 AI concordi",
+  single_agent: "1 AI",
+  unverified: "non verificata",
 };
 
 const readApiError = async (response: Response, fallback: string) => {
@@ -573,9 +602,30 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                         {contact.name || "(senza nome)"}
                       </div>
                       <div className="text-[11px] text-[var(--muted)]">
-                        {contact.email || "email mancante"}
+                        {contact.email || "email ancora da cercare"}
                       </div>
-                      <div className="mt-1 text-[11px] text-[var(--muted)]">
+                      <div
+                        className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                          contact.ai_status === "approved"
+                            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                            : contact.ai_status === "needs_review"
+                            ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+                            : contact.ai_status === "blocked"
+                            ? "border-red-500/40 bg-red-500/10 text-red-200"
+                            : contact.ai_status === "error"
+                            ? "border-red-500/40 bg-red-500/10 text-red-200"
+                            : "border-sky-500/40 bg-sky-500/10 text-sky-200"
+                        }`}
+                      >
+                        {(contact.ai_status === "imported" ||
+                          contact.ai_status === "draft_ready" ||
+                          !contact.ai_status ||
+                          contact.ai_status === "not_checked") && (
+                          <span
+                            aria-hidden
+                            className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-400"
+                          />
+                        )}
                         {summarizeStatus(contact.ai_status)}
                       </div>
                     </div>
@@ -592,44 +642,77 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                   </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
-                  {agentBadge("Claude", checks.claude)}
-                  {agentBadge("Gemini", checks.gemini)}
-                  {agentBadge("Codex", checks.codex)}
-                  {contact.email_enrichment_status && (
-                    <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)]">
-                      Email: {contact.email_enrichment_status}
-                      {typeof contact.email_confidence === "number" &&
-                        ` · ${Math.round(contact.email_confidence * 100)}%`}
-                    </span>
-                  )}
-                  {contact.email_source_url && (
-                    <a
-                      href={contact.email_source_url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--ink)]"
-                    >
-                      Fonte: {contact.email_source_type ?? "link"}
-                    </a>
-                  )}
-                  {contact.ai_template_used && (
-                    <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)]">
-                      Template {contact.ai_template_used}
-                    </span>
-                  )}
-                  <span
-                    className={`rounded-full border px-2 py-0.5 font-semibold ${
-                      contact.ai_send_allowed
-                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                        : "border-red-500/40 bg-red-500/10 text-red-200"
-                    }`}
-                  >
-                    {contact.ai_send_allowed
-                      ? "send_allowed"
-                      : "send_blocked"}
-                  </span>
-                </div>
+                {(() => {
+                  const agentBadges = [
+                    agentBadge("Claude", checks.claude),
+                    agentBadge("Gemini", checks.gemini),
+                    agentBadge("Codex", checks.codex),
+                  ].filter(Boolean);
+                  const enrichmentLabel = contact.email_enrichment_status
+                    ? EMAIL_STATUS_LABEL[contact.email_enrichment_status] ??
+                      contact.email_enrichment_status
+                    : null;
+                  const enrichmentTone = contact.email_enrichment_status
+                    ? EMAIL_STATUS_TONE[contact.email_enrichment_status] ??
+                      "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]"
+                    : null;
+                  const sourceLabel = contact.email_source_type
+                    ? SOURCE_TYPE_LABEL[contact.email_source_type] ??
+                      contact.email_source_type
+                    : null;
+                  const validationDone =
+                    contact.ai_validation_status &&
+                    contact.ai_validation_status !== "not_checked";
+                  const hasAnything =
+                    agentBadges.length > 0 ||
+                    enrichmentLabel ||
+                    sourceLabel ||
+                    contact.ai_template_used ||
+                    validationDone;
+                  if (!hasAnything) return null;
+                  return (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
+                      {enrichmentLabel && (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 font-medium ${enrichmentTone}`}
+                        >
+                          {enrichmentLabel}
+                          {typeof contact.email_confidence === "number" &&
+                            ` · ${Math.round(contact.email_confidence * 100)}%`}
+                        </span>
+                      )}
+                      {sourceLabel && contact.email_source_url && (
+                        <a
+                          href={contact.email_source_url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--ink)]"
+                        >
+                          via {sourceLabel}
+                        </a>
+                      )}
+                      {agentBadges}
+                      {contact.ai_template_used && (
+                        <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)]">
+                          Template {contact.ai_template_used}
+                        </span>
+                      )}
+                      {validationDone && (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 font-semibold ${
+                            contact.ai_send_allowed
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+                              : "border-red-500/40 bg-red-500/10 text-red-200"
+                          }`}
+                        >
+                          {contact.ai_send_allowed
+                            ? "pronto da inviare"
+                            : "non inviabile"}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {ready && !isEditing && (
                   <div className="mt-4 grid gap-3 md:grid-cols-[1fr,2fr]">
