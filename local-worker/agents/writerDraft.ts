@@ -412,10 +412,9 @@ export const runWriterDraft = async (
   input: WriterInput,
   workingDirectory: string
 ): Promise<WriterDraftResult | WriterDraftError> => {
-  const attempts = await Promise.all([
-    runViaClaude(input, workingDirectory),
-    runViaGemini(input, workingDirectory),
-    runViaCodex(input, workingDirectory),
-  ]);
-  return pickConsensusDraft(attempts);
+  // Decisione architetturale (Pietro 2026-05-27): la mail la scrive UNA sola AI
+  // (Claude), non un consensus a 3. Il consensus a 3 e' riservato ai validatori
+  // che controllano la veridicita' della bozza. Cosi' la voce della mail resta
+  // coerente e meno "media-da-3-modelli".
+  return runViaClaude(input, workingDirectory).then((attempt) => attempt.outcome);
 };
