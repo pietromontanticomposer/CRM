@@ -2757,7 +2757,7 @@ export default function CrmApp({
         <div className="mt-4 grid gap-5">
           {draft.status === "Non interessato" && (
             <div
-              className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.warning}`}
+              className={`rounded-2xl border px-4 py-3 text-sm font-semibold uppercase tracking-[0.08em] shadow-sm ${toneStyles.danger}`}
             >
               Non interessato · non rimanere in contatto
             </div>
