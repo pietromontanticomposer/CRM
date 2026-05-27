@@ -67,6 +67,14 @@ type StatusToneClasses = {
   countActive: string;
 };
 
+const PENDING_OUTREACH_STATUSES: ReadonlySet<string> = new Set([
+  "imported",
+  "draft_ready",
+  "needs_review",
+  "blocked",
+  "error",
+]);
+
 const STATUS_PILL_TONES: Record<(typeof STATUS_OPTIONS)[number], StatusToneClasses> = {
   "Attiva auto follow-up": {
     idle: "border-sky-500/30 bg-sky-500/5 text-sky-200/80 hover:bg-sky-500/10 hover:text-sky-100",
@@ -1372,13 +1380,6 @@ export default function CrmApp({
   // Compaiono solo dopo che Pietro li approva manualmente nella pagina batch
   // (ai_status passa a "approved"). Doppio gate: prima approvi che entrino in
   // CRM, poi approvi l'invio dell'email.
-  const PENDING_OUTREACH_STATUSES = new Set([
-    "imported",
-    "draft_ready",
-    "needs_review",
-    "blocked",
-    "error",
-  ]);
   const sectionContacts = useMemo(
     () =>
       allSectionContacts.filter(
