@@ -535,14 +535,14 @@ export function OutreachImportClient() {
           </section>
         )}
 
-        {/* STEP 3 — IMPORTA */}
+        {/* STEP 3 — AVVIA LE AI */}
         {hasContacts && (
           <section className="mt-10">
             <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
               <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
                 3
               </span>
-              <span>Importa nel CRM</span>
+              <span>Avvia le 3 AI</span>
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5">
               <div className="grid gap-4 sm:grid-cols-3">
@@ -556,7 +556,7 @@ export function OutreachImportClient() {
                 </div>
                 <div>
                   <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Con email
+                    Email già nel file
                   </div>
                   <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-300">
                     {totals.withEmail}
@@ -564,18 +564,33 @@ export function OutreachImportClient() {
                 </div>
                 <div>
                   <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Da arricchire
+                    Da cercare online
                   </div>
                   <div className="mt-1 text-2xl font-semibold tabular-nums text-amber-300">
                     {totals.withoutEmail}
                   </div>
                 </div>
               </div>
-              <p className="mt-4 text-xs leading-relaxed text-[var(--muted)]">
-                Dopo l&apos;import il worker locale arricchisce le email
-                mancanti, il Writer Claude genera le bozze e i tre agenti
-                CLI validano. Nessuna email parte automaticamente.
-              </p>
+              <div className="mt-4 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky-500/20 text-sky-300">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                  </div>
+                  <div className="text-xs leading-relaxed text-[var(--ink)]">
+                    <div className="mb-1 font-semibold">
+                      Cosa succede quando clicchi qui sotto
+                    </div>
+                    <div className="text-[var(--muted-strong)]">
+                      <span className="font-medium text-[var(--ink)]">1.</span> Il worker sul tuo Mac inizia a cercare su internet le {totals.withoutEmail} email mancanti.{" "}
+                      <span className="font-medium text-[var(--ink)]">2.</span> Il Writer Claude scrive una bozza personalizzata per ciascun contatto.{" "}
+                      <span className="font-medium text-[var(--ink)]">3.</span> I 3 agenti (Claude, Codex, Gemini) controllano ogni bozza.{" "}
+                      <span className="font-medium text-[var(--ink)]">4.</span> Tu approvi nella prossima schermata. Nessuna email parte automaticamente.
+                    </div>
+                  </div>
+                </div>
+              </div>
               <button
                 type="button"
                 disabled={importing || extracting || totals.contacts === 0}
@@ -585,12 +600,12 @@ export function OutreachImportClient() {
                 {importing ? (
                   <>
                     <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                    Importazione in corso…
+                    Avvio in corso…
                   </>
                 ) : (
                   <>
-                    Importa {totals.contacts}{" "}
-                    {totals.contacts === 1 ? "contatto" : "contatti"} nel CRM
+                    Avvia ricerca email + bozze ({totals.contacts}{" "}
+                    {totals.contacts === 1 ? "contatto" : "contatti"})
                     <span aria-hidden>→</span>
                   </>
                 )}

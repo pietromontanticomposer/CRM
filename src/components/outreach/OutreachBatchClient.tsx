@@ -240,12 +240,20 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     let approved = 0;
     let blocked = 0;
     let sendAllowed = 0;
+    let emailsFound = 0;
+    let emailsChecked = 0;
+    let draftsWritten = 0;
     contacts.forEach((contact) => {
       if (isReady(contact.ai_status)) processed += 1;
       if (contact.ai_status === "needs_review") needsReview += 1;
       if (contact.ai_status === "approved") approved += 1;
       if (contact.ai_status === "blocked") blocked += 1;
       if (contact.ai_send_allowed) sendAllowed += 1;
+      if (contact.email) emailsFound += 1;
+      if (contact.email || contact.email_enrichment_status) emailsChecked += 1;
+      if (contact.ai_email_subject?.trim() && contact.ai_email_body?.trim()) {
+        draftsWritten += 1;
+      }
     });
     return {
       processed,
@@ -254,8 +262,20 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       approved,
       blocked,
       sendAllowed,
+      emailsFound,
+      emailsChecked,
+      draftsWritten,
     };
   }, [contacts]);
+
+  const isWorking = useMemo(
+    () =>
+      contacts.some(
+        (contact) =>
+          contact.ai_status === "imported" || contact.ai_status === "draft_ready"
+      ),
+    [contacts]
+  );
 
   const visible = useMemo(() => {
     const filtered = contacts.filter((contact) => {
@@ -430,6 +450,44 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             >
               Conferma blocco {counts.blocked || ""}
             </button>
+          </div>
+        </div>
+        <div className="mx-auto w-full max-w-6xl px-6 pb-3">
+          <div
+            className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${
+              isWorking
+                ? "border-sky-500/40 bg-sky-500/5"
+                : "border-emerald-500/40 bg-emerald-500/5"
+            }`}
+          >
+            <span
+              aria-hidden
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                isWorking ? "animate-pulse bg-sky-400" : "bg-emerald-400"
+              }`}
+            />
+            <div className="text-sm font-semibold text-[var(--ink)]">
+              {isWorking
+                ? "Le 3 AI stanno lavorando — aggiornamento ogni 3 secondi"
+                : "Tutto pronto per la tua revisione"}
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2 py-1 font-medium text-[var(--muted-strong)]">
+                <span className="text-[var(--ink)] tabular-nums">{counts.emailsFound}</span>
+                <span className="text-[var(--muted)]"> / {counts.total}</span>
+                <span className="ml-1 text-[var(--muted)]">email trovate</span>
+              </span>
+              <span className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2 py-1 font-medium text-[var(--muted-strong)]">
+                <span className="text-[var(--ink)] tabular-nums">{counts.draftsWritten}</span>
+                <span className="text-[var(--muted)]"> / {counts.total}</span>
+                <span className="ml-1 text-[var(--muted)]">bozze scritte</span>
+              </span>
+              <span className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2 py-1 font-medium text-[var(--muted-strong)]">
+                <span className="text-[var(--ink)] tabular-nums">{counts.processed}</span>
+                <span className="text-[var(--muted)]"> / {counts.total}</span>
+                <span className="ml-1 text-[var(--muted)]">validati dalle 3 AI</span>
+              </span>
+            </div>
           </div>
         </div>
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-6 pb-3">
