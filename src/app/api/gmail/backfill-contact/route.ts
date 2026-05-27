@@ -10,7 +10,7 @@ import {
   uniqueEmails,
 } from "@/lib/server/emailMatching";
 import { resolveEmailAccount } from "@/lib/server/emailAccounts";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 import {
   SECOND_FOLLOW_UP_DAYS,
   buildAutomaticFollowUpNote,
@@ -414,7 +414,15 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabase();
-  const currentUser = await requireCurrentUser(supabase);
+  let currentUser: Awaited<ReturnType<typeof requireCurrentUser>>;
+  try {
+    currentUser = await requireCurrentUser(supabase);
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    throw error;
+  }
   if (!emailAccountId && !currentUser.canAccessLegacyData) {
     return NextResponse.json(
       { ok: false, error: "Collega una casella email prima del sync." },

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadContactEmailHistory } from "@/lib/server/contactEmailHistory";
 import { callConfiguredAiChat } from "@/lib/server/aiClient";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -179,7 +179,15 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabase();
-  const user = await requireCurrentUser(supabase);
+  let user: Awaited<ReturnType<typeof requireCurrentUser>>;
+  try {
+    user = await requireCurrentUser(supabase);
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    throw error;
+  }
   const ownerFilter = getOwnerFilter(user);
   const { data: contact } = await supabase
     .from("contacts")

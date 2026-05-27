@@ -7,7 +7,8 @@ import {
   serializeEmailAccount,
   type EmailAccountRow,
 } from "@/lib/server/emailAccounts";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
+import { isLegacySchemaError } from "@/lib/server/supabaseSchema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,9 @@ export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
+    if (user.usesLegacySchema) {
+      return NextResponse.json({ ok: true, accounts: [] });
+    }
     const { data, error } = await supabase
       .from("email_accounts")
       .select(
@@ -42,6 +46,9 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
+      if (isLegacySchemaError(error, ["email_accounts", "owner_id"])) {
+        return NextResponse.json({ ok: true, accounts: [] });
+      }
       return NextResponse.json(
         { ok: false, error: "Impossibile caricare gli account email." },
         { status: 500 }
@@ -53,6 +60,9 @@ export async function GET() {
       accounts: ((data ?? []) as EmailAccountRow[]).map(serializeEmailAccount),
     });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("GET /api/email-accounts unexpected error", error);
     return NextResponse.json({ ok: false }, { status: 500 });
   }
@@ -93,6 +103,16 @@ export async function POST(request: Request) {
 
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
+    if (user.usesLegacySchema) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Configurazione account multipli non disponibile finché il database non viene aggiornato.",
+        },
+        { status: 400 }
+      );
+    }
     const insertPayload = {
       owner_id: user.id,
       provider,
@@ -135,6 +155,16 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      if (isLegacySchemaError(error, ["email_accounts", "owner_id"])) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Configurazione account multipli non disponibile finché il database non viene aggiornato.",
+          },
+          { status: 400 }
+        );
+      }
       console.error("POST /api/email-accounts failed", error);
       return NextResponse.json(
         { ok: false, error: "Impossibile salvare account email." },
@@ -147,6 +177,9 @@ export async function POST(request: Request) {
       account: serializeEmailAccount(data as EmailAccountRow),
     });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("POST /api/email-accounts unexpected error", error);
     return NextResponse.json({ ok: false }, { status: 500 });
   }

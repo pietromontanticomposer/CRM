@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
+import { isLegacySchemaError } from "@/lib/server/supabaseSchema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,14 +69,19 @@ export async function GET(request: Request) {
 
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
-    const ownerFilter = getOwnerFilter(user);
+    const legacyMode = user.usesLegacySchema;
+    if (legacyMode && section === "live_music") {
+      return NextResponse.json({ notifications: [] });
+    }
     let query = supabase
       .from("notifications")
       .select("id, type, contact_id, email_id, title, body, is_read, created_at")
-      .or(ownerFilter)
-      .eq("section", section)
       .order("created_at", { ascending: false })
       .limit(scope === AUTOMATION_SCOPE ? Math.max(limit * 3, 100) : limit);
+
+    if (!legacyMode) {
+      query = query.or(getOwnerFilter(user)).eq("section", section);
+    }
 
     if (scope === AUTOMATION_SCOPE) {
       query = query.eq("type", "email_sent");
@@ -84,6 +90,9 @@ export async function GET(request: Request) {
     const { data, error } = await query;
 
     if (error) {
+      if (isLegacySchemaError(error, ["owner_id", "section"])) {
+        return NextResponse.json({ notifications: [] });
+      }
       console.error("GET /api/notifications failed", error);
       return NextResponse.json(
         {
@@ -103,6 +112,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ notifications });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("GET /api/notifications unexpected error", error);
     return NextResponse.json(
       { error: getErrorMessage(error, "Impossibile caricare le notifiche del CRM.") },
@@ -136,14 +148,16 @@ export async function PATCH(request: Request) {
 
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
-    const ownerFilter = getOwnerFilter(user);
+    const legacyMode = user.usesLegacySchema;
     if (markAll) {
       let updateQuery = supabase
         .from("notifications")
         .update({ is_read: true })
-        .eq("is_read", false)
-        .eq("section", section)
-        .or(ownerFilter);
+        .eq("is_read", false);
+
+      if (!legacyMode) {
+        updateQuery = updateQuery.eq("section", section).or(getOwnerFilter(user));
+      }
 
       if (scope === AUTOMATION_SCOPE) {
         updateQuery = updateQuery.eq("type", "email_sent");
@@ -170,8 +184,63 @@ export async function PATCH(request: Request) {
       .from("notifications")
       .select("id, type, title")
       .eq("id", notificationId)
-      .or(ownerFilter)
       .maybeSingle();
+
+    if (!legacyMode) {
+      const ownerFilteredCurrent = await supabase
+        .from("notifications")
+        .select("id, type, title")
+        .eq("id", notificationId)
+        .or(getOwnerFilter(user))
+        .maybeSingle();
+
+      if (ownerFilteredCurrent.error) {
+        console.error("PATCH /api/notifications single fetch failed", ownerFilteredCurrent.error);
+        return NextResponse.json(
+          {
+            error: getErrorMessage(
+              ownerFilteredCurrent.error,
+              "Impossibile segnare la notifica come letta."
+            ),
+          },
+          { status: 500 }
+        );
+      }
+
+      if (!ownerFilteredCurrent.data) {
+        return NextResponse.json(
+          { error: "Notifica non trovata." },
+          { status: 404 }
+        );
+      }
+
+      if (scope === AUTOMATION_SCOPE && !isAutomationNotification(ownerFilteredCurrent.data)) {
+        return NextResponse.json(
+          { error: "Notifica non trovata." },
+          { status: 404 }
+        );
+      }
+
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("id", notificationId);
+
+      if (error) {
+        console.error("PATCH /api/notifications single update failed", error);
+        return NextResponse.json(
+          {
+            error: getErrorMessage(
+              error,
+              "Impossibile segnare la notifica come letta."
+            ),
+          },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({ ok: true });
+    }
 
     if (currentError) {
       console.error("PATCH /api/notifications single fetch failed", currentError);
@@ -220,6 +289,9 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("PATCH /api/notifications unexpected error", error);
     return NextResponse.json(
       {

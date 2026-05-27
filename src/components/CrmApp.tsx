@@ -8,6 +8,8 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   KEEP_IN_TOUCH_MONTHS,
   KEEP_IN_TOUCH_NOTE,
@@ -23,6 +25,15 @@ import {
   isManualRecontactNote,
   buildManualRecontactNote,
 } from "@/lib/followUp";
+import {
+  getAiOutreachSendBlockReason,
+  getAiValidationStatusLabel,
+  getAiWorkflowStatusLabel,
+  normalizeAiAgentChecks,
+  type AiAgentCheck,
+  type AiAgentChecksMap,
+  type AiAgentName,
+} from "@/lib/aiOutreach";
 
 const STATUS_OPTIONS = [
   "Attiva auto follow-up",
@@ -93,6 +104,25 @@ type Contact = {
   last_outbound_email_at?: string | null;
   activity_at?: string | null;
   language?: "it" | "en" | null;
+  ai_batch_id?: string | null;
+  ai_batch_name?: string | null;
+  ai_status?: string | null;
+  ai_email_subject?: string | null;
+  ai_email_body?: string | null;
+  verified_facts_json?: unknown;
+  source_link?: string | null;
+  prompt_master_rules?: string | null;
+  ai_agent_checks_json?: AiAgentChecksMap | null;
+  ai_validation_summary?: string | null;
+  ai_validation_status?: string | null;
+  ai_send_allowed?: boolean | null;
+  ai_template_used?: string | null;
+  ai_link_visione?: string | null;
+  email_source_url?: string | null;
+  email_source_type?: string | null;
+  email_confidence?: number | null;
+  email_enrichment_status?: string | null;
+  email_enrichment_reason?: string | null;
 };
 
 type DraftContact = Omit<Contact, "created_at" | "updated_at">;
@@ -108,6 +138,11 @@ type NewContact = {
 type ContactsApiResponse = {
   contacts?: Contact[];
   contact?: Contact;
+  batch?: {
+    id: string;
+    name: string;
+    total_contacts: number;
+  };
   error?: string;
 };
 
@@ -862,6 +897,53 @@ const getLanguageFlag = (language?: Contact["language"]) => {
   return null;
 };
 
+const getAgentLabel = (agent: AiAgentName) => {
+  if (agent === "gemini") return "Gemini";
+  if (agent === "claude") return "Claude";
+  return "Codex";
+};
+
+const getAgentHeadline = (agent: AiAgentName, check?: AiAgentCheck | null) => {
+  if (!check) return `${getAgentLabel(agent)} · non eseguito`;
+  return `${getAgentLabel(agent)} · ${
+    check.approved ? "approved" : "rejected"
+  } · risk ${check.risk_level}`;
+};
+
+const getAgentIssuePreview = (check?: AiAgentCheck | null) => {
+  const firstIssue = check?.issues?.[0];
+  if (!firstIssue) return "Nessun issue riportato.";
+  if (typeof firstIssue.message === "string" && firstIssue.message.trim()) {
+    return firstIssue.message;
+  }
+  return "Issue riportato senza dettaglio testuale.";
+};
+
+const normalizeContactRecord = (contact: Contact): Contact => ({
+  ...contact,
+  ai_status: contact.ai_status ?? "not_checked",
+  ai_email_subject: contact.ai_email_subject ?? null,
+  ai_email_body: contact.ai_email_body ?? null,
+  ai_batch_id: contact.ai_batch_id ?? null,
+  ai_batch_name: contact.ai_batch_name ?? null,
+  source_link: contact.source_link ?? null,
+  prompt_master_rules: contact.prompt_master_rules ?? null,
+  ai_agent_checks_json: normalizeAiAgentChecks(contact.ai_agent_checks_json),
+  ai_validation_summary: contact.ai_validation_summary ?? null,
+  ai_validation_status: contact.ai_validation_status ?? "not_checked",
+  ai_send_allowed: contact.ai_send_allowed ?? null,
+  ai_template_used: contact.ai_template_used ?? null,
+  ai_link_visione: contact.ai_link_visione ?? null,
+  email_source_url: contact.email_source_url ?? null,
+  email_source_type: contact.email_source_type ?? null,
+  email_confidence:
+    typeof contact.email_confidence === "number"
+      ? contact.email_confidence
+      : null,
+  email_enrichment_status: contact.email_enrichment_status ?? null,
+  email_enrichment_reason: contact.email_enrichment_reason ?? null,
+});
+
 const getContactActivityTimestamp = (contact: Contact) =>
   Math.max(
     getTimestamp(contact.activity_at ?? null),
@@ -897,17 +979,9 @@ const getMostRecentlyCreatedContact = (contacts: Contact[]) => {
 };
 
 const buildDraft = (contact: Contact): DraftContact => ({
-  id: contact.id,
-  name: contact.name,
-  email: contact.email,
-  company: contact.company,
-  role: contact.role,
-  status: contact.status,
+  ...normalizeContactRecord(contact),
   last_action_at: toDateInputValue(contact.last_action_at),
-  last_action_note: contact.last_action_note,
   next_action_at: toDateInputValue(contact.next_action_at),
-  next_action_note: contact.next_action_note,
-  notes: contact.notes,
 });
 
 const PULSE_DURATION_MS = 2000;
@@ -922,6 +996,7 @@ export default function CrmApp({
   theme: CrmTheme;
   section: CrmSection;
 }) {
+  const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -931,6 +1006,7 @@ export default function CrmApp({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [newContact, setNewContact] = useState<NewContact>(emptyNewContact);
+  const [addContactOpen, setAddContactOpen] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
   const [contactFolder, setContactFolder] = useState<ContactFolder>("Tutte");
   const [draft, setDraft] = useState<DraftContact | null>(null);
@@ -1002,8 +1078,22 @@ export default function CrmApp({
     theme === "light"
       ? "rounded-full border border-teal-700 bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-60"
       : "rounded-full border border-teal-300/60 bg-teal-500/20 px-2 py-1 text-[11px] font-semibold text-teal-100 transition hover:bg-teal-500/30 disabled:opacity-60";
+  const neutralToneClass =
+    theme === "light"
+      ? "border-slate-300 bg-slate-50 text-slate-700"
+      : "border-slate-700 bg-slate-900/40 text-slate-300";
+  const getValidationToneClass = (status?: string | null) => {
+    if (status === "passed" || status === "approved") return toneStyles.success;
+    if (status === "needs_review") return toneStyles.warning;
+    if (status === "blocked") return toneStyles.danger;
+    if (status === "error") return toneStyles.error;
+    return neutralToneClass;
+  };
 
   const selected = contacts.find((contact) => contact.id === selectedId) || null;
+  const selectedOutreachBlockReason = selected
+    ? getAiOutreachSendBlockReason(selected)
+    : null;
   const conversationRefreshing = Boolean(
     selected &&
       (emailsLoading || backfillByContact[selected.id] === "pending")
@@ -1250,6 +1340,65 @@ export default function CrmApp({
     return { ...statusCounts, ...groupCounts };
   }, [sectionContacts]);
 
+  const outreachBatchSummaries = useMemo(() => {
+    const batches = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        totalContacts: number;
+        draftGenerated: number;
+        passed: number;
+        needsReview: number;
+        blocked: number;
+        error: number;
+        emailsSent: number;
+        latestActivity: number;
+      }
+    >();
+
+    sectionContacts.forEach((contact) => {
+      const batchId = contact.ai_batch_id?.trim();
+      if (!batchId) return;
+
+      const current = batches.get(batchId) ?? {
+        id: batchId,
+        name: contact.ai_batch_name?.trim() || `Batch ${batchId.slice(0, 8)}`,
+        totalContacts: 0,
+        draftGenerated: 0,
+        passed: 0,
+        needsReview: 0,
+        blocked: 0,
+        error: 0,
+        emailsSent: 0,
+        latestActivity: 0,
+      };
+
+      current.totalContacts += 1;
+      if (contact.ai_email_subject?.trim() && contact.ai_email_body?.trim()) {
+        current.draftGenerated += 1;
+      }
+      if (contact.ai_validation_status === "passed") current.passed += 1;
+      if (contact.ai_validation_status === "needs_review") current.needsReview += 1;
+      if (contact.ai_validation_status === "blocked") current.blocked += 1;
+      if (contact.ai_validation_status === "error") current.error += 1;
+      if (contact.last_outbound_email_at) current.emailsSent += 1;
+
+      current.latestActivity = Math.max(
+        current.latestActivity,
+        getTimestamp(contact.updated_at),
+        getTimestamp(contact.last_outbound_email_at ?? null),
+        getTimestamp(contact.created_at)
+      );
+
+      batches.set(batchId, current);
+    });
+
+    return Array.from(batches.values()).sort(
+      (a, b) => b.latestActivity - a.latestActivity
+    );
+  }, [sectionContacts]);
+
   const searchedContacts = useMemo(() => {
     const query = contactSearch.trim().toLowerCase();
     if (!query) return sectionContacts;
@@ -1362,8 +1511,8 @@ export default function CrmApp({
     }
 
     const payload = (await response.json()) as ContactsApiResponse;
-    const nextContacts = payload.contacts || [];
-    setContacts(nextContacts);
+    const nextContacts = (payload.contacts || []).map(normalizeContactRecord);
+    setContacts(sortContacts(nextContacts));
     if (!silent) {
       setLoading(false);
     }
@@ -1810,6 +1959,15 @@ export default function CrmApp({
   const handleSelectContact = (contact: Contact) => {
     const scrollY = window.scrollY;
     const shouldResetConversation = selectedId !== contact.id;
+    if (
+      contact.ai_batch_id &&
+      contact.ai_email_subject?.trim() &&
+      contact.ai_email_body?.trim()
+    ) {
+      setEmailPreset("custom");
+      setEmailSubject(contact.ai_email_subject);
+      setEmailBody(contact.ai_email_body);
+    }
     selectedIdRef.current = contact.id;
     setSelectedId(contact.id);
     setDraft(buildDraft(contact));
@@ -1820,13 +1978,16 @@ export default function CrmApp({
   };
 
   const applyContactUpdate = (updated: Contact) => {
+    const normalized = normalizeContactRecord(updated);
     setContacts((prev) =>
       sortContacts(
-        prev.map((contact) => (contact.id === updated.id ? updated : contact))
+        prev.map((contact) =>
+          contact.id === normalized.id ? normalized : contact
+        )
       )
     );
-    if (selectedId === updated.id) {
-      setDraft(buildDraft(updated));
+    if (selectedId === normalized.id) {
+      setDraft(buildDraft(normalized));
     }
   };
 
@@ -2241,6 +2402,11 @@ export default function CrmApp({
   };
 
   const handleSendEmail = async () => {
+    if (selectedOutreachBlockReason) {
+      setEmailsError(selectedOutreachBlockReason);
+      return;
+    }
+
     if (!selected?.email?.trim()) {
       setEmailsError("Aggiungi un'email al contatto per poter rispondere.");
       return;
@@ -2327,6 +2493,11 @@ export default function CrmApp({
   };
 
   const handleScheduleEmail = async () => {
+    if (selectedOutreachBlockReason) {
+      setEmailsError(selectedOutreachBlockReason);
+      return;
+    }
+
     if (!selected?.email?.trim()) {
       setEmailsError("Aggiungi un'email al contatto per poter programmare.");
       return;
@@ -2460,11 +2631,12 @@ export default function CrmApp({
     }
 
     const payload = (await response.json()) as ContactsApiResponse;
-    const created = payload.contact as Contact;
+    const created = normalizeContactRecord(payload.contact as Contact);
     setContacts((prev) => sortContacts([created, ...prev]));
     handleSelectContact(created);
     setNewContact(emptyNewContact);
     setAdding(false);
+    setAddContactOpen(false);
   };
 
   const handleSave = async () => {
@@ -2506,7 +2678,7 @@ export default function CrmApp({
     }
 
     const payload = (await response.json()) as ContactsApiResponse;
-    const updated = payload.contact as Contact;
+    const updated = normalizeContactRecord(payload.contact as Contact);
     setContacts((prev) =>
       sortContacts(
         prev.map((contact) => (contact.id === id ? updated : contact))
@@ -2590,6 +2762,7 @@ export default function CrmApp({
               Non interessato · non rimanere in contatto
             </div>
           )}
+          {/* Modulo AI Director Outreach temporaneamente nascosto: in revisione. */}
           <div className="grid gap-3">
             <div className="grid gap-2">
               <label className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -3331,6 +3504,31 @@ export default function CrmApp({
             value={emailBody}
             onChange={(event) => setEmailBody(event.target.value)}
           />
+          {selected.ai_batch_id && (
+            <div
+              className={`mt-3 rounded-xl border px-3 py-2 text-xs ${
+                selectedOutreachBlockReason
+                  ? toneStyles.warning
+                  : toneStyles.success
+              }`}
+            >
+              <div className="font-semibold">
+                {selected.ai_batch_name || `Batch ${selected.ai_batch_id.slice(0, 8)}`}
+              </div>
+              <div className="mt-1">
+                Final decision: {getAiWorkflowStatusLabel(selected.ai_status)} ·{" "}
+                Validation: {getAiValidationStatusLabel(selected.ai_validation_status)}
+              </div>
+              {selected.ai_email_subject && (
+                <div className="mt-1 break-words">
+                  Soggetto approvato: {selected.ai_email_subject}
+                </div>
+              )}
+              {selectedOutreachBlockReason && (
+                <div className="mt-1">{selectedOutreachBlockReason}</div>
+              )}
+            </div>
+          )}
           {emailsError && (
             <div
               className={`mt-3 rounded-xl border px-3 py-2 text-xs ${toneStyles.error}`}
@@ -3342,7 +3540,9 @@ export default function CrmApp({
             <button
               type="button"
               onClick={handleSendEmail}
-              disabled={sendingEmail || schedulingEmail}
+              disabled={
+                sendingEmail || schedulingEmail || Boolean(selectedOutreachBlockReason)
+              }
               className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
             >
               {sendingEmail ? "Invio..." : "Invia email"}
@@ -3358,7 +3558,12 @@ export default function CrmApp({
               <button
                 type="button"
                 onClick={handleScheduleEmail}
-                disabled={schedulingEmail || sendingEmail || !scheduleSendDate}
+                disabled={
+                  schedulingEmail ||
+                  sendingEmail ||
+                  !scheduleSendDate ||
+                  Boolean(selectedOutreachBlockReason)
+                }
                 className="rounded-full border border-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-white disabled:opacity-60"
               >
                 {schedulingEmail ? "Programmo..." : "Programma"}
@@ -3493,333 +3698,235 @@ export default function CrmApp({
         </div>
       </header>
 
-      <main className="relative mx-auto grid w-full max-w-7xl flex-1 items-start gap-6 md:grid-cols-[minmax(280px,320px)_minmax(0,1fr)] lg:gap-8 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="mx-auto w-full max-w-7xl px-0 pt-4 sm:px-2">
+        <Link
+          href="/crm/outreach/import"
+          className="group mb-4 flex items-center justify-between gap-4 rounded-xl border-2 border-dashed border-[var(--line)] bg-[var(--panel)] px-5 py-5 transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
+        >
+          <div className="flex items-center gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted-strong)] transition group-hover:border-[var(--accent)] group-hover:text-[var(--accent)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 3v12" />
+                <path d="m7 8 5-5 5 5" />
+                <path d="M5 21h14" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-base font-semibold text-[var(--ink)]">
+                Importa PDF · 3 AI lavorano per te
+              </div>
+              <div className="mt-0.5 text-xs text-[var(--muted)]">
+                Trascina un PDF con la lista registi → cerco i contatti, controllo, scrivo le email. Tu approvi.
+              </div>
+            </div>
+          </div>
+          <span
+            aria-hidden
+            className="shrink-0 rounded-md border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--muted-strong)] transition group-hover:border-[var(--accent)] group-hover:text-[var(--ink)]"
+          >
+            Apri →
+          </span>
+        </Link>
+
+        {outreachBatchSummaries.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+                Batch AI in lavorazione
+              </span>
+              <span className="text-[11px] tabular-nums text-[var(--muted)]">
+                {outreachBatchSummaries.length} {outreachBatchSummaries.length === 1 ? "batch" : "batch"}
+              </span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {outreachBatchSummaries.slice(0, 8).map((batch) => {
+                const pending = batch.totalContacts - batch.passed - batch.blocked - batch.error;
+                const isWorking = batch.draftGenerated < batch.totalContacts || pending > 0;
+                return (
+                  <Link
+                    key={batch.id}
+                    href={`/crm/outreach/${batch.id}`}
+                    className="min-w-[240px] shrink-0 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2.5 transition hover:border-[var(--accent)]"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          isWorking ? "animate-pulse bg-sky-400" : "bg-emerald-400"
+                        }`}
+                        aria-hidden
+                      />
+                      <span className="truncate text-sm font-medium text-[var(--ink)]">
+                        {batch.name}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em]">
+                      <span className="rounded border border-[var(--line)] bg-[var(--panel-strong)] px-1.5 py-0.5 tabular-nums text-[var(--muted)]">
+                        {batch.totalContacts} contatti
+                      </span>
+                      {batch.needsReview > 0 && (
+                        <span className="rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 tabular-nums text-amber-300">
+                          {batch.needsReview} da rivedere
+                        </span>
+                      )}
+                      {batch.passed > 0 && (
+                        <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 tabular-nums text-emerald-300">
+                          {batch.passed} ok
+                        </span>
+                      )}
+                      {batch.blocked > 0 && (
+                        <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 tabular-nums text-red-300">
+                          {batch.blocked} bloccati
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            {
+              key: "overdue" as const,
+              label: "In ritardo",
+              value: followUpSummary.overdue.length,
+              tone: "text-red-400",
+              dot: "bg-red-500",
+              onClick: () => {
+                setContactFolder("In attesa di risposta");
+                contentSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              },
+            },
+            {
+              key: "today" as const,
+              label: "Oggi",
+              value: followUpSummary.dueToday.length,
+              tone: "text-sky-400",
+              dot: "bg-sky-500",
+              onClick: () => {
+                setContactFolder("In attesa di risposta");
+                contentSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              },
+            },
+            {
+              key: "replies" as const,
+              label: "Risposte da gestire",
+              value: contacts.filter(
+                (c) => c.status === "Azione richiesta" && (c.section ?? "cinema") === section
+              ).length,
+              tone: "text-amber-400",
+              dot: "bg-amber-500",
+              onClick: () => setContactFolder("Azione richiesta"),
+            },
+          ].map((card) => (
+            <button
+              key={card.key}
+              type="button"
+              onClick={card.onClick}
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-left transition hover:border-[var(--line-strong)]"
+            >
+              <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
+                <span className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
+                {card.label}
+              </div>
+              <div className={`text-2xl font-semibold tabular-nums ${card.tone}`}>
+                {card.value}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddContactOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition hover:border-[var(--accent)]"
+          >
+            <span aria-hidden>+</span> Nuovo contatto
+          </button>
+        </div>
+      </div>
+      <main className="relative mx-auto grid w-full max-w-7xl flex-1 items-start gap-4 px-0 py-4 sm:px-2 md:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] md:gap-6">
         <section
           style={
             desktopSidebarHeight
               ? { height: `${desktopSidebarHeight}px` }
               : undefined
           }
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-lg md:overflow-y-auto md:pr-3"
+          className="min-w-0 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-3 md:overflow-y-auto md:pr-2"
         >
-          <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-            Nuovo contatto
-          </h2>
-          <form onSubmit={handleAdd} className="mt-4 grid gap-3">
-            <input
-              placeholder="Nome e cognome"
-              value={newContact.name}
-              onChange={(event) =>
-                setNewContact((prev) => ({ ...prev, name: event.target.value }))
-              }
-            />
-            <input
-              placeholder="Email"
-              type="email"
-              value={newContact.email}
-              onChange={(event) =>
-                setNewContact((prev) => ({ ...prev, email: event.target.value }))
-              }
-            />
-            <input
-              placeholder="Produzione / Studio"
-              value={newContact.company}
-              onChange={(event) =>
-                setNewContact((prev) => ({
-                  ...prev,
-                  company: event.target.value,
-                }))
-              }
-            />
-            <select
-              value={newContact.role}
-              onChange={(event) =>
-                setNewContact((prev) => ({ ...prev, role: event.target.value }))
-              }
-            >
-              <option value="">Ruolo</option>
-              <option value="Regista">Regista</option>
-              <option value="Produzione">Produzione</option>
-              <option value="Regista con agente">Regista con agente</option>
-              <option value="Regista e Produzione">Regista e Produzione</option>
-            </select>
-            <select
-              value={newContact.status}
-              onChange={(event) =>
-                setNewContact((prev) => ({
-                  ...prev,
-                  status: event.target.value as NewContactStatus,
-                }))
-              }
-            >
-              {NEW_CONTACT_STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status}>
-                  {getStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              disabled={adding}
-              className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_30px_-18px_rgba(37,99,235,0.9)] transition hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] disabled:opacity-60"
-            >
-              {adding ? "Salvo..." : "+ Aggiungi"}
-            </button>
-          </form>
-          {addError && (
-            <div
-              className={`mt-3 rounded-2xl border px-4 py-2 text-xs ${toneStyles.error}`}
-            >
-              {addError}
-            </div>
-          )}
+          <div>
+            <div className="sticky -top-5 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-2 pb-3 rounded-t-3xl">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
+                  Contatti
+                </span>
+                <span className="text-[11px] tabular-nums text-[var(--muted)]">
+                  {contactSearch.trim() || contactFolder !== "Tutte"
+                    ? `${filteredContacts.length} / ${sectionContacts.length}`
+                    : sectionContacts.length}
+                </span>
+              </div>
 
-          <div className="mt-6 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)]">
-                Follow-up
-              </h3>
-              <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[11px] font-semibold text-[var(--muted)]">
-                {followUpSummary.totalOpen}
-              </span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-              <span
-                className={`rounded-full border px-2 py-0.5 font-semibold ${toneStyles.danger}`}
-              >
-                In ritardo: {followUpSummary.overdue.length}
-              </span>
-              <span
-                className={`rounded-full border px-2 py-0.5 font-semibold ${toneStyles.warning}`}
-              >
-                Oggi: {followUpSummary.dueToday.length}
-              </span>
-            </div>
-            <p className="mt-3 text-xs text-[var(--muted)]">
-              Data aggiornata automaticamente (di default 10 giorni dopo la prima
-              email inviata).
-            </p>
-            {followUpMessage && (
-              <div
-                className={`mt-3 rounded-xl border px-3 py-2 text-xs ${toneStyles.success}`}
-              >
-                {followUpMessage}
-              </div>
-            )}
-            {followUpSummary.totalOpen === 0 ? (
-              <div className="mt-3 rounded-xl border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
-                Nessun follow-up urgente.
-              </div>
-            ) : (
-              <div className="mt-3 grid gap-2">
-                {[
-                  ...followUpSummary.overdue.map((contact) => ({
-                    contact,
-                    label: "In ritardo",
-                    tone: toneStyles.danger,
-                  })),
-                  ...followUpSummary.dueToday.map((contact) => ({
-                    contact,
-                    label: "Oggi",
-                    tone: toneStyles.warning,
-                  })),
-                ]
-                  .slice(0, 8)
-                  .map(({ contact, label, tone }) => {
-                    const pending = followUpActionByContact[contact.id];
-                    const keepWarm = isKeepInTouchNote(contact.next_action_note);
-                    const sendStatus = getFollowUpSendStatus(
-                      contact,
-                      countdownNow
-                    );
+              <div className="mt-3 -mx-1 flex items-center gap-1 overflow-x-auto pb-0.5">
+                {(["Tutte", "In attesa di risposta", "Risposta ricevuta"] as const).map(
+                  (folder) => {
+                    const active = contactFolder === folder;
+                    const count =
+                      folder === "Tutte"
+                        ? sectionContacts.length
+                        : counts[folder] ?? 0;
                     return (
-                      <div
-                        key={`${label}-${contact.id}`}
-                        className={`rounded-xl border px-3 py-2 ${
-                          selectedId === contact.id
-                            ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                            : "border-[var(--line)] bg-[var(--panel)]"
+                      <button
+                        key={folder}
+                        type="button"
+                        onClick={() => setContactFolder(folder)}
+                        className={`whitespace-nowrap rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                          active
+                            ? "bg-[var(--panel-strong)] text-[var(--ink)]"
+                            : "text-[var(--muted)] hover:text-[var(--ink)]"
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => handleSelectContact(contact)}
-                          className="flex w-full items-center justify-between gap-3 text-left"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-[var(--ink)]">
-                              {getDisplayName(contact)}
-                            </div>
-                            <div className="text-xs text-[var(--muted)]">
-                              {formatDate(contact.next_action_at)}
-                            </div>
-                            <div
-                              className={`mt-1 text-[11px] font-semibold ${
-                                sendStatus.sent
-                                  ? "text-emerald-600 dark:text-emerald-300"
-                                  : "text-amber-700 dark:text-amber-300"
-                              }`}
-                            >
-                              {sendStatus.label}
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-2">
-                            {keepWarm && (
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${toneStyles.keepInTouch}`}
-                              >
-                                ogni 2 mesi
-                              </span>
-                            )}
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                                sendStatus.sent ? toneStyles.success : tone
-                              }`}
-                            >
-                              {sendStatus.sent ? "Inviato" : label}
-                            </span>
-                          </div>
-                        </button>
-
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => markFollowUpRecontacted(contact)}
-                            disabled={Boolean(pending)}
-                            className="rounded-full border border-[var(--accent)] bg-[var(--accent)]/10 px-2 py-1 text-[11px] font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20 disabled:opacity-60"
-                          >
-                            {pending === "recontacted"
-                              ? "Salvo..."
-                              : "Ricontattato"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => enableKeepInTouch(contact)}
-                            disabled={Boolean(pending)}
-                            className={keepInTouchButtonClass}
-                          >
-                            {pending === "keepwarm"
-                              ? "Imposto..."
-                              : "Mantenere in contatto"}
-                          </button>
-                        </div>
-                      </div>
+                        {folder === "Tutte" ? "Tutti" : folder.split(" ")[0]}{" "}
+                        <span className="ml-1 tabular-nums text-[var(--muted-strong)]">
+                          {count}
+                        </span>
+                      </button>
                     );
-                  })}
+                  }
+                )}
               </div>
-            )}
-          </div>
-
-          <div className="mt-8">
-            <div className="sticky -top-5 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-9 pb-4 rounded-t-3xl">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              <span>Contatti</span>
-              <span>
-                {contactSearch.trim() || contactFolder !== "Tutte"
-                  ? `${filteredContacts.length} / ${sectionContacts.length}`
-                  : sectionContacts.length}
-              </span>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-5">
-              {/* Filtro Tutte */}
-              <button
-                type="button"
-                onClick={() => setContactFolder("Tutte")}
-                className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-xs font-bold uppercase tracking-[0.15em] transition ${
-                  contactFolder === "Tutte"
-                    ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
-                    : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
-                }`}
-              >
-                <span>Tutte le schede</span>
-                <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent)]">
-                  {sectionContacts.length}
-                </span>
-              </button>
-
-              {/* Gruppo: In attesa di risposta */}
-              <div className="grid gap-2">
-                <button
-                  onClick={() => setContactFolder("In attesa di risposta")}
-                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] transition ${
-                    contactFolder === "In attesa di risposta"
-                      ? "border-sky-500/50 bg-sky-500/10 text-sky-400"
-                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
-                  }`}
-                >
-                  <span>In attesa di risposta</span>
-                  <span className="rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                    {counts["In attesa di risposta"] ?? 0}
-                  </span>
-                </button>
-                <div className="ml-2 grid gap-1.5 border-l-2 border-sky-500/20 pl-3">
-                  {STATUS_GROUPS["In attesa di risposta"].map((status) => {
-                    const isAutoFollowUp = status === "Attiva auto follow-up";
-                    const isSelected = contactFolder === status;
+              <details className="mt-2 group">
+                <summary className="cursor-pointer text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)] hover:text-[var(--ink)]">
+                  Stati dettagliati ▾
+                </summary>
+                <div className="mt-2 -mx-1 flex flex-wrap gap-1">
+                  {[
+                    ...STATUS_GROUPS["In attesa di risposta"],
+                    ...STATUS_GROUPS["Risposta ricevuta"],
+                  ].map((status) => {
+                    const active = contactFolder === status;
                     return (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setContactFolder(status)}
-                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold ${
-                        isAutoFollowUp ? "auto-follow-pulse " : "transition "
-                      }${
-                        isSelected
-                          ? statusStyles[status]
-                          : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
-                      }`}
-                    >
-                      <span>{getStatusLabel(status)}</span>
-                      <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
-                        {counts[status] ?? 0}
-                      </span>
-                    </button>
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => setContactFolder(status)}
+                        className={`rounded-md border px-2 py-0.5 text-[10px] font-medium transition ${
+                          active
+                            ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--ink)]"
+                            : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--ink)]"
+                        }`}
+                      >
+                        {getStatusLabel(status)}{" "}
+                        <span className="ml-1 tabular-nums text-[var(--muted-strong)]">
+                          {counts[status] ?? 0}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
-              </div>
-
-              {/* Gruppo: Risposta ricevuta */}
-              <div className="grid gap-2">
-                <button
-                  onClick={() => setContactFolder("Risposta ricevuta")}
-                  className={`flex w-full items-center justify-between rounded-xl border px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] transition ${
-                    contactFolder === "Risposta ricevuta"
-                      ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
-                      : "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)] hover:border-[var(--muted)]/30"
-                  }`}
-                >
-                  <span>Risposta ricevuta</span>
-                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                    {counts["Risposta ricevuta"] ?? 0}
-                  </span>
-                </button>
-                <div className="ml-2 grid gap-1.5 border-l-2 border-amber-500/20 pl-3">
-                  {STATUS_GROUPS["Risposta ricevuta"].map((status) => {
-                    const isMaintainRapport = status === "Mantenimento rapporto";
-                    return (
-                    <button
-                      key={status}
-                      type="button"
-                      onClick={() => setContactFolder(status)}
-                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-semibold transition ${
-                        contactFolder === status
-                          ? statusStyles[status]
-                          : "text-[var(--muted)] hover:bg-[var(--panel-strong)] hover:text-[var(--ink)]"
-                      }${isMaintainRapport ? " maintain-rapport-pulse" : ""}`}
-                    >
-                      <span>{getStatusLabel(status)}</span>
-                      <span className="bg-[var(--panel-strong)] px-1.5 py-0.5 rounded-full text-[9px] font-bold">
-                        {counts[status] ?? 0}
-                      </span>
-                    </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-            </div>
+              </details>
 
             <div className="mt-3">
               <input
@@ -3830,95 +3937,100 @@ export default function CrmApp({
             </div>
             </div>
 
-            <div className="mt-4 grid gap-3">
+            <div className="mt-3 flex flex-col">
               {loading && (
-                <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                  Caricamento...
+                <div className="rounded-md border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
+                  Caricamento…
                 </div>
               )}
               {!loading && !error && sectionContacts.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                  Nessun contatto ancora. Aggiungi il primo.
+                <div className="rounded-md border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
+                  Nessun contatto. Aggiungi il primo.
                 </div>
               )}
               {!loading &&
                 !error &&
                 sectionContacts.length > 0 &&
                 filteredContacts.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-[var(--line)] p-4 text-sm text-[var(--muted)]">
-                  Nessun risultato per “{contactSearch.trim()}”.
-                </div>
-              )}
-            {!loading &&
+                  <div className="rounded-md border border-dashed border-[var(--line)] p-3 text-xs text-[var(--muted)]">
+                    Nessun risultato per &ldquo;{contactSearch.trim()}&rdquo;.
+                  </div>
+                )}
+              {!loading &&
                 filteredContacts.length > 0 &&
                 filteredContacts.map((contact) => {
                   const isSelected = contact.id === selectedId;
+                  const hasScheduled = scheduledEmails.some(
+                    (se) => se.contact_id === contact.id
+                  );
                   return (
-                    <div key={contact.id} className="grid gap-3">
-                      <button
-                        onClick={() => handleSelectContact(contact)}
-                        className={`perf-card flex w-full flex-col gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-1 hover:shadow-[0_18px_40px_-30px_rgba(15,23,42,0.5)] ${
-                          isSelected
-                            ? "border-[var(--accent)] bg-[var(--panel-strong)]"
-                            : "border-[var(--line)] bg-[var(--panel)]"
-                        }`}
-                      >
-                        <div className="flex min-w-0 items-center justify-between gap-2">
-                          <div className="flex min-w-0 flex-1 items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)]/10 text-sm font-semibold text-[var(--accent)]">
-                              {getInitials(getDisplayName(contact))}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-1">
-                                <span className="truncate text-sm font-semibold">
-                                  {getDisplayName(contact)}
-                                </span>
-                                {getLanguageFlag(contact.language) && (
-                                  <span
-                                    className="shrink-0 text-sm"
-                                    title={contact.language === "it" ? "Italiano" : "English"}
-                                    aria-label={contact.language === "it" ? "Italiano" : "English"}
-                                  >
-                                    {getLanguageFlag(contact.language)}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="truncate text-xs text-[var(--muted)]">
-                                {[contact.role, contact.company]
-                                  .filter(Boolean)
-                                  .join(" · ") || "—"}
-                              </div>
-                            </div>
-                          </div>
-                          {scheduledEmails.some((se) => se.contact_id === contact.id) ? (
-                            <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${theme === "dark" ? "bg-orange-500/15 text-orange-200 border-orange-400/30" : "border-orange-500 bg-orange-100 text-orange-900"} scheduled-email-pulse`}>
-                              Email programmata
-                            </span>
-                          ) : (
+                    <button
+                      key={contact.id}
+                      onClick={() => handleSelectContact(contact)}
+                      className={`group flex w-full items-center gap-3 border-l-2 px-3 py-2.5 text-left transition ${
+                        isSelected
+                          ? "border-l-[var(--accent)] bg-[var(--panel-strong)]"
+                          : "border-l-transparent hover:bg-[var(--panel-strong)]/50"
+                      }`}
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--panel-strong)] text-[11px] font-semibold text-[var(--muted-strong)]">
+                        {getInitials(getDisplayName(contact))}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium text-[var(--ink)]">
+                            {getDisplayName(contact)}
+                          </span>
+                          {getLanguageFlag(contact.language) && (
                             <span
-                              className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold ${statusStyles[contact.status]}${contact.status === "Attiva auto follow-up" ? " auto-follow-pulse" : ""}${contact.status === "Mantenimento rapporto" ? " maintain-rapport-pulse" : ""}`}
+                              className="shrink-0 text-xs"
+                              title={
+                                contact.language === "it" ? "Italiano" : "English"
+                              }
+                              aria-label={
+                                contact.language === "it" ? "Italiano" : "English"
+                              }
                             >
-                              {getStatusLabel(contact.status)}
+                              {getLanguageFlag(contact.language)}
                             </span>
                           )}
                         </div>
-                        <div className="break-words text-xs text-[var(--muted)]">
-                          {contact.status === "Non interessato" ? (
-                            <>Non interessato · non rimanere in contatto</>
-                          ) : !contact.last_action_at ? (
-                            <>Prossima azione: Impostare Auto follow-up</>
-                          ) : (
-                            <>
-                              Prossima azione:{" "}
-                              {formatDate(contact.next_action_at)}
-                              {contact.next_action_note
-                                ? ` · ${contact.next_action_note}`
-                                : ""}
-                            </>
-                          )}
+                        <div className="truncate text-[11px] text-[var(--muted)]">
+                          {[contact.role, contact.company]
+                            .filter(Boolean)
+                            .join(" · ") ||
+                            (contact.email ?? "—")}
                         </div>
-                      </button>
-                    </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {hasScheduled && (
+                          <span
+                            className="h-1.5 w-1.5 rounded-full bg-orange-400 scheduled-email-pulse"
+                            title="Email programmata"
+                          />
+                        )}
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            contact.status === "Attiva auto follow-up"
+                              ? "bg-indigo-400 auto-follow-pulse"
+                              : contact.status === "In attesa"
+                              ? "bg-sky-400"
+                              : contact.status === "Azione richiesta"
+                              ? "bg-amber-400"
+                              : contact.status === "Non interessato"
+                              ? "bg-rose-400"
+                              : contact.status === "Call prenotata"
+                              ? "bg-violet-400"
+                              : contact.status === "Mantenimento rapporto"
+                              ? "bg-teal-400 maintain-rapport-pulse"
+                              : contact.status === "Collaborazione stabilita"
+                              ? "bg-emerald-400"
+                              : "bg-slate-500"
+                          }`}
+                          title={getStatusLabel(contact.status)}
+                        />
+                      </div>
+                    </button>
                   );
                 })}
             </div>
@@ -3927,7 +4039,7 @@ export default function CrmApp({
 
         <section
           ref={contentSectionRef}
-          className="min-w-0 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-lg"
+          className="min-w-0 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-6"
         >
           <div className="flex min-w-0 items-start justify-between gap-4">
             <div className="min-w-0">
@@ -3986,6 +4098,128 @@ export default function CrmApp({
           )}
         </section>
       </main>
+
+      {addContactOpen && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setAddContactOpen(false)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-2xl"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-[var(--ink)]">
+                Nuovo contatto
+              </h2>
+              <button
+                type="button"
+                onClick={() => setAddContactOpen(false)}
+                className="text-[var(--muted)] hover:text-[var(--ink)]"
+                aria-label="Chiudi"
+              >
+                ✕
+              </button>
+            </div>
+            <form
+              onSubmit={(event) => {
+                handleAdd(event);
+              }}
+              className="grid gap-3"
+            >
+              <input
+                placeholder="Nome e cognome"
+                value={newContact.name}
+                onChange={(event) =>
+                  setNewContact((prev) => ({
+                    ...prev,
+                    name: event.target.value,
+                  }))
+                }
+                autoFocus
+              />
+              <input
+                placeholder="Email"
+                type="email"
+                value={newContact.email}
+                onChange={(event) =>
+                  setNewContact((prev) => ({
+                    ...prev,
+                    email: event.target.value,
+                  }))
+                }
+              />
+              <input
+                placeholder="Produzione / Studio"
+                value={newContact.company}
+                onChange={(event) =>
+                  setNewContact((prev) => ({
+                    ...prev,
+                    company: event.target.value,
+                  }))
+                }
+              />
+              <select
+                value={newContact.role}
+                onChange={(event) =>
+                  setNewContact((prev) => ({
+                    ...prev,
+                    role: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Ruolo</option>
+                <option value="Regista">Regista</option>
+                <option value="Produzione">Produzione</option>
+                <option value="Regista con agente">
+                  Regista con agente
+                </option>
+                <option value="Regista e Produzione">
+                  Regista e Produzione
+                </option>
+              </select>
+              <select
+                value={newContact.status}
+                onChange={(event) =>
+                  setNewContact((prev) => ({
+                    ...prev,
+                    status: event.target.value as NewContactStatus,
+                  }))
+                }
+              >
+                {NEW_CONTACT_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {getStatusLabel(status)}
+                  </option>
+                ))}
+              </select>
+              {addError && (
+                <div
+                  className={`rounded-md border px-3 py-2 text-xs ${toneStyles.error}`}
+                >
+                  {addError}
+                </div>
+              )}
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAddContactOpen(false)}
+                  className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:text-[var(--ink)]"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
+                >
+                  {adding ? "Salvo…" : "Aggiungi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

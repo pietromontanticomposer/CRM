@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getAiOutreachSendBlockReason } from "@/lib/aiOutreach";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,6 +67,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ ok: true, items: data });
   } catch (err) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("GET /api/scheduled-emails unexpected error", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Errore interno." },
@@ -101,7 +105,9 @@ export async function POST(request: Request) {
     if (contactId) {
       const { data: contact } = await supabase
         .from("contacts")
-        .select("id")
+        .select(
+          "id, email, ai_batch_id, ai_status, ai_email_subject, ai_email_body, ai_validation_status"
+        )
         .eq("id", contactId)
         .or(ownerFilter)
         .maybeSingle();
@@ -109,6 +115,14 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { ok: false, error: "Contatto non trovato." },
           { status: 404 }
+        );
+      }
+
+      const outreachBlock = getAiOutreachSendBlockReason(contact);
+      if (outreachBlock) {
+        return NextResponse.json(
+          { ok: false, error: outreachBlock },
+          { status: 409 }
         );
       }
     }
@@ -137,6 +151,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, scheduled: data });
   } catch (err) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("POST /api/scheduled-emails unexpected error", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Errore interno." },

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { requireCurrentUser } from "@/lib/server/currentUser";
+import { isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +51,9 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("DELETE /api/scheduled-emails/[id] unexpected error", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "Errore interno." },

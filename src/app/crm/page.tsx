@@ -20,15 +20,10 @@ const isCrmTheme = (value: unknown): value is CrmTheme =>
   value === "light" || value === "dark";
 
 export default function CrmPage() {
-  // Always render the same defaults on server + first client render to
-  // avoid hydration mismatches; the persisted values land in a useEffect
-  // after mount.
-  const [theme, setTheme] = useState<CrmTheme>("light");
+  const [theme, setTheme] = useState<CrmTheme>("dark");
   const [section, setSection] = useState<CrmSection>("cinema");
   const [hydrated, setHydrated] = useState(false);
 
-  // Sync state from localStorage on mount. setState in an effect is the
-  // canonical way to read browser-only state without breaking SSR.
   useEffect(() => {
     const storedTheme = window.localStorage.getItem(CRM_THEME_STORAGE_KEY);
     /* eslint-disable react-hooks/set-state-in-effect */
@@ -56,57 +51,63 @@ export default function CrmPage() {
       suppressHydrationWarning
       className={`${theme === "light" ? "crm-light-theme" : ""} relative min-h-screen`}
     >
-      <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-6 pt-6 sm:px-10">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/"
-            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] shadow-sm transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-          >
-            ← Home
-          </Link>
-          <div
-            role="tablist"
-            aria-label="Sezioni CRM"
-            className="inline-flex rounded-full border border-[var(--line)] bg-[var(--panel)] p-0.5 shadow-sm"
-          >
-            {sections.map((value) => {
-              const active = section === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setSection(value)}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                    active
-                      ? "bg-[var(--accent)] text-white shadow-sm"
-                      : "text-[var(--muted)] hover:text-[var(--ink)]"
-                  }`}
-                >
-                  {SECTION_LABELS[value]}
-                </button>
-              );
-            })}
+      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--bg)]/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-6 py-3">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="text-sm font-semibold tracking-tight text-[var(--ink)]"
+            >
+              Pietro CRM
+            </Link>
+            <span className="text-[var(--line-strong)]">/</span>
+            <div
+              role="tablist"
+              aria-label="Sezioni"
+              className="inline-flex items-center gap-0.5 rounded-md border border-[var(--line)] bg-[var(--panel)] p-0.5"
+            >
+              {sections.map((value) => {
+                const active = section === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setSection(value)}
+                    className={`rounded-[5px] px-2.5 py-1 text-xs font-medium transition ${
+                      active
+                        ? "bg-[var(--panel-strong)] text-[var(--ink)]"
+                        : "text-[var(--muted)] hover:text-[var(--ink)]"
+                    }`}
+                  >
+                    {SECTION_LABELS[value]}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <CrmNotificationsBell section={section} />
-          <button
-            type="button"
-            onClick={() =>
-              setTheme((current) => (current === "light" ? "dark" : "light"))
-            }
-            suppressHydrationWarning
-            className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 text-xs font-semibold text-[var(--muted)] shadow-sm transition hover:border-[var(--accent)] hover:text-[var(--ink)]"
-          >
-            {theme === "light" ? "Tema scuro" : "Tema chiaro"}
-          </button>
-          <div>
+          <div className="flex items-center gap-1.5">
+            <CrmNotificationsBell section={section} />
+            <button
+              type="button"
+              onClick={() =>
+                setTheme((current) => (current === "light" ? "dark" : "light"))
+              }
+              suppressHydrationWarning
+              aria-label="Cambia tema"
+              className="grid h-8 w-8 place-items-center rounded-md border border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] transition hover:text-[var(--ink)]"
+            >
+              {theme === "light" ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+              )}
+            </button>
             <LogoutButton />
           </div>
         </div>
-      </div>
+      </header>
       <CrmApp theme={theme} section={section} />
     </div>
   );

@@ -7,6 +7,7 @@ import {
   verifySessionToken,
 } from "@/lib/auth";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
+import { isLegacySchemaError } from "@/lib/server/supabaseSchema";
 
 type AppUserRow = {
   id: string;
@@ -20,6 +21,7 @@ export type CurrentUser = {
   id: string;
   email: string;
   canAccessLegacyData: boolean;
+  usesLegacySchema: boolean;
 };
 
 const PASSWORD_PREFIX = "pbkdf2-v1";
@@ -37,6 +39,14 @@ const toCurrentUser = (row: AppUserRow): CurrentUser => ({
   id: row.id,
   email: row.email,
   canAccessLegacyData: canAccessLegacyData(row.email),
+  usesLegacySchema: false,
+});
+
+const toLegacyCurrentUser = (email: string): CurrentUser => ({
+  id: normalizeUserEmail(email),
+  email: normalizeUserEmail(email),
+  canAccessLegacyData: canAccessLegacyData(email),
+  usesLegacySchema: true,
 });
 
 export const findAppUserByEmail = async (
@@ -106,7 +116,18 @@ export const ensureAppUser = async (
   email: string
 ) => {
   const normalizedEmail = normalizeUserEmail(email);
-  const existing = await findAppUserByEmail(supabase, normalizedEmail);
+  let existing: AppUserRow | null = null;
+  try {
+    existing = await findAppUserByEmail(supabase, normalizedEmail);
+  } catch (error) {
+    if (isLegacySchemaError(error, ["app_users", "email_verified_at", "disabled_at"])) {
+      if (canAccessLegacyData(normalizedEmail)) {
+        return toLegacyCurrentUser(normalizedEmail);
+      }
+      throw new Error("Unauthorized");
+    }
+    throw error;
+  }
   if (existing) {
     if (existing.disabled_at) throw new Error("Unauthorized");
     return toCurrentUser(existing);
@@ -115,13 +136,27 @@ export const ensureAppUser = async (
     ? new Date().toISOString()
     : null;
 
-  const { data, error } = await supabase
-    .from("app_users")
-    .insert({ email: normalizedEmail, email_verified_at: legacyVerifiedAt })
-    .select("id,email,password_hash,email_verified_at,disabled_at")
-    .single();
+  let data: AppUserRow | null = null;
+  let error: unknown = null;
+  try {
+    const result = await supabase
+      .from("app_users")
+      .insert({ email: normalizedEmail, email_verified_at: legacyVerifiedAt })
+      .select("id,email,password_hash,email_verified_at,disabled_at")
+      .single();
+    data = result.data as AppUserRow | null;
+    error = result.error;
+  } catch (insertError) {
+    error = insertError;
+  }
 
   if (error) {
+    if (isLegacySchemaError(error, ["app_users", "email_verified_at"])) {
+      if (canAccessLegacyData(normalizedEmail)) {
+        return toLegacyCurrentUser(normalizedEmail);
+      }
+      throw new Error("Unauthorized");
+    }
     const retry = await findAppUserByEmail(supabase, normalizedEmail);
     if (retry) return toCurrentUser(retry);
     throw error;
@@ -175,7 +210,15 @@ export const validateAppUserLogin = async (
   email: string,
   password: string
 ) => {
-  const user = await findAppUserByEmail(supabase, email);
+  let user: AppUserRow | null = null;
+  try {
+    user = await findAppUserByEmail(supabase, email);
+  } catch (error) {
+    if (isLegacySchemaError(error, ["app_users", "email_verified_at", "disabled_at"])) {
+      return null;
+    }
+    throw error;
+  }
   if (!user?.password_hash) return null;
   if (user.disabled_at) return null;
   if (!user.email_verified_at && !canAccessLegacyData(user.email)) {
@@ -217,6 +260,9 @@ export const updateAppUserPassword = async (
   if (error) throw error;
   return toCurrentUser(data as AppUserRow);
 };
+
+export const isUnauthorizedError = (error: unknown) =>
+  error instanceof Error && error.message === "Unauthorized";
 
 export const requireCurrentUser = async (
   supabase: SupabaseClient = getSupabaseAdmin()

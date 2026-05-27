@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 import { linkExistingEmailsToContact } from "@/lib/server/linkContactEmails";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +21,17 @@ type ContactUpdate = {
   next_action_at?: string | null;
   next_action_note?: string | null;
   notes?: string | null;
+  ai_batch_id?: string | null;
+  ai_batch_name?: string | null;
+  ai_status?: string;
+  ai_email_subject?: string | null;
+  ai_email_body?: string | null;
+  verified_facts_json?: unknown;
+  source_link?: string | null;
+  prompt_master_rules?: string | null;
+  ai_agent_checks_json?: unknown;
+  ai_validation_summary?: string | null;
+  ai_validation_status?: string;
   mark_followup_read?: boolean;
 };
 
@@ -32,6 +43,14 @@ const normalizeString = (value: unknown) => {
 const normalizeNullableString = (value: unknown) => {
   const normalized = normalizeString(value);
   return normalized || null;
+};
+
+const normalizeJsonField = (value: unknown, fallback: unknown) => {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return value;
+  if (value === null) return fallback;
+  return undefined;
 };
 
 const normalizeUpdatePayload = (value: unknown): ContactUpdate | null => {
@@ -73,6 +92,44 @@ const normalizeUpdatePayload = (value: unknown): ContactUpdate | null => {
         : normalizeNullableString(payload.next_action_note),
     notes:
       payload.notes === undefined ? undefined : normalizeNullableString(payload.notes),
+    ai_batch_id:
+      payload.ai_batch_id === undefined
+        ? undefined
+        : normalizeNullableString(payload.ai_batch_id),
+    ai_batch_name:
+      payload.ai_batch_name === undefined
+        ? undefined
+        : normalizeNullableString(payload.ai_batch_name),
+    ai_status:
+      typeof payload.ai_status === "string"
+        ? normalizeString(payload.ai_status)
+        : undefined,
+    ai_email_subject:
+      payload.ai_email_subject === undefined
+        ? undefined
+        : normalizeNullableString(payload.ai_email_subject),
+    ai_email_body:
+      payload.ai_email_body === undefined
+        ? undefined
+        : normalizeNullableString(payload.ai_email_body),
+    verified_facts_json: normalizeJsonField(payload.verified_facts_json, {}),
+    source_link:
+      payload.source_link === undefined
+        ? undefined
+        : normalizeNullableString(payload.source_link),
+    prompt_master_rules:
+      payload.prompt_master_rules === undefined
+        ? undefined
+        : normalizeNullableString(payload.prompt_master_rules),
+    ai_agent_checks_json: normalizeJsonField(payload.ai_agent_checks_json, {}),
+    ai_validation_summary:
+      payload.ai_validation_summary === undefined
+        ? undefined
+        : normalizeNullableString(payload.ai_validation_summary),
+    ai_validation_status:
+      typeof payload.ai_validation_status === "string"
+        ? normalizeString(payload.ai_validation_status)
+        : undefined,
     mark_followup_read: Boolean(payload.mark_followup_read),
   };
 };
@@ -160,6 +217,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     return NextResponse.json({ contact: data });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("PATCH /api/contacts/[id] unexpected error", error);
     return NextResponse.json(
       { error: getErrorMessage(error, "Impossibile aggiornare il contatto.") },
@@ -173,6 +233,22 @@ export async function DELETE(_request: Request, context: RouteContext) {
     const { id } = await context.params;
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
+
+    // The notifications.contact_id FK was created without ON DELETE CASCADE
+    // (see migration 20260515120000), so for databases that haven't applied
+    // the fix yet we clear dependent rows first to avoid a FK violation.
+    const { error: notificationsError } = await supabase
+      .from("notifications")
+      .delete()
+      .eq("contact_id", id);
+
+    if (notificationsError) {
+      console.error(
+        `DELETE /api/contacts/${id} cleanup notifications failed`,
+        notificationsError
+      );
+    }
+
     const { error } = await supabase
       .from("contacts")
       .delete()
@@ -189,6 +265,9 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("DELETE /api/contacts/[id] unexpected error", error);
     return NextResponse.json(
       { error: getErrorMessage(error, "Impossibile eliminare il contatto.") },

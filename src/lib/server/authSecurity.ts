@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isLegacySchemaError } from "@/lib/server/supabaseSchema";
 
 type AuthTokenType = "email_verification" | "password_reset";
 
@@ -36,7 +37,15 @@ export const checkRateLimit = async (
     .eq("key", key)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (isLegacySchemaError(error, ["app_auth_rate_limits"])) {
+      return {
+        allowed: true,
+        retryAfterSeconds: 0,
+      };
+    }
+    throw error;
+  }
 
   if (current?.blocked_until) {
     const blockedUntil = new Date(current.blocked_until);
@@ -75,7 +84,15 @@ export const checkRateLimit = async (
       { onConflict: "key" }
     );
 
-  if (upsertError) throw upsertError;
+  if (upsertError) {
+    if (isLegacySchemaError(upsertError, ["app_auth_rate_limits"])) {
+      return {
+        allowed: true,
+        retryAfterSeconds: 0,
+      };
+    }
+    throw upsertError;
+  }
 
   return {
     allowed: !blockedUntil,

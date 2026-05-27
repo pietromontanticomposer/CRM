@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify": "npm run lint && npm run build"
+    "verify": "npm run lint && npm run build",
+    "outreach:worker": "tsx local-worker/run-worker.ts",
+    "outreach:test": "tsx local-worker/tests/runTests.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.94.0",
@@ -17,7 +19,8 @@
     "next": "16.1.6",
     "nodemailer": "^8.0.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "unpdf": "^1.6.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -29,6 +32,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

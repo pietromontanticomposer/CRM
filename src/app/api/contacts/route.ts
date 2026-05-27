@@ -1,10 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 import { getAutomaticFollowUpStage } from "@/lib/followUp";
 import { detectLanguageFromEmail, stripHtml } from "@/lib/languageDetection";
 import { extractEmails, normalizeEmail } from "@/lib/server/emailMatching";
 import { linkExistingEmailsToContact } from "@/lib/server/linkContactEmails";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
+import { isLegacySchemaError } from "@/lib/server/supabaseSchema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +44,23 @@ type ContactInsert = {
   status: string;
   last_action_at: string | null;
   section: ContactSection;
+  notes?: string | null;
+  ai_batch_id?: string | null;
+  ai_batch_name?: string | null;
+  ai_status?: string;
+  ai_email_subject?: string | null;
+  ai_email_body?: string | null;
+  verified_facts_json?: unknown;
+  source_link?: string | null;
+  prompt_master_rules?: string | null;
+  ai_agent_checks_json?: unknown;
+  ai_validation_summary?: string | null;
+  ai_validation_status?: string;
+  email_source_url?: string | null;
+  email_source_type?: string | null;
+  email_confidence?: number | null;
+  email_enrichment_status?: string | null;
+  email_found_at?: string | null;
 };
 
 type ContactEmailRow = {
@@ -63,8 +82,35 @@ type LanguageCandidateRow = {
   created_at: string | null;
 };
 
+type OutreachImportRow = {
+  name: string;
+  email: string | null;
+  company: string | null;
+  role: string | null;
+  status: string;
+  notes: string | null;
+  section: ContactSection;
+  draft_subject: string | null;
+  draft_body: string | null;
+  source_link: string | null;
+  verified_facts_json: unknown;
+  prompt_master_rules: string | null;
+  email_source_url: string | null;
+  email_source_type: string | null;
+  email_confidence: number | null;
+  email_enrichment_status: string | null;
+};
+
+type OutreachImportPayload = {
+  batchName: string;
+  section: ContactSection;
+  contacts: OutreachImportRow[];
+};
+
 const CONTACT_SELECT_FIELDS =
-  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,section,language,created_at,updated_at";
+  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,section,language,ai_batch_id,ai_batch_name,ai_status,ai_email_subject,ai_email_body,verified_facts_json,source_link,prompt_master_rules,ai_agent_checks_json,ai_validation_summary,ai_validation_status,ai_send_allowed,ai_template_used,ai_risk_score,ai_link_visione,email_source_url,email_source_type,email_confidence,email_found_at,email_enrichment_status,email_enrichment_reason,created_at,updated_at";
+const LEGACY_CONTACT_SELECT_FIELDS =
+  "id,name,email,company,role,status,last_action_at,last_action_note,next_action_at,next_action_note,notes,created_at,updated_at";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") return "";
@@ -74,6 +120,12 @@ const normalizeString = (value: unknown) => {
 const normalizeNullableString = (value: unknown) => {
   const normalized = normalizeString(value);
   return normalized || null;
+};
+
+const normalizeJsonValue = (value: unknown, fallback: unknown) => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return value;
+  return fallback;
 };
 
 const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
@@ -97,6 +149,101 @@ const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
     status,
     last_action_at: lastActionAt,
     section: parseSection(payload.section),
+    notes: normalizeNullableString(payload.notes),
+  };
+};
+
+const normalizeOutreachImportRow = (
+  value: unknown,
+  fallbackSection: ContactSection,
+  fallbackPromptMasterRules: string | null
+): OutreachImportRow | null => {
+  if (!value || typeof value !== "object") return null;
+  const payload = value as Record<string, unknown>;
+  const name = normalizeString(payload.name);
+  const company = normalizeString(payload.company);
+
+  if (!name && !company) {
+    return null;
+  }
+
+  return {
+    name,
+    email: normalizeNullableString(payload.email),
+    company: company || null,
+    role: normalizeNullableString(payload.role),
+    status: normalizeString(payload.status) || "Attiva auto follow-up",
+    notes: normalizeNullableString(payload.notes),
+    section: parseOptionalSection(payload.section) ?? fallbackSection,
+    draft_subject:
+      normalizeNullableString(payload.draftSubject) ??
+      normalizeNullableString(payload.draft_subject),
+    draft_body:
+      normalizeNullableString(payload.draftBody) ??
+      normalizeNullableString(payload.draft_body),
+    source_link:
+      normalizeNullableString(payload.sourceLink) ??
+      normalizeNullableString(payload.source_link),
+    verified_facts_json: normalizeJsonValue(
+      (payload.verifiedFactsJson ?? payload.verified_facts_json) as unknown,
+      {}
+    ),
+    prompt_master_rules:
+      normalizeNullableString(payload.promptMasterRules) ??
+      normalizeNullableString(payload.prompt_master_rules) ??
+      fallbackPromptMasterRules,
+    email_source_url:
+      normalizeNullableString(payload.email_source_url) ??
+      normalizeNullableString(payload.emailSourceUrl),
+    email_source_type:
+      normalizeNullableString(payload.email_source_type) ??
+      normalizeNullableString(payload.emailSourceType),
+    email_confidence: (() => {
+      const value =
+        (payload.email_confidence as unknown) ??
+        (payload.emailConfidence as unknown);
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.max(0, Math.min(1, value));
+      }
+      return null;
+    })(),
+    email_enrichment_status:
+      normalizeNullableString(payload.email_enrichment_status) ??
+      normalizeNullableString(payload.email_status) ??
+      normalizeNullableString(payload.emailStatus),
+  };
+};
+
+const normalizeOutreachImportPayload = (
+  value: unknown
+): OutreachImportPayload | null => {
+  if (!value || typeof value !== "object") return null;
+  const payload = value as Record<string, unknown>;
+  if (payload.mode !== "outreach_import") return null;
+
+  const section = parseSection(payload.section);
+  const promptMasterRules =
+    normalizeNullableString(payload.promptMasterRules) ??
+    normalizeNullableString(payload.prompt_master_rules);
+  const contacts = Array.isArray(payload.contacts)
+    ? payload.contacts
+        .map((item) =>
+          normalizeOutreachImportRow(item, section, promptMasterRules)
+        )
+        .filter(Boolean)
+    : [];
+
+  if (!contacts.length) {
+    return null;
+  }
+
+  return {
+    batchName:
+      normalizeString(payload.batchName) ||
+      normalizeString(payload.batch_name) ||
+      `AI Outreach ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+    section,
+    contacts: contacts as OutreachImportRow[],
   };
 };
 
@@ -147,6 +294,121 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 };
 
 const escapeIlike = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+const mapLegacyContact = (contact: ContactRow) => {
+  const stage = getAutomaticFollowUpStage(contact.next_action_note as string);
+  return {
+    ...contact,
+    status: stage ? "Attiva auto follow-up" : contact.status,
+    section: "cinema" as const,
+    last_inbound_email_at: null,
+    last_outbound_email_at: null,
+    activity_at: (contact.updated_at as string) || (contact.created_at as string),
+    language: detectLanguageForContactProfile(contact),
+    ai_batch_id: null,
+    ai_batch_name: null,
+    ai_status: "not_checked",
+    ai_email_subject: null,
+    ai_email_body: null,
+    verified_facts_json: {},
+    source_link: null,
+    prompt_master_rules: null,
+    ai_agent_checks_json: {},
+    ai_validation_summary: null,
+    ai_validation_status: "not_checked",
+  };
+};
+
+const withAiDefaults = (contact: ContactRow) => ({
+  ...contact,
+  ai_batch_id:
+    typeof contact.ai_batch_id === "string" ? contact.ai_batch_id : null,
+  ai_batch_name:
+    typeof contact.ai_batch_name === "string" ? contact.ai_batch_name : null,
+  ai_status: typeof contact.ai_status === "string" ? contact.ai_status : "not_checked",
+  ai_email_subject:
+    typeof contact.ai_email_subject === "string" ? contact.ai_email_subject : null,
+  ai_email_body:
+    typeof contact.ai_email_body === "string" ? contact.ai_email_body : null,
+  verified_facts_json: normalizeJsonValue(contact.verified_facts_json, {}),
+  source_link: typeof contact.source_link === "string" ? contact.source_link : null,
+  prompt_master_rules:
+    typeof contact.prompt_master_rules === "string"
+      ? contact.prompt_master_rules
+      : null,
+  ai_agent_checks_json: normalizeJsonValue(contact.ai_agent_checks_json, {}),
+  ai_validation_summary:
+    typeof contact.ai_validation_summary === "string"
+      ? contact.ai_validation_summary
+      : null,
+  ai_validation_status:
+    typeof contact.ai_validation_status === "string"
+      ? contact.ai_validation_status
+      : "not_checked",
+});
+
+const findExistingOutreachContact = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  ownerFilter: string,
+  row: OutreachImportRow
+) => {
+  if (row.email) {
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("id")
+      .or(ownerFilter)
+      .ilike("email", row.email)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data?.id) {
+      return data;
+    }
+  }
+
+  let query = supabase
+    .from("contacts")
+    .select("id")
+    .or(ownerFilter)
+    .ilike("name", row.name);
+
+  if (row.company) {
+    query = query.ilike("company", row.company);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle();
+  if (error) {
+    throw error;
+  }
+  return data;
+};
+
+const loadLegacyContacts = async (
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  section: ContactSection | null
+) => {
+  if (section === "live_music") {
+    return [] as ReturnType<typeof mapLegacyContact>[];
+  }
+
+  const { data, error } = await supabase
+    .from("contacts")
+    .select(LEGACY_CONTACT_SELECT_FIELDS)
+    .order("updated_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return sortContactsByActivity(
+    ((data ?? []) as unknown) as ContactRow[],
+    new Map<string, string>()
+  ).map(mapLegacyContact);
+};
 
 const detectLanguageForContactEmail = async (
   supabase: ReturnType<typeof getSupabaseAdmin>,
@@ -265,6 +527,11 @@ export async function GET(request: Request) {
     const section = parseOptionalSection(url.searchParams.get("section"));
     const supabase = getSupabaseAdmin();
     const user = await requireCurrentUser(supabase);
+    if (user.usesLegacySchema) {
+      return NextResponse.json({
+        contacts: await loadLegacyContacts(supabase, section),
+      });
+    }
     const ownerFilter = getOwnerFilter(user);
     let contactsQuery = supabase
       .from("contacts")
@@ -274,17 +541,32 @@ export async function GET(request: Request) {
     if (section) {
       contactsQuery = contactsQuery.eq("section", section);
     }
-    const [{ data, error }, { data: contactEmails, error: emailsError }] =
-      await Promise.all([
-        contactsQuery,
-        supabase
-          .from("emails")
-          .select("id, contact_id, direction, received_at, created_at")
-          .or(ownerFilter)
-          .not("contact_id", "is", null),
-      ]);
+    const { data, error } = await contactsQuery;
 
     if (error) {
+      if (
+        isLegacySchemaError(error, [
+          "owner_id",
+          "section",
+          "language",
+          "ai_status",
+          "ai_validation_status",
+          "ai_agent_checks_json",
+          "ai_batch_id",
+          "ai_batch_name",
+          "ai_email_subject",
+          "ai_email_body",
+          "ai_validation_summary",
+          "ai_send_allowed",
+          "verified_facts_json",
+          "source_link",
+          "prompt_master_rules",
+        ])
+      ) {
+        return NextResponse.json({
+          contacts: await loadLegacyContacts(supabase, section),
+        });
+      }
       console.error("GET /api/contacts failed", error);
       return NextResponse.json(
         { error: getErrorMessage(error, "Impossibile caricare i contatti.") },
@@ -292,18 +574,26 @@ export async function GET(request: Request) {
       );
     }
 
+    const { data: contactEmails, error: emailsError } = await supabase
+      .from("emails")
+      .select("id, contact_id, direction, received_at, created_at")
+      .or(ownerFilter)
+      .not("contact_id", "is", null);
+
     if (emailsError) {
-      console.error("GET /api/contacts emails fetch failed", emailsError);
-      return NextResponse.json(
-        { error: getErrorMessage(emailsError, "Impossibile caricare i contatti.") },
-        { status: 500 }
-      );
+      if (!isLegacySchemaError(emailsError, ["owner_id", "contact_id"])) {
+        console.error("GET /api/contacts emails fetch failed", emailsError);
+        return NextResponse.json(
+          { error: getErrorMessage(emailsError, "Impossibile caricare i contatti.") },
+          { status: 500 }
+        );
+      }
     }
 
     const lastInboundAtByContactId = new Map<string, string>();
     const lastOutboundAtByContactId = new Map<string, string>();
 
-    (contactEmails ?? []).forEach((row) => {
+    ((contactEmails ?? []) as unknown[]).forEach((row) => {
       const email = row as unknown as ContactEmailRow;
       if (!email.contact_id) return;
       const candidate = email.received_at ?? email.created_at ?? null;
@@ -358,7 +648,7 @@ export async function GET(request: Request) {
           : null;
 
       return {
-        ...contact,
+        ...withAiDefaults(contact),
         status: effectiveStatus,
         last_inbound_email_at: lastInboundAtByContactId.get(contact.id) ?? null,
         last_outbound_email_at: lastOutboundAtByContactId.get(contact.id) ?? null,
@@ -369,6 +659,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ contacts });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("GET /api/contacts unexpected error", error);
     return NextResponse.json(
       { error: getErrorMessage(error, "Impossibile caricare i contatti.") },
@@ -380,6 +673,159 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
+    const importPayload = normalizeOutreachImportPayload(body);
+    const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
+
+    if (importPayload) {
+      if (user.usesLegacySchema) {
+        return NextResponse.json(
+          {
+            error:
+              "Schema legacy non compatibile con AI Director Outreach. Applica le migration Supabase aggiornate.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const ownerFilter = getOwnerFilter(user);
+      const batchId = randomUUID();
+      const importedContacts: ContactRow[] = [];
+
+      for (const row of importPayload.contacts) {
+        const existing = await findExistingOutreachContact(
+          supabase,
+          ownerFilter,
+          row
+        );
+        const contactPayload: ContactInsert & { owner_id: string } = {
+          owner_id: user.id,
+          name: row.name,
+          email: row.email,
+          company: row.company,
+          role: row.role || "Regista",
+          status: row.status,
+          notes: row.notes,
+          last_action_at: null,
+          section: row.section,
+          ai_batch_id: batchId,
+          ai_batch_name: importPayload.batchName,
+          ai_status: "imported",
+          ai_email_subject: row.draft_subject,
+          ai_email_body: row.draft_body,
+          verified_facts_json: row.verified_facts_json,
+          source_link: row.source_link,
+          prompt_master_rules: row.prompt_master_rules,
+          ai_agent_checks_json: {},
+          ai_validation_summary: null,
+          ai_validation_status: "not_checked",
+          email_source_url: row.email_source_url,
+          email_source_type: row.email_source_type,
+          email_confidence: row.email_confidence,
+          email_enrichment_status:
+            row.email_enrichment_status ??
+            (row.email ? "present" : null),
+          email_found_at: row.email ? new Date().toISOString() : null,
+        };
+
+        let saved: ContactRow | null = null;
+        let saveError: unknown = null;
+
+        // Bypassiamo il client @supabase/supabase-js per l'INSERT/UPDATE outreach:
+        // ha mostrato cache stale su colonne aggiunte di recente. Andiamo direttamente al
+        // PostgREST endpoint con fetch nativo (gli stessi service_role headers).
+        const supabaseUrl = process.env.SUPABASE_URL?.trim();
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+        if (!supabaseUrl || !supabaseKey) {
+          saveError = new Error(
+            "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env."
+          );
+        } else if (existing?.id) {
+          const response = await fetch(
+            `${supabaseUrl}/rest/v1/contacts?id=eq.${existing.id}`,
+            {
+              method: "PATCH",
+              headers: {
+                apikey: supabaseKey,
+                Authorization: `Bearer ${supabaseKey}`,
+                "Content-Type": "application/json",
+                Prefer: "return=representation",
+              },
+              body: JSON.stringify(contactPayload),
+            }
+          );
+          if (response.ok) {
+            const data = (await response.json()) as ContactRow[];
+            saved = data[0] ?? null;
+          } else {
+            saveError = await response
+              .json()
+              .catch(() => ({ message: response.statusText }));
+          }
+        } else {
+          const response = await fetch(`${supabaseUrl}/rest/v1/contacts`, {
+            method: "POST",
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+              Prefer: "return=representation",
+            },
+            body: JSON.stringify(contactPayload),
+          });
+          if (response.ok) {
+            const data = (await response.json()) as ContactRow[];
+            saved = data[0] ?? null;
+          } else {
+            saveError = await response
+              .json()
+              .catch(() => ({ message: response.statusText }));
+          }
+        }
+
+        if (saveError || !saved) {
+          console.error("POST /api/contacts outreach import failed", saveError);
+          return NextResponse.json(
+            {
+              error: getErrorMessage(
+                saveError,
+                "Impossibile importare il batch outreach."
+              ),
+            },
+            { status: 500 }
+          );
+        }
+
+        if (saved.email) {
+          try {
+            await linkExistingEmailsToContact(
+              supabase,
+              saved.id,
+              saved.email as string,
+              user.id,
+              user.canAccessLegacyData
+            );
+          } catch (linkError) {
+            console.error("POST /api/contacts outreach link email failed", linkError);
+          }
+        }
+
+        importedContacts.push(withAiDefaults(saved));
+      }
+
+      return NextResponse.json(
+        {
+          batch: {
+            id: batchId,
+            name: importPayload.batchName,
+            total_contacts: importedContacts.length,
+          },
+          contacts: importedContacts,
+        },
+        { status: 201 }
+      );
+    }
+
     const payload = normalizeCreatePayload(body);
 
     if (!payload) {
@@ -388,14 +834,34 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    const modernInsertPayload = user.usesLegacySchema
+      ? payload
+      : { ...payload, owner_id: user.id };
 
-    const supabase = getSupabaseAdmin();
-    const user = await requireCurrentUser(supabase);
-    const { data, error } = await supabase
+    const insertedContact = await supabase
       .from("contacts")
-      .insert({ ...payload, owner_id: user.id })
-      .select("*")
+      .insert(modernInsertPayload)
+      .select(CONTACT_SELECT_FIELDS)
       .single();
+    let data = (insertedContact.data as ContactRow | null) ?? null;
+    let error: unknown = insertedContact.error;
+
+    if (error && isLegacySchemaError(error, ["owner_id", "section"])) {
+      const legacyInsert = await supabase
+        .from("contacts")
+        .insert({
+          name: payload.name,
+          email: payload.email,
+          company: payload.company,
+          role: payload.role,
+          status: payload.status,
+          last_action_at: payload.last_action_at,
+        })
+        .select(LEGACY_CONTACT_SELECT_FIELDS)
+        .single();
+      data = (legacyInsert.data as ContactRow | null) ?? null;
+      error = legacyInsert.error;
+    }
 
     if (error) {
       console.error("POST /api/contacts failed", error);
@@ -405,11 +871,20 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!data) {
+      return NextResponse.json(
+        { error: "Impossibile salvare il contatto." },
+        { status: 500 }
+      );
+    }
+
+    const savedEmail = typeof data.email === "string" ? data.email : null;
+
     try {
       await linkExistingEmailsToContact(
         supabase,
         data.id,
-        data.email,
+        savedEmail,
         user.id,
         user.canAccessLegacyData
       );
@@ -420,7 +895,7 @@ export async function POST(request: Request) {
     const language =
       (await detectLanguageForContactEmail(
         supabase,
-        data.email,
+        savedEmail,
         user.id,
         user.canAccessLegacyData
       )) ??
@@ -429,13 +904,20 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         contact: {
-          ...data,
+          ...withAiDefaults(data as ContactRow),
+          section:
+            typeof (data as Record<string, unknown>)?.section === "string"
+              ? (data as Record<string, unknown>).section
+              : "cinema",
           language,
         },
       },
       { status: 201 }
     );
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("POST /api/contacts unexpected error", error);
     return NextResponse.json(
       { error: getErrorMessage(error, "Impossibile salvare il contatto.") },

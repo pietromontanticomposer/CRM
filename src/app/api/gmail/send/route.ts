@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import { getAiOutreachSendBlockReason } from "@/lib/aiOutreach";
 import {
   SECOND_FOLLOW_UP_DAYS,
   buildAutomaticFollowUpNote,
@@ -9,7 +10,7 @@ import {
   toFollowUpDateOnly,
 } from "@/lib/followUp";
 import { buildOutboundAttachments, buildOutboundHtml } from "@/lib/outboundEmail";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 import { resolveEmailAccount } from "@/lib/server/emailAccounts";
 
 export const runtime = "nodejs";
@@ -383,8 +384,77 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabase();
-  const currentUser = await requireCurrentUser(supabase);
+  let currentUser: Awaited<ReturnType<typeof requireCurrentUser>>;
+  try {
+    currentUser = await requireCurrentUser(supabase);
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    throw error;
+  }
   const ownerFilter = getOwnerFilter(currentUser);
+  const explicitContactId =
+    typeof payload.contactId === "string" && payload.contactId.trim().length > 0
+      ? payload.contactId.trim()
+      : null;
+  const recipientAddresses = extractEmails(payload.to);
+  const matchedContactIds = explicitContactId
+    ? []
+    : await findContactIdsFromAddresses(
+        recipientAddresses.length ? recipientAddresses : [payload.to],
+        currentUser.id,
+        currentUser.canAccessLegacyData
+      );
+  const contactId =
+    explicitContactId ??
+    (matchedContactIds.length === 1 ? matchedContactIds[0] : null);
+
+  if (contactId) {
+    const { data: contact } = await supabase
+      .from("contacts")
+      .select(
+        "id, email, ai_batch_id, ai_status, ai_email_subject, ai_email_body, ai_validation_status"
+      )
+      .eq("id", contactId)
+      .or(ownerFilter)
+      .maybeSingle();
+
+    if (!contact) {
+      return NextResponse.json(
+        { ok: false, error: "Contatto non trovato." },
+        { status: 404 }
+      );
+    }
+
+    const outreachBlock = getAiOutreachSendBlockReason(contact);
+    if (outreachBlock) {
+      return NextResponse.json(
+        { ok: false, error: outreachBlock },
+        { status: 409 }
+      );
+    }
+  } else if (!explicitContactId && matchedContactIds.length > 1) {
+    const { data: ambiguousMatches } = await supabase
+      .from("contacts")
+      .select(
+        "id, email, ai_batch_id, ai_status, ai_email_subject, ai_email_body, ai_validation_status"
+      )
+      .in("id", matchedContactIds);
+
+    for (const candidate of ambiguousMatches ?? []) {
+      if (getAiOutreachSendBlockReason(candidate)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "Più contatti corrispondono al destinatario e almeno uno è un outreach AI non approvato. Specifica contactId per disambiguare.",
+          },
+          { status: 409 }
+        );
+      }
+    }
+  }
 
   let replyMessageId: string | null = null;
   let replyReferences: string | null = null;
@@ -488,37 +558,7 @@ export async function POST(request: Request) {
     attachments: outboundAttachments,
   });
 
-  const explicitContactId =
-    typeof payload.contactId === "string" && payload.contactId.trim().length > 0
-      ? payload.contactId.trim()
-      : null;
-  const recipientAddresses = extractEmails(payload.to);
-  const matchedContactIds = explicitContactId
-    ? []
-    : await findContactIdsFromAddresses(
-      recipientAddresses.length ? recipientAddresses : [payload.to],
-      currentUser.id,
-      currentUser.canAccessLegacyData
-    );
-  const contactId =
-    explicitContactId ??
-    (matchedContactIds.length === 1 ? matchedContactIds[0] : null);
   const now = new Date().toISOString();
-
-  if (explicitContactId) {
-    const { data: contact } = await supabase
-      .from("contacts")
-      .select("id")
-      .eq("id", explicitContactId)
-      .or(ownerFilter)
-      .maybeSingle();
-    if (!contact) {
-      return NextResponse.json(
-        { ok: false, error: "Contatto non trovato." },
-        { status: 404 }
-      );
-    }
-  }
 
   const { data: insertedEmail, error: insertedEmailError } = await supabase
     .from("emails")

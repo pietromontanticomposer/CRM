@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadContactEmailHistory } from "@/lib/server/contactEmailHistory";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -140,6 +140,9 @@ export async function GET(request: Request, context: RouteContext) {
 
     return NextResponse.json({ emails, readMap });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("GET /api/contacts/[id]/emails unexpected error", error);
     return NextResponse.json(
       { error: getErrorMessage(error, "Impossibile caricare le email.") },

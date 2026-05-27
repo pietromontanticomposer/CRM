@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
-import { getOwnerFilter, requireCurrentUser } from "@/lib/server/currentUser";
+import { getOwnerFilter, isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +31,9 @@ export async function POST(_request: Request, context: RouteContext) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("POST /api/emails/[id]/read unexpected error", error);
     return NextResponse.json(
       { error: "Impossibile aggiornare la notifica." },

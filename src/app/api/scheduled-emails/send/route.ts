@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import { getAiOutreachSendBlockReason } from "@/lib/aiOutreach";
 import {
   SECOND_FOLLOW_UP_DAYS,
   buildAutomaticFollowUpNote,
@@ -167,6 +168,26 @@ export async function POST(request: Request) {
 
   for (const row of dueEmails as ScheduledRow[]) {
     try {
+      if (row.contact_id) {
+        const { data: contact } = await supabase
+          .from("contacts")
+          .select(
+            "id, email, ai_batch_id, ai_status, ai_email_subject, ai_email_body, ai_validation_status"
+          )
+          .eq("id", row.contact_id)
+          .eq("owner_id", row.owner_id)
+          .maybeSingle();
+
+        if (!contact) {
+          throw new Error("Contatto collegato alla schedulazione non trovato.");
+        }
+
+        const outreachBlock = getAiOutreachSendBlockReason(contact);
+        if (outreachBlock) {
+          throw new Error(outreachBlock);
+        }
+      }
+
       // Build transport
       let transport: ReturnType<typeof nodemailer.createTransport>;
       let fromAddress: string;

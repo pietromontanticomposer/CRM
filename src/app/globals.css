@@ -1,17 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0b0f17;
-  --bg-soft: #121826;
-  --panel: #0f1724;
-  --panel-strong: #162033;
-  --ink: #e6edf6;
-  --muted: #9aa6b2;
-  --accent: #4f8cff;
-  --accent-strong: #3b6fd1;
-  --line: #243246;
-  --accent-soft: #1c2b46;
-  --field-shadow: 0 1px 0 rgba(15, 23, 42, 0.5);
+  --bg: #08090b;
+  --bg-soft: #0d0e11;
+  --panel: #111317;
+  --panel-strong: #16181d;
+  --ink: #f0f1f3;
+  --muted: #7c828d;
+  --muted-strong: #a4abb7;
+  --accent: #5e6ad2;
+  --accent-strong: #4b53b8;
+  --accent-soft: #1c1f3c;
+  --line: #1f2228;
+  --line-strong: #2a2f38;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger: #f85149;
+  --field-shadow: none;
   --crm-pulse-blur: 0px;
   --crm-pulse-spread: 0px;
   --crm-pulse-alpha: 0.5;
@@ -36,12 +41,11 @@
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 10% -10%, #1f2a44 0%, transparent 60%),
-    radial-gradient(900px 400px at 90% 10%, #1a3a33 0%, transparent 55%),
-    linear-gradient(180deg, #0b0f17 0%, #0f1420 100%);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.005em;
 }
 
 * {
@@ -58,26 +62,22 @@ select,
 textarea {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--ink);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   outline: none;
-  padding: 0.55rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   width: 100%;
   min-width: 0;
   box-shadow: var(--field-shadow);
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 input:not([type="checkbox"]):not([type="radio"]):focus,
 select:focus,
 textarea:focus {
-  border-color: color-mix(in oklab, var(--accent) 70%, white 30%);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 20%, transparent);
-  transform: translateY(-1px);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 28%, transparent);
 }
 
 summary {
@@ -89,7 +89,7 @@ summary::-webkit-details-marker {
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--accent) 25%, white 75%);
+  background: color-mix(in oklab, var(--accent) 35%, transparent);
 }
 
 .email-html {
@@ -113,28 +113,28 @@ summary::-webkit-details-marker {
 }
 
 .crm-light-theme {
-  --bg: #f6f8fc;
-  --bg-soft: #eef3fb;
+  --bg: #fafafa;
+  --bg-soft: #f4f4f5;
   --panel: #ffffff;
-  --panel-strong: #f3f6fb;
-  --ink: #152033;
-  --muted: #5f6f84;
-  --accent: #2563eb;
-  --accent-strong: #1d4ed8;
-  --line: #d8e1ee;
-  --accent-soft: #dbeafe;
-  --field-shadow: 0 1px 0 rgba(148, 163, 184, 0.28);
-  background:
-    radial-gradient(960px 420px at 8% -8%, rgba(37, 99, 235, 0.16) 0%, transparent 58%),
-    radial-gradient(760px 340px at 92% 4%, rgba(16, 185, 129, 0.1) 0%, transparent 55%),
-    linear-gradient(180deg, #fbfcff 0%, #f1f5fb 100%);
+  --panel-strong: #fafafa;
+  --ink: #18181b;
+  --muted: #71717a;
+  --muted-strong: #52525b;
+  --accent: #5e6ad2;
+  --accent-strong: #4b53b8;
+  --accent-soft: #eef0fb;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  background: var(--bg);
   color: var(--ink);
   color-scheme: light;
 }
 
-
 .auto-follow-pulse {
-  --pulse-rgb: 99 102 241;
+  --pulse-rgb: 94 106 210;
 }
 
 .maintain-rapport-pulse {
@@ -150,8 +150,28 @@ summary::-webkit-details-marker {
 .scheduled-email-pulse {
   box-shadow: 0 0 var(--crm-pulse-blur) var(--crm-pulse-spread)
     rgb(var(--pulse-rgb) / var(--crm-pulse-alpha));
-  transition-duration: 150ms;
-  transition-property: background-color, border-color, color, transform;
+  transition-duration: 120ms;
+  transition-property: background-color, border-color, color;
   transition-timing-function: ease;
   will-change: box-shadow;
+}
+
+button {
+  letter-spacing: -0.005em;
+}
+
+/* Custom scrollbar */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
 }

@@ -1,26 +1,41 @@
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
-import { requireCurrentUser } from "@/lib/server/currentUser";
+import { isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 import { getSupabaseAdmin } from "@/lib/server/supabaseAdmin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const supabase = getSupabaseAdmin();
-  const user = await requireCurrentUser(supabase);
-  return NextResponse.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      legacy: user.canAccessLegacyData,
-    },
-  });
+  try {
+    const supabase = getSupabaseAdmin();
+    const user = await requireCurrentUser(supabase);
+    return NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        legacy: user.canAccessLegacyData,
+      },
+    });
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    throw error;
+  }
 }
 
 export async function DELETE() {
   const supabase = getSupabaseAdmin();
-  const user = await requireCurrentUser(supabase);
+  let user: Awaited<ReturnType<typeof requireCurrentUser>>;
+  try {
+    user = await requireCurrentUser(supabase);
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    throw error;
+  }
   if (user.canAccessLegacyData) {
     return NextResponse.json(
       { error: "Account principale non eliminabile da qui." },
