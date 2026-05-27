@@ -49,7 +49,7 @@ export default function CrmPage() {
   return (
     <div
       suppressHydrationWarning
-      className={`${theme === "light" ? "crm-light-theme" : ""} relative min-h-screen`}
+      className={`${theme === "light" ? "crm-light-theme" : ""} brand-page relative min-h-screen`}
     >
       <header className="brand-topbar sticky top-0 z-40">
         <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-6 px-6 py-3.5">
