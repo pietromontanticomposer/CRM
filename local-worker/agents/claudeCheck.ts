@@ -1,5 +1,4 @@
 import {
-  VALIDATOR_PROMPT_FILENAME,
   buildFailedResult,
   buildValidationPrompt,
   getInlineSchema,
@@ -14,10 +13,7 @@ export const runClaudeCheck = async (
   workingDirectory: string
 ): Promise<AgentRunResult> => {
   try {
-    const prompt = await buildValidationPrompt(
-      VALIDATOR_PROMPT_FILENAME,
-      packet
-    );
+    const prompt = await buildValidationPrompt("validator_claude.md", packet);
     const args = [
       "-p",
       prompt,

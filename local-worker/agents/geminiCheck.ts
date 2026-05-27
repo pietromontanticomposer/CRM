@@ -1,5 +1,4 @@
 import {
-  VALIDATOR_PROMPT_FILENAME,
   buildFailedResult,
   buildValidationPrompt,
   parseAgentOutput,
@@ -13,10 +12,7 @@ export const runGeminiCheck = async (
   workingDirectory: string
 ): Promise<AgentRunResult> => {
   try {
-    const prompt = await buildValidationPrompt(
-      VALIDATOR_PROMPT_FILENAME,
-      packet
-    );
+    const prompt = await buildValidationPrompt("validator_gemini.md", packet);
     const args = ["-p", prompt, "-o", "text"];
 
     if (process.env.GEMINI_MODEL?.trim()) {
