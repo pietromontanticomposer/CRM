@@ -117,33 +117,80 @@ const extractJsonObject = (raw: string): Record<string, unknown> | null => {
 const buildSearchPrompt = (input: EnrichmentInput): string => {
   const { pdf_full_text, source_file, ...identityFields } = input;
   const lines = [
-    "Devi trovare UNA singola email pubblica del regista o filmmaker indicato.",
-    "Hai a disposizione il testo COMPLETO del documento da cui è stato estratto il nome (catalogo festival, lista registi, programma).",
-    "Usalo per disambiguare: titoli di film, anno, festival, sezione, paese, produzione, biografia.",
-    "Cerca SOLO fonti pubbliche e verificabili (sito ufficiale, IMDB, Vimeo, FilmFreeway, sito della produzione, sito del festival).",
-    "Non inventare email. Se non sei sicuro, found:false.",
-    "Restituisci SOLO JSON valido, senza markdown.",
+    "RUOLO: sei un investigatore. Devi trovare l'email PUBBLICA di contatto di un regista/filmmaker, verificandola di persona.",
     "",
-    "Dati identificativi del contatto:",
+    "HAI ACCESSO A INTERNET. DEVI USARLO. Non rispondere senza aver effettivamente caricato pagine web.",
+    "",
+    "═══════════════════════════════════════════",
+    "METODO OBBLIGATORIO (esegui ESATTAMENTE in quest'ordine)",
+    "═══════════════════════════════════════════",
+    "",
+    "STEP 1 — CONTESTO DAL PDF",
+    "Cerca il NOME del regista nel testo del documento (PDF) qui sotto. Estrai:",
+    "- titolo/i del/dei suoi film",
+    "- sezione del festival, anno, paese di produzione",
+    "- casa di produzione se citata",
+    "Se il nome non è chiaramente identificabile nel PDF: torna {\"found\": false, \"reason\": \"Nome non trovato nel documento\"}.",
+    "",
+    "STEP 2 — RICERCA WEB MIRATA (USA IL WEB SEARCH TOOL ADESSO)",
+    "Esegui ALMENO 3 ricerche distinte combinando nome + contesto dal PDF:",
+    "  a) \"<nome regista>\" \"<titolo film più recente>\"",
+    "  b) \"<nome regista>\" site:imdb.com",
+    "  c) \"<nome regista>\" contact OR email OR contatti",
+    "  d) opzionale: \"<nome regista>\" \"<casa produzione>\"",
+    "",
+    "STEP 3 — APRI LE PAGINE E LEGGI",
+    "Per ogni risultato promettente (sito ufficiale, IMDb, FilmFreeway, Vimeo del regista, sito della produzione, sito del festival), USA IL WEB FETCH TOOL per caricare la pagina e LEGGERE il contenuto. NON inventare email basandoti solo sul nome del dominio.",
+    "",
+    "STEP 4 — VERIFICA",
+    "Quando trovi un candidato email:",
+    "  a) deve apparire LETTERALMENTE su una pagina pubblica che hai aperto (non solo dedotto)",
+    "  b) la pagina deve essere chiaramente ATTRIBUITA a QUESTA persona, non a un'altra con nome simile",
+    "  c) deve essere un'email di CONTATTO del regista (anche generica come info@suoSito.com va bene se il sito è il suo o della sua produzione)",
+    "  d) NON va bene: email di agenti/manager di celebrità senza che il regista la pubblichi direttamente; email scraped da sentry/wix/cdn; placeholder come info@example.com",
+    "",
+    "STEP 5 — RESPONSO",
+    "Se hai un'email VERIFICATA (vista con i tuoi occhi su una pagina aperta da te) → restituiscila con il source_url ESATTO della pagina dove l'hai vista.",
+    "Se hai trovato candidati ma non riesci a verificarli (es. pagina inaccessibile, email troppo generica senza prova chiara) → found:false con reason che spiega cosa hai provato.",
+    "Se non hai trovato nulla → found:false con reason che elenca le 3+ query tentate.",
+    "",
+    "═══════════════════════════════════════════",
+    "REGOLE ANTI-ALLUCINAZIONE",
+    "═══════════════════════════════════════════",
+    "- NON costruire email \"plausibili\" tipo nome.cognome@gmail.com se non le hai LETTE da una pagina pubblica.",
+    "- NON restituire l'email del festival (es. info@trentofestival.it) come email del regista.",
+    "- NON restituire l'email di un OMONIMO (es. un regista famoso con stesso nome).",
+    "- Per registi CELEBRI con solo agente/PR (Bong Joon-ho, Park Chan-wook, Robert Redford, ecc): preferisci found:false con reason \"raggiungibile solo via agente, non email diretta pubblica\".",
+    "- Per registi MORTI (Kim Ki-duk dec.2022, Sydney Pollack dec.2008, Arnold Fanck dec.1974, Blake Edwards dec.2010): found:false con reason \"deceduto\".",
+    "- In dubbio: found:false. È molto meglio non trovare che trovare l'email sbagliata.",
+    "",
+    "═══════════════════════════════════════════",
+    "DATI DI INPUT",
+    "═══════════════════════════════════════════",
+    "",
+    "Identità del contatto da cercare:",
     JSON.stringify(identityFields, null, 2),
   ];
   if (pdf_full_text && pdf_full_text.trim()) {
     lines.push(
       "",
-      `Testo completo del documento di origine${source_file ? ` (${source_file})` : ""}:`,
+      `Testo COMPLETO del documento di origine${source_file ? ` (${source_file})` : ""}:`,
       "<<<DOCUMENT_START>>>",
       pdf_full_text,
-      "<<<DOCUMENT_END>>>",
-      "",
-      "Cerca nel documento il contesto specifico che riguarda questo regista (titoli dei suoi film, anno, sezione del festival, paese, produzione) e usa quel contesto per la ricerca web mirata."
+      "<<<DOCUMENT_END>>>"
     );
   }
   lines.push(
     "",
-    "Schema di output obbligatorio:",
-    '{"found": true, "email": "...", "source_url": "...", "source_type": "official_site|production|festival|imdb|vimeo|filmfreeway|other", "reason": "..."}',
-    "oppure:",
-    '{"found": false, "reason": "..."}'
+    "═══════════════════════════════════════════",
+    "OUTPUT (SOLO JSON, NIENTE TESTO PRIMA O DOPO, NIENTE MARKDOWN)",
+    "═══════════════════════════════════════════",
+    "",
+    "Caso successo:",
+    '{"found": true, "email": "<email vista su pagina>", "source_url": "<URL ESATTO della pagina dove appare l\'email>", "source_type": "official_site|production|festival|imdb|vimeo|filmfreeway|other", "reason": "<frase: dove e come l\'hai verificata>"}',
+    "",
+    "Caso fallimento:",
+    '{"found": false, "reason": "<spiegazione concreta: query provate, pagine aperte, perche\' non hai trovato/verificato>"}'
   );
   return lines.join("\n");
 };
@@ -265,9 +312,16 @@ const searchByClaude = async (
     return failedProposal("claude", "Claude disattivato via env.");
   }
   const prompt = buildSearchPrompt(input);
+  // Web access: senza WebSearch + WebFetch Claude non puo' verificare i claim
+  // online. acceptEdits e' la permission-mode minima per eseguire i tool.
   const args = [
     "-p",
     prompt,
+    "--allowedTools",
+    "WebSearch",
+    "WebFetch",
+    "--permission-mode",
+    "acceptEdits",
     "--output-format",
     "text",
     "--no-session-persistence",
@@ -315,11 +369,13 @@ const searchByCodex = async (
         const tempFiles = await createSchemaTempFile();
         tempDirectory = tempFiles.directory;
         const outputFile = path.join(tempFiles.directory, "last-message.json");
+        // Sandbox read-only blocca anche la rete: passa a workspace-write
+        // per permettere a Codex di fare richieste HTTP durante la ricerca.
         const args = [
           "exec",
           "--skip-git-repo-check",
           "--sandbox",
-          "read-only",
+          "workspace-write",
           "--output-last-message",
           outputFile,
           "-",

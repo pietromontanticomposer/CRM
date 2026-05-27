@@ -83,6 +83,28 @@ const FORBIDDEN_WORDS = [
   "outside the box",
   "win-win",
   "touch base",
+  "reaching out",
+  "trust this email finds you",
+  // anti-bullshit IA italiano:
+  "Ho avuto modo di visionare",
+  "rimasto colpito dalla profondità",
+  "cura estetica",
+  "risonanza emotiva",
+  "raccontare le tue storie",
+  "raccontare le loro storie",
+  "amplificare l'emotività",
+  "amplificano la risonanza",
+  "match creativo",
+  "due chiacchiere",
+  "demo gratuita",
+  "playlist personalizzata",
+  "continuerò a seguire il tuo lavoro",
+  "bellezza visiva",
+  "potenza espressiva",
+  "intimismo poetico",
+  "atmosfera evocativa",
+  "sensibilità autentica",
+  "voce unica",
 ];
 
 const TEMPLATE_RULES: Record<string, string> = {

@@ -173,13 +173,16 @@ const runViaClaude = async (
     };
   }
   const prompt = await buildWriterPrompt(input);
+  // Web tools attivi: il Writer puo' verificare online i lavori del regista
+  // prima di citarli, riducendo il rischio di claim inventati.
   const args = [
     "-p",
     prompt,
-    "--tools",
-    "",
+    "--allowedTools",
+    "WebSearch",
+    "WebFetch",
     "--permission-mode",
-    "plan",
+    "acceptEdits",
     "--output-format",
     "text",
     "--no-session-persistence",
@@ -296,7 +299,7 @@ const runViaCodex = async (
           "exec",
           "--skip-git-repo-check",
           "--sandbox",
-          "read-only",
+          "workspace-write",
           "--output-last-message",
           outputFile,
           "-",
