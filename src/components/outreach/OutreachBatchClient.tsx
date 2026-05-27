@@ -401,7 +401,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
               <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--muted)]">
                 Worker AI · revisione batch
               </div>
-              <div className="brand-serif mt-1 text-xl font-semibold text-[var(--gold)]">
+              <div className="mt-1 text-base font-semibold text-[var(--ink)]">
                 {batchName || "Batch AI Outreach"}
               </div>
             </div>

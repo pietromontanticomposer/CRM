@@ -60,6 +60,64 @@ const STATUS_GROUPS = {
   ],
 } as const;
 
+type StatusToneClasses = {
+  idle: string;
+  active: string;
+  countIdle: string;
+  countActive: string;
+};
+
+const STATUS_PILL_TONES: Record<(typeof STATUS_OPTIONS)[number], StatusToneClasses> = {
+  "Attiva auto follow-up": {
+    idle: "border-sky-500/30 bg-sky-500/5 text-sky-200/80 hover:bg-sky-500/10 hover:text-sky-100",
+    active: "border-sky-400/70 bg-sky-500/15 text-sky-100",
+    countIdle: "text-sky-300/70",
+    countActive: "text-sky-200",
+  },
+  "In attesa": {
+    idle: "border-slate-500/30 bg-slate-500/5 text-slate-300/80 hover:bg-slate-500/10 hover:text-slate-100",
+    active: "border-slate-400/70 bg-slate-500/15 text-slate-100",
+    countIdle: "text-slate-400/80",
+    countActive: "text-slate-100",
+  },
+  "Azione richiesta": {
+    idle: "border-amber-500/30 bg-amber-500/5 text-amber-200/80 hover:bg-amber-500/10 hover:text-amber-100",
+    active: "border-amber-400/70 bg-amber-500/15 text-amber-100",
+    countIdle: "text-amber-300/70",
+    countActive: "text-amber-200",
+  },
+  "Non interessato": {
+    idle: "border-rose-500/30 bg-rose-500/5 text-rose-200/80 hover:bg-rose-500/10 hover:text-rose-100",
+    active: "border-rose-400/70 bg-rose-500/15 text-rose-100",
+    countIdle: "text-rose-300/70",
+    countActive: "text-rose-200",
+  },
+  "Mantenimento rapporto": {
+    idle: "border-teal-500/30 bg-teal-500/5 text-teal-200/80 hover:bg-teal-500/10 hover:text-teal-100",
+    active: "border-teal-400/70 bg-teal-500/15 text-teal-100",
+    countIdle: "text-teal-300/70",
+    countActive: "text-teal-200",
+  },
+  "Call prenotata": {
+    idle: "border-emerald-500/30 bg-emerald-500/5 text-emerald-200/80 hover:bg-emerald-500/10 hover:text-emerald-100",
+    active: "border-emerald-400/70 bg-emerald-500/15 text-emerald-100",
+    countIdle: "text-emerald-300/70",
+    countActive: "text-emerald-200",
+  },
+  "Contatto morto": {
+    idle: "border-zinc-500/30 bg-zinc-500/5 text-zinc-400 hover:bg-zinc-500/10 hover:text-zinc-200",
+    active: "border-zinc-400/70 bg-zinc-500/15 text-zinc-100",
+    countIdle: "text-zinc-500",
+    countActive: "text-zinc-200",
+  },
+  "Collaborazione stabilita": {
+    idle: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15 hover:text-emerald-100",
+    active: "border-emerald-400 bg-emerald-500/20 text-emerald-50",
+    countIdle: "text-emerald-300",
+    countActive: "text-emerald-100",
+  },
+};
+
 type MacroStatus = keyof typeof STATUS_GROUPS;
 type ContactFolder = "Tutte" | Status | MacroStatus;
 
@@ -3701,35 +3759,37 @@ export default function CrmApp({
       <div className="mx-auto w-full max-w-7xl px-0 pt-4 sm:px-2">
         <Link
           href="/crm/outreach/import"
-          className="group mb-6 flex items-center justify-between gap-6 rounded-md border border-dashed border-[var(--line-strong)] bg-[var(--panel)] px-6 py-6 transition hover:border-[var(--gold)]"
+          className="group mb-4 flex items-center justify-between gap-4 rounded-xl border-2 border-dashed border-[var(--line)] bg-[var(--panel)] px-5 py-5 transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
         >
-          <div className="flex items-center gap-5">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-[var(--line-strong)] bg-[var(--panel-strong)] text-[var(--muted-strong)] transition group-hover:border-[var(--gold)] group-hover:text-[var(--gold)]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <div className="flex items-center gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted-strong)] transition group-hover:border-[var(--accent)] group-hover:text-[var(--accent)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M12 3v12" />
                 <path d="m7 8 5-5 5 5" />
                 <path d="M5 21h14" />
               </svg>
             </div>
             <div>
-              <div className="brand-eyebrow brand-eyebrow--gold">Outreach · 3 AI</div>
-              <div className="brand-serif mt-1.5 text-2xl font-semibold leading-tight text-[var(--ink)]">
-                Importa <em className="italic font-normal text-[var(--gold)]">PDF</em>
+              <div className="text-base font-semibold text-[var(--ink)]">
+                Importa PDF · 3 AI lavorano per te
               </div>
-              <div className="mt-1.5 text-sm text-[var(--muted-strong)]">
-                Trascina un PDF con la lista registi · le 3 AI cercano i contatti, controllano e scrivono le email. Tu approvi.
+              <div className="mt-0.5 text-xs text-[var(--muted)]">
+                Trascina un PDF con la lista registi → cerco i contatti, controllo, scrivo le email. Tu approvi.
               </div>
             </div>
           </div>
-          <span className="brand-link-gold shrink-0">
-            Apri <span className="brand-link-arrow" aria-hidden>→</span>
+          <span
+            aria-hidden
+            className="shrink-0 rounded-md border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--muted-strong)] transition group-hover:border-[var(--accent)] group-hover:text-[var(--ink)]"
+          >
+            Apri →
           </span>
         </Link>
 
         {outreachBatchSummaries.length > 0 && (
-          <div className="mb-6">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <span className="brand-eyebrow brand-eyebrow--gold">
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
                 Batch AI in lavorazione
               </span>
               <span className="text-[11px] tabular-nums text-[var(--muted)]">
@@ -3823,23 +3883,23 @@ export default function CrmApp({
               key={card.key}
               type="button"
               onClick={card.onClick}
-              className="flex flex-col items-start gap-2 rounded-md border border-[var(--line)] bg-[var(--panel)] px-5 py-4 text-left transition hover:border-[var(--gold)]"
+              className="flex flex-col items-start gap-1.5 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-4 py-3 text-left transition hover:border-[var(--line-strong)]"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
                 <span className={`h-1.5 w-1.5 rounded-full ${card.dot}`} />
-                <span className="brand-eyebrow text-[10px]">{card.label}</span>
+                {card.label}
               </div>
-              <div className={`brand-serif text-4xl font-semibold tabular-nums leading-none ${card.tone}`}>
+              <div className={`text-2xl font-semibold tabular-nums ${card.tone}`}>
                 {card.value}
               </div>
             </button>
           ))}
         </div>
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setAddContactOpen(true)}
-            className="brand-cta-ghost"
+            className="inline-flex items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium text-[var(--ink)] transition hover:border-[var(--accent)]"
           >
             <span aria-hidden>+</span> Nuovo contatto
           </button>
@@ -3857,7 +3917,7 @@ export default function CrmApp({
           <div>
             <div className="sticky -top-5 z-30 -mx-5 mb-4 border-b border-[var(--line)] bg-[var(--panel)] px-5 pt-2 pb-3 rounded-t-3xl">
               <div className="flex items-center justify-between gap-2">
-                <span className="brand-eyebrow brand-eyebrow--gold">
+                <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">
                   Contatti
                 </span>
                 <span className="text-[11px] tabular-nums text-[var(--muted)]">
@@ -3905,19 +3965,18 @@ export default function CrmApp({
                     ...STATUS_GROUPS["Risposta ricevuta"],
                   ].map((status) => {
                     const active = contactFolder === status;
+                    const tone = STATUS_PILL_TONES[status];
                     return (
                       <button
                         key={status}
                         type="button"
                         onClick={() => setContactFolder(status)}
                         className={`rounded-md border px-2 py-0.5 text-[10px] font-medium transition ${
-                          active
-                            ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--ink)]"
-                            : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--ink)]"
+                          active ? tone.active : tone.idle
                         }`}
                       >
                         {getStatusLabel(status)}{" "}
-                        <span className="ml-1 tabular-nums text-[var(--muted-strong)]">
+                        <span className={`ml-1 tabular-nums ${active ? tone.countActive : tone.countIdle}`}>
                           {counts[status] ?? 0}
                         </span>
                       </button>

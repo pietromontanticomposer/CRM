@@ -297,8 +297,8 @@ export function OutreachImportClient() {
             >
               ← CRM
             </Link>
-            <h1 className="brand-serif text-lg font-semibold tracking-tight text-[var(--gold)]">
-              Importa <em className="italic font-normal">registi</em>
+            <h1 className="text-sm font-semibold tracking-tight text-[var(--ink)]">
+              Importa registi
             </h1>
           </div>
           <div className="flex items-center gap-2 text-[11px] tabular-nums text-[var(--muted)]">
@@ -611,17 +611,17 @@ export function OutreachImportClient() {
                 type="button"
                 disabled={importing || extracting || totals.contacts === 0}
                 onClick={() => void handleImport()}
-                className="brand-cta-primary mt-6 w-full"
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {importing ? (
                   <>
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-black/30 border-t-black" />
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                     Avvio in corso…
                   </>
                 ) : (
                   <>
-                    Avvia ricerca email + bozze · {totals.contacts}{" "}
-                    {totals.contacts === 1 ? "contatto" : "contatti"}
+                    Avvia ricerca email + bozze ({totals.contacts}{" "}
+                    {totals.contacts === 1 ? "contatto" : "contatti"})
                     <span aria-hidden>→</span>
                   </>
                 )}
