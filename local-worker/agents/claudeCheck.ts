@@ -36,8 +36,11 @@ export const runClaudeCheck = async (
       getInlineSchema(),
     ];
 
-    if (process.env.CLAUDE_MODEL?.trim()) {
-      args.push("--model", process.env.CLAUDE_MODEL.trim());
+    const model =
+      process.env.CLAUDE_VALIDATOR_MODEL?.trim() ||
+      process.env.CLAUDE_MODEL?.trim();
+    if (model) {
+      args.push("--model", model);
     }
 
     const result = await runCommand({

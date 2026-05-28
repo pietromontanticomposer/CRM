@@ -381,12 +381,12 @@ const processContact = async (
       typeof facts.pdf_full_text === "string" ? facts.pdf_full_text : null;
     const sourceFile =
       typeof facts.source_file === "string" ? facts.source_file : null;
-    // Per la ricerca email mando solo il pezzo di PDF attorno al nome (1/10
-    // del payload medio) — velocita' notevole senza perdere disambiguazione.
+    // Per la ricerca email mando solo il pezzo di PDF attorno al nome (1/20
+    // del payload medio) — il contesto stretto basta per disambiguare.
     const pdfChunkForEnrichment = extractContextChunk(
       pdfFullText,
       contact.name,
-      5000
+      2500
     );
     const enrichment = await findPublicEmail(
       {

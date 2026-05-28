@@ -44,11 +44,12 @@ type AgentEmailProposal = {
   raw_output: string;
 };
 
-// Timeout calibrati col PDF gia' chunked dal worker: payload medio 5KB
-// invece di 50KB+, risposte tipiche 15-40s.
-const GEMINI_TIMEOUT_MS = 45_000;
-const CLAUDE_TIMEOUT_MS = 60_000;
-const CODEX_TIMEOUT_MS = 75_000;
+// Timeout aggressivi: con chunk a 2.5KB le AI sono molto piu' veloci.
+// Se una delle 3 va in timeout non e' un problema: il consensus sopravvive
+// con le altre 2 (e' proprio per questo che ne lanciamo 3).
+const GEMINI_TIMEOUT_MS = 30_000;
+const CLAUDE_TIMEOUT_MS = 45_000;
+const CODEX_TIMEOUT_MS = 60_000;
 
 const JUNK_EMAIL_SUFFIXES = [
   ".png",

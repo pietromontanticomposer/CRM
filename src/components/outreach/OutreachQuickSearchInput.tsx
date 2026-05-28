@@ -5,17 +5,23 @@ import { useRouter } from "next/navigation";
 
 const SECTION_STORAGE_KEY = "crm-section";
 
-// Estrae un nome plausibile dalla prima parte del testo (tutto cio' che sta
-// prima della prima virgola). Cosi' "Mario Rossi, regista di X" -> name="Mario Rossi",
-// e l'intera stringa va in pdf_full_text come "documento" di contesto.
+// Estrae un nome plausibile (~2 parole) dall'input dell'utente.
+// "diego carli verona monitus"   -> name="diego carli"   (resto = contesto)
+// "Mario Rossi, regista di X"    -> name="Mario Rossi"  (virgola interrompe)
+// "Maria Grazia Cucinotta, X"    -> name="Maria Grazia Cucinotta" (virgola dopo 3 parole)
+// L'intero testo originale viene poi passato come pdf_full_text alle AI
+// cosi' hanno comunque accesso a tutta l'info aggiuntiva (citta', produzione, etc).
 const extractName = (raw: string): string => {
   const trimmed = raw.trim();
   if (!trimmed) return "";
-  const beforeComma = trimmed.split(/[,\n]/)[0]?.trim();
-  if (beforeComma && beforeComma.length <= 80) return beforeComma;
-  // Fallback: prime 4 parole
-  const words = trimmed.split(/\s+/).slice(0, 4).join(" ");
-  return words.slice(0, 80);
+  // Se c'e' una virgola/newline/parentesi, prendi tutto prima
+  const beforeBreak = trimmed.split(/[,\n(]/)[0]?.trim();
+  if (beforeBreak && beforeBreak.length <= 80 && beforeBreak.length < trimmed.length) {
+    return beforeBreak;
+  }
+  // Altrimenti: prime 2 parole (default per "Nome Cognome")
+  const words = trimmed.split(/\s+/);
+  return words.slice(0, 2).join(" ").slice(0, 80);
 };
 
 export function OutreachQuickSearchInput() {

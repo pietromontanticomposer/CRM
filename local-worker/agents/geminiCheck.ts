@@ -21,8 +21,13 @@ export const runGeminiCheck = async (
     );
     const args = ["-p", prompt, "-o", "text"];
 
-    if (process.env.GEMINI_MODEL?.trim()) {
-      args.push("-m", process.env.GEMINI_MODEL.trim());
+    // GEMINI_VALIDATOR_MODEL prevale se settato (per usare gemini-2.5-flash
+    // sui validatori e tenere il modello piu' lento solo per writer/enrichment).
+    const model =
+      process.env.GEMINI_VALIDATOR_MODEL?.trim() ||
+      process.env.GEMINI_MODEL?.trim();
+    if (model) {
+      args.push("-m", model);
     }
 
     const result = await runCommand({

@@ -41,8 +41,11 @@ export const runCodexCheck = async (
       "-",
     ];
 
-    if (process.env.CODEX_MODEL?.trim()) {
-      args.splice(1, 0, "--model", process.env.CODEX_MODEL.trim());
+    const model =
+      process.env.CODEX_VALIDATOR_MODEL?.trim() ||
+      process.env.CODEX_MODEL?.trim();
+    if (model) {
+      args.splice(1, 0, "--model", model);
     }
 
     const result = await runCommand({
