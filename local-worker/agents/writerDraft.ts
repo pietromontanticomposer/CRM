@@ -414,9 +414,9 @@ export const runWriterDraft = async (
   input: WriterInput,
   workingDirectory: string
 ): Promise<WriterDraftResult | WriterDraftError> => {
-  // Decisione architetturale (Pietro 2026-05-27): la mail la scrive UNA sola AI
-  // (Claude), non un consensus a 3. Il consensus a 3 e' riservato ai validatori
-  // che controllano la veridicita' della bozza. Cosi' la voce della mail resta
-  // coerente e meno "media-da-3-modelli".
-  return runViaClaude(input, workingDirectory).then((attempt) => attempt.outcome);
+  // Decisione architetturale (Pietro 2026-05-28): la mail la scrive ChatGPT
+  // via Codex CLI. I validatori (Claude + Gemini + Codex) si occupano poi di
+  // controllare che ogni claim sul regista sia documentato. Voce coerente +
+  // verifica indipendente.
+  return runViaCodex(input, workingDirectory).then((attempt) => attempt.outcome);
 };
