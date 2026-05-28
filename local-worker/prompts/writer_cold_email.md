@@ -407,6 +407,13 @@ GIRO 4 — anti-duplicazione (CRITICO):
 - nessun altra frase del body e' ripetuta?
 - se SI a una delle due: riscrivi rimuovendo la duplicazione.
 
+GIRO 5 — coerenza subject ↔ body (CRITICO):
+- il subject e' il TITOLO DI UN LAVORO (Template A o B)? Se si', il BODY deve descrivere QUEL lavoro, non un altro.
+- ESEMPIO SBAGLIATO: subject="I Found You" ma body descrive la trama di "Monitus" → INCOERENTE. Riscrivi: o subject="Monitus" (e body su Monitus) o subject="I Found You" (e body su I Found You).
+- ESEMPIO GIUSTO: subject="Monitus" + body cita "Monitus" e la sua trama.
+- Pick ONE lavoro e stai su quello. NON mischiare due lavori diversi nello stesso messaggio.
+- Se hai dubbi su quale lavoro citare → scegli quello con piu' info documentate.
+
 REGOLA FINALE:
 Meglio Template C onesto che Template A inventato.
 
