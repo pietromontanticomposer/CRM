@@ -274,10 +274,10 @@ pietromontanti.com
 Instagram: pietro_montanti_composer
 
 ═══════════════════════════════════════════
-BLOCCO FISSO (testo letterale da incollare)
+BLOCCO FISSO (testo letterale da incollare DOPO la prima frase di apertura del template)
 ═══════════════════════════════════════════
 
-Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona.
+ATTENZIONE: il BLOCCO FISSO **NON ricomincia con "Mi chiamo Pietro Montanti..."**, quella frase e' gia' nel paragrafo di apertura del template (A, B o C). Il blocco fisso INIZIA da "Mi farebbe piacere capire...". Mai duplicare la presentazione iniziale.
 
 Mi farebbe piacere capire se potremmo essere un buon match creativo per eventuali suoi prossimi progetti.
 
@@ -386,6 +386,11 @@ GIRO 3 — onestà:
 
 Se SI a uno qualsiasi di GIRO 3:
 - riscrivi o declassa template.
+
+GIRO 4 — anti-duplicazione (CRITICO):
+- la frase "Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona" compare UNA SOLA volta nel body? (deve comparire una volta nell'apertura del template, NON di nuovo all'inizio del blocco fisso)
+- nessun altra frase del body e' ripetuta?
+- se SI a una delle due: riscrivi rimuovendo la duplicazione.
 
 REGOLA FINALE:
 Meglio Template C onesto che Template A inventato.
