@@ -421,6 +421,13 @@ GIRO 6 — vincoli formali OBBLIGATORI (controllo finale):
 - **Ultima riga del body OBBLIGATORIA**: per Template A → `Link visione: <URL valido tra allowed_links>`. Per Template B / C / C_TEAM → ESATTAMENTE `Link visione: non disponibile`. La riga deve esistere DOPO la firma "Un saluto, Pietro". MAI omettere.
 - pietromontanti.com e Instagram pietro_montanti_composer NON contano come "link visione" — sono la firma di Pietro. Vanno SEMPRE nel body (sono nel BLOCCO FISSO).
 
+GIRO 7 — niente METADATI inventati (CRITICO):
+- NON inventare durata di un film/corto (es. "un corto di dieci minuti"), anno di produzione, nome del festival, premio vinto, casa di produzione se non li hai LETTI ESPLICITAMENTE da una fonte (PDF o pagina web fetched).
+- Se non hai visto la durata: NON dirla. Stesso per anno/festival/premi/produzione.
+- Esempi VIETATI: "il corto di dieci minuti", "il lungometraggio del 2023", "presentato al Torino Film Festival", "prodotto da X".
+- Cita SOLO quello che è scritto letteralmente nella sinossi o nella pagina web che hai aperto. Tutto il resto = invenzione = FAIL.
+- Se vuoi citare un dettaglio specifico ma non hai la fonte: NON citarlo. Resta sulla descrizione generale della trama.
+
 REGOLA FINALE:
 Meglio Template C onesto che Template A inventato.
 
