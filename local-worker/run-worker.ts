@@ -114,7 +114,10 @@ const getSupabase = () =>
 // nel BLOCCO FISSO autorizzato di Pietro (es. "match creativo", "raccontare
 // la loro storia", "continuero' a seguire"). NON aggiungerle qui o i
 // validatori bloccheranno bozze formalmente perfette.
+// IMPORTANTE: la stringa "Link visione" e' OBBLIGATORIA nel template, quindi
+// NON inserire mai "visione" da sola in blacklist.
 const FORBIDDEN_WORDS = [
+  // anti-cringe inglese
   "I hope this email finds you well",
   "Spero che questa email ti trovi bene",
   "leverage",
@@ -125,6 +128,7 @@ const FORBIDDEN_WORDS = [
   "touch base",
   "reaching out",
   "trust this email finds you",
+  // anti-bullshit IA italiano
   "Ho avuto modo di visionare",
   "rimasto colpito dalla profondità",
   "cura estetica",
@@ -140,6 +144,18 @@ const FORBIDDEN_WORDS = [
   "atmosfera evocativa",
   "sensibilità autentica",
   "voce unica",
+  // blacklist esplicita di Pietro (prompt writer 2026-05-28)
+  "proposta",
+  "collaborazione",
+  "valore",
+  "allineare",
+  "rafforzare",
+  "coinvolgente",
+  "rigore narrativo",
+  "linguaggio visivo",
+  "visione artistica",
+  "la sua visione",
+  "vostra visione",
 ];
 
 const TEMPLATE_RULES: Record<string, string> = {
