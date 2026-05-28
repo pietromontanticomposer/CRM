@@ -12,73 +12,81 @@ import {
   type ValidationPacket,
 } from "./shared";
 
+const CODEX_VALIDATOR_TIMEOUT_MS = 180_000;
+
 export const runCodexCheck = async (
   packet: ValidationPacket,
   workingDirectory: string
 ): Promise<AgentRunResult> => {
-  let tempDirectory: string | null = null;
-
-  try {
-    const prompt = await buildValidationPrompt(
-      VALIDATOR_PROMPT_FILENAME,
-      packet
+  let timer: NodeJS.Timeout | null = null;
+  const timeoutPromise = new Promise<AgentRunResult>((resolve) => {
+    timer = setTimeout(
+      () =>
+        resolve(
+          buildFailedResult(
+            "codex",
+            `Timeout Codex validator (${CODEX_VALIDATOR_TIMEOUT_MS}ms).`
+          )
+        ),
+      CODEX_VALIDATOR_TIMEOUT_MS
     );
-    // tempDirectory serve solo per --output-last-message; lo schema non lo
-    // usiamo piu' ma riutilizzo createSchemaTempFile() perche' crea la dir
-    // temp che gia' ci serve.
-    const tempFiles = await createSchemaTempFile();
-    tempDirectory = tempFiles.directory;
-    const outputFile = path.join(tempFiles.directory, "last-message.json");
-    // Web access: il sandbox read-only blocca anche la rete su molte versioni
-    // del CLI. workspace-write permette network ed e' sicuro perche' la dir
-    // di lavoro e' temporanea.
-    // Diagnostica Pietro 2026-05-28: con --output-schema + reasoning medium
-    // Codex usciva con exit code 1 senza output. Tolgo --output-schema:
-    // parseAgentOutput estrae comunque il JSON dal testo. Lascio reasoning
-    // default (xhigh).
-    const args = [
-      "exec",
-      "--skip-git-repo-check",
-      "--sandbox",
-      "workspace-write",
-      "--output-last-message",
-      outputFile,
-      "-",
-    ];
-
-    const model =
-      process.env.CODEX_VALIDATOR_MODEL?.trim() ||
-      process.env.CODEX_MODEL?.trim();
-    if (model) {
-      args.splice(1, 0, "--model", model);
-    }
-
-    const result = await runCommand({
-      command: "codex",
-      args,
-      cwd: workingDirectory,
-      stdin: prompt,
-    });
-    const fileOutput = await readFile(outputFile, "utf8").catch(() => "");
-    const rawOutput = fileOutput.trim() || result.stdout.trim() || result.stderr.trim();
-
-    if (result.code !== 0) {
+  });
+  const work = (async (): Promise<AgentRunResult> => {
+    let tempDirectory: string | null = null;
+    try {
+      const prompt = await buildValidationPrompt(
+        VALIDATOR_PROMPT_FILENAME,
+        packet
+      );
+      const tempFiles = await createSchemaTempFile();
+      tempDirectory = tempFiles.directory;
+      const outputFile = path.join(tempFiles.directory, "last-message.json");
+      const args = [
+        "exec",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "workspace-write",
+        "--output-last-message",
+        outputFile,
+        "-",
+      ];
+      const model =
+        process.env.CODEX_VALIDATOR_MODEL?.trim() ||
+        process.env.CODEX_MODEL?.trim();
+      if (model) {
+        args.splice(1, 0, "--model", model);
+      }
+      const result = await runCommand({
+        command: "codex",
+        args,
+        cwd: workingDirectory,
+        stdin: prompt,
+      });
+      const fileOutput = await readFile(outputFile, "utf8").catch(() => "");
+      const rawOutput =
+        fileOutput.trim() || result.stdout.trim() || result.stderr.trim();
+      if (result.code !== 0) {
+        return buildFailedResult(
+          "codex",
+          `Codex CLI exited with code ${result.code ?? "unknown"}.`,
+          rawOutput
+        );
+      }
+      return parseAgentOutput("codex", rawOutput);
+    } catch (error) {
       return buildFailedResult(
         "codex",
-        `Codex CLI exited with code ${result.code ?? "unknown"}.`,
-        rawOutput
+        error instanceof Error ? error.message : "Codex CLI non disponibile."
       );
+    } finally {
+      if (tempDirectory) {
+        await cleanupTempDirectory(tempDirectory);
+      }
     }
-
-    return parseAgentOutput("codex", rawOutput);
-  } catch (error) {
-    return buildFailedResult(
-      "codex",
-      error instanceof Error ? error.message : "Codex CLI non disponibile."
-    );
+  })();
+  try {
+    return await Promise.race([work, timeoutPromise]);
   } finally {
-    if (tempDirectory) {
-      await cleanupTempDirectory(tempDirectory);
-    }
+    if (timer) clearTimeout(timer);
   }
 };
