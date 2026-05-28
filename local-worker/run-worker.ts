@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
@@ -421,13 +422,24 @@ const processContact = async (
     !isNonEmptyString(contact.ai_email_body)
   ) {
     console.log(`${logPrefix(contact)} draft mancante, invoco Writer`);
+    // BUGFIX 2026-05-28: il writer riceveva solo 5 campi e NON il PDF full
+    // text. Senza pdf_full_text il writer non aveva contesto per cercare i
+    // lavori del regista -> finiva sempre in NOT_READY anche se l'enrichment
+    // aveva trovato l'email. Passo tutto il contesto.
     const writerOutcome = await runWriterDraft(
       {
         name: contact.name,
         email: contact.email,
+        company: contact.company,
         source_link: contact.source_link,
         notes: contact.notes,
         language: contact.language,
+        role: contact.role,
+        section: contact.section,
+        verified_facts_json: contact.verified_facts_json,
+        email_source_url: contact.email_source_url,
+        email_confidence: contact.email_confidence,
+        email_enrichment_status: contact.email_enrichment_status,
       },
       PROJECT_ROOT
     );
@@ -554,6 +566,58 @@ const main = async () => {
     await sleep(WORKER_POLL_MS);
   }
 };
+
+// Single-instance lock: previene che 2 worker girino in parallelo e processino
+// lo stesso draft 2 volte (bug diagnosticato 2026-05-28, double validator runs).
+const LOCK_FILE = path.join(PROJECT_ROOT, ".local-worker.lock");
+
+const acquireLock = (): boolean => {
+  if (existsSync(LOCK_FILE)) {
+    try {
+      const existingPid = Number.parseInt(readFileSync(LOCK_FILE, "utf8").trim(), 10);
+      if (!Number.isNaN(existingPid)) {
+        try {
+          process.kill(existingPid, 0); // 0 = solo signal-check, no kill
+          console.error(
+            `[worker] LOCK: un altro worker e' gia' attivo (PID ${existingPid}). Uscita.`
+          );
+          return false;
+        } catch {
+          // PID non esistente: lock stale, rimuovo
+          console.warn(
+            `[worker] LOCK stale (PID ${existingPid} non esiste piu'), riprendo`
+          );
+          unlinkSync(LOCK_FILE);
+        }
+      } else {
+        unlinkSync(LOCK_FILE);
+      }
+    } catch (error) {
+      console.warn("[worker] LOCK file illeggibile, lo rimuovo", error);
+      try { unlinkSync(LOCK_FILE); } catch { /* noop */ }
+    }
+  }
+  writeFileSync(LOCK_FILE, String(process.pid), "utf8");
+  return true;
+};
+
+const releaseLock = () => {
+  try {
+    if (existsSync(LOCK_FILE)) {
+      const pid = Number.parseInt(readFileSync(LOCK_FILE, "utf8").trim(), 10);
+      if (pid === process.pid) unlinkSync(LOCK_FILE);
+    }
+  } catch {
+    // noop
+  }
+};
+
+if (!acquireLock()) {
+  process.exit(1);
+}
+process.on("SIGINT", () => { releaseLock(); process.exit(0); });
+process.on("SIGTERM", () => { releaseLock(); process.exit(0); });
+process.on("exit", releaseLock);
 
 main().catch((error) => {
   console.error("[worker] fatal error", error);

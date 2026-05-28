@@ -13,6 +13,7 @@ const PROMPTS_DIR = path.resolve(AGENTS_DIR, "../prompts");
 export type WriterInput = {
   name: string;
   email: string | null;
+  company?: string | null;
   source_link: string | null;
   notes: string | null;
   language: string | null;
