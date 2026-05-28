@@ -81,11 +81,17 @@ export const aggregateResults = (
       ai_validation_status = "passed";
       summary = "Validazione completata: Gemini, Claude e Codex approvano.";
     }
-  } else if (approvedCount === 2) {
+  } else if (approvedCount >= 1) {
+    // Pietro 2026-05-29: se ALMENO 1 validatore approva, la bozza va a
+    // revisione manuale (non bloccata). Il writer puo' aver citato un lavoro
+    // vero che gli altri validatori non riescono a verificare via web in
+    // questa sessione — meglio che decida Pietro.
     ai_status = "needs_review";
     ai_validation_status = "needs_review";
     const blockers = [...rejected, ...failedAgents].join(", ");
-    summary = `Serve revisione manuale: ${blockers} ha segnalato problemi.`;
+    summary = blockers
+      ? `Serve revisione manuale: ${blockers} ha segnalato problemi.`
+      : "Serve revisione manuale.";
   } else {
     ai_status = "blocked";
     ai_validation_status = "blocked";

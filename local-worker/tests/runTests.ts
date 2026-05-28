@@ -142,14 +142,14 @@ run("aggregator: 2/3 approved => needs_review", () => {
   assert.equal(out.ai_validation_status, "needs_review");
 });
 
-run("aggregator: 1/3 approved => blocked", () => {
+run("aggregator: 1/3 approved => needs_review (revisione manuale)", () => {
   const out = aggregateResults([
     makeResult("gemini"),
     makeResult("claude", { approved: false }),
     makeResult("codex", { approved: false }),
   ]);
-  assert.equal(out.ai_status, "blocked");
-  assert.equal(out.ai_validation_status, "blocked");
+  assert.equal(out.ai_status, "needs_review");
+  assert.equal(out.ai_validation_status, "needs_review");
 });
 
 run("aggregator: 0/3 approved => blocked", () => {
@@ -179,13 +179,13 @@ run("aggregator: 1 failed + 2 approved => needs_review (failed conta come non-ap
   assert.equal(out.ai_send_allowed, false);
 });
 
-run("aggregator: 2 failed + 1 approved => blocked", () => {
+run("aggregator: 2 failed + 1 approved => needs_review (revisione manuale)", () => {
   const out = aggregateResults([
     makeResult("gemini"),
     makeResult("claude", { failed: true, approved: false, send_allowed: false }),
     makeResult("codex", { failed: true, approved: false, send_allowed: false }),
   ]);
-  assert.equal(out.ai_status, "blocked");
+  assert.equal(out.ai_status, "needs_review");
   assert.equal(out.ai_send_allowed, false);
 });
 
