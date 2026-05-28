@@ -153,6 +153,29 @@ const normalizeCreatePayload = (value: unknown): ContactInsert | null => {
   };
 };
 
+// Difensiva server-side: anche se il client manda l'intero testo digitato
+// dall'utente come name (es. cache browser vecchia con extractName non
+// aggiornata), il server riduce a "prime 2 parole / prima virgola" come fa
+// il client. Cosi' "diego carli monitus verona regista" -> "diego carli".
+const normalizeContactName = (raw: string): string => {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const beforeBreak = trimmed.split(/[,\n(]/)[0]?.trim();
+  if (
+    beforeBreak &&
+    beforeBreak.length <= 80 &&
+    beforeBreak.length < trimmed.length
+  ) {
+    return beforeBreak;
+  }
+  // Se 5+ parole senza virgola, tronca a 2 (probabile input non normalizzato)
+  const words = trimmed.split(/\s+/);
+  if (words.length >= 5) {
+    return words.slice(0, 2).join(" ").slice(0, 80);
+  }
+  return trimmed.slice(0, 80);
+};
+
 const normalizeOutreachImportRow = (
   value: unknown,
   fallbackSection: ContactSection,
@@ -160,7 +183,8 @@ const normalizeOutreachImportRow = (
 ): OutreachImportRow | null => {
   if (!value || typeof value !== "object") return null;
   const payload = value as Record<string, unknown>;
-  const name = normalizeString(payload.name);
+  const rawName = normalizeString(payload.name);
+  const name = normalizeContactName(rawName);
   const company = normalizeString(payload.company);
 
   if (!name && !company) {

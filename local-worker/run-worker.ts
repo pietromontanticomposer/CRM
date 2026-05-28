@@ -109,6 +109,10 @@ const getSupabase = () =>
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+// NOTA: alcune frasi che potrebbero sembrare "AI-cringe" sono in realta'
+// nel BLOCCO FISSO autorizzato di Pietro (es. "match creativo", "raccontare
+// la loro storia", "continuero' a seguire"). NON aggiungerle qui o i
+// validatori bloccheranno bozze formalmente perfette.
 const FORBIDDEN_WORDS = [
   "I hope this email finds you well",
   "Spero che questa email ti trovi bene",
@@ -120,20 +124,15 @@ const FORBIDDEN_WORDS = [
   "touch base",
   "reaching out",
   "trust this email finds you",
-  // anti-bullshit IA italiano:
   "Ho avuto modo di visionare",
   "rimasto colpito dalla profondità",
   "cura estetica",
   "risonanza emotiva",
-  "raccontare le tue storie",
-  "raccontare le loro storie",
   "amplificare l'emotività",
   "amplificano la risonanza",
-  "match creativo",
   "due chiacchiere",
   "demo gratuita",
   "playlist personalizzata",
-  "continuerò a seguire il tuo lavoro",
   "bellezza visiva",
   "potenza espressiva",
   "intimismo poetico",

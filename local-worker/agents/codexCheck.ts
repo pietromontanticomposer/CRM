@@ -29,11 +29,15 @@ export const runCodexCheck = async (
     // Web access: il sandbox read-only blocca anche la rete su molte versioni
     // del CLI. workspace-write permette network ed e' sicuro perche' la dir
     // di lavoro e' temporanea.
+    // medium reasoning: i validatori non hanno bisogno di reasoning xhigh,
+    // controllano regole + cercano su web se serve disambiguazione.
     const args = [
       "exec",
       "--skip-git-repo-check",
       "--sandbox",
       "workspace-write",
+      "-c",
+      "model_reasoning_effort=medium",
       "--output-schema",
       tempFiles.file,
       "--output-last-message",

@@ -73,11 +73,11 @@ PARTE 3 — CONTROLLI BOZZA
 
 i. Subject:
    - presente, non vuoto, non solo whitespace
-   - lunghezza 25-80 caratteri
+   - lunghezza max 80 caratteri (NESSUN minimo: il template B/C usa il nome del lavoro che spesso e' una sola parola corta tipo "Monitus")
    - non in MAIUSCOLO integrale
    - non termina con punto esclamativo
    - non contiene clickbait ("URGENTE", "IMPORTANTE", ecc.)
-   - se viola condizione bloccante (vuoto/troppo lungo): `draft_ok=false`; per le altre: issue + `suggested_status="needs_review"`.
+   - se vuoto o >80 char: `draft_ok=false`; per le altre: issue + `suggested_status="needs_review"`.
 
 j. Body:
    - non vuoto, non solo whitespace

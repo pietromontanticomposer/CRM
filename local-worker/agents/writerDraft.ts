@@ -47,11 +47,11 @@ type AgentDraftAttempt = {
   outcome: WriterDraftResult | WriterDraftError;
 };
 
-// Solo Claude scrive le bozze ora (vedi runWriterDraft sotto). Gemini/Codex
-// restano in file ma con timeout abbassato come fallback non usato.
+// Codex (writer attivo) richiede piu' tempo: usa reasoning xhigh per default
+// e fa web search per verificare claim. 240s e' la finestra realistica.
 const CLAUDE_TIMEOUT_MS = 120_000;
 const GEMINI_TIMEOUT_MS = 90_000;
-const CODEX_TIMEOUT_MS = 120_000;
+const CODEX_TIMEOUT_MS = 240_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -297,11 +297,16 @@ const runViaCodex = async (
         const tempFiles = await createSchemaTempFile();
         tempDirectory = tempFiles.directory;
         const outputFile = path.join(tempFiles.directory, "last-message.json");
+        // reasoning_effort=medium e' un ottimo compromesso: xhigh (default su
+        // gpt-5) e' molto piu' lento e raramente porta gain misurabile per
+        // questa task. -c override del config.toml.
         const args = [
           "exec",
           "--skip-git-repo-check",
           "--sandbox",
           "workspace-write",
+          "-c",
+          "model_reasoning_effort=medium",
           "--output-last-message",
           outputFile,
           "-",
