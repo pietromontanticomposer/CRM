@@ -63,7 +63,12 @@ e. `email_enrichment_status`:
    - "found_public" → richiede `email_source_url` valido (http/https, host plausibile) e `email_confidence ≥ 0.5`. Altrimenti `send_allowed=false`.
    - "needs_review" → `send_allowed=false`.
    - "not_found" / "error" → `email_ok=false`, `send_allowed=false`.
-f. Dominio email generico (gmail.com, yahoo.com, hotmail.com, icloud.com, libero.it, ecc.) ammesso solo se `email_source_url` punta a una pagina pubblica del regista o della produzione e `email_confidence ≥ 0.5`. Verifica via web che l'URL sia raggiungibile e mostri davvero quella email.
+f. Dominio email generico (gmail.com, yahoo.com, hotmail.com, icloud.com, libero.it, ecc.) ammesso se TUTTE queste condizioni sono true:
+   - `email_source_url` e' settato e NON e' un dominio di esempio
+   - `email_confidence ≥ 0.5`
+   - (preferibile ma non obbligatorio) puoi verificare via web che l'URL sia raggiungibile
+   Se `email_source_url` e' settato a un URL plausibile (es. sito ufficiale, trepalchi.it, sito festival, IMDb, FilmFreeway, Vimeo, sito produzione), considera l'email VALIDA anche se non puoi fetcharlo in questo momento. NON bloccare per "non verificabile in questa sessione".
+   Solo se `email_source_url` e' null OR puntare a placeholder/example.com → blocca.
 g. Coerenza nome ↔ email/dominio: il local-part deve contenere almeno un token del nome del destinatario, oppure il dominio deve contenere almeno un token della produzione. Se nessuna delle due: `contact_ok=false`.
 h. Verifica via web che l'email proposta non appartenga PALESEMENTE a un'altra persona (es. cerca l'email su Google e vedi a chi è associata).
 
@@ -94,7 +99,14 @@ m. Template (A, B, C, C_TEAM, NOT_READY) coerente con materiale disponibile:
    - NOT_READY: dati insufficienti, subject/body vuoti
    Se mismatch: `draft_ok=false`.
 
-n. Link visione: se compare un URL nel body, deve essere uno tra `allowed_links` (match esatto, escluso solo trailing slash) oppure il body deve contenere letterale "Link visione: non disponibile" o equivalente esplicito. Altrimenti: `draft_ok=false`.
+n. Link visione: il body DEVE contenere su una riga la dicitura `Link visione: <URL>` (Template A) oppure ESATTAMENTE `Link visione: non disponibile` (Template B/C/C_TEAM). Se manca la riga "Link visione:" del tutto → `draft_ok=false`. Per Template A: l'URL dopo "Link visione:" deve essere uno tra `allowed_links`.
+
+**IMPORTANTE — NON sono link visione e quindi NON vanno controllati**:
+- `pietromontanti.com` e `https://pietromontanti.com` (sito personale di Pietro, parte della firma)
+- `pietro_montanti_composer` (handle Instagram, parte della firma)
+- `https://www.instagram.com/pietro_montanti_composer`
+- `https://soundcloud.com/pietromontanticomposer/*` (portfolio)
+Questi compaiono SEMPRE nel body (sono nel BLOCCO FISSO autorizzato di Pietro) e NON devono essere segnalati come "URL non in allowed_links". Il check link visione si applica SOLO alla riga letterale `Link visione: ...`.
 
 o. Link visione URL valido: http/https, host plausibile, no localhost/IP raw/domini esempio. Altrimenti: `draft_ok=false`.
 

@@ -341,7 +341,9 @@ Salve (Nome)!
 
 Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona. Mi sono imbattuto nel suo lavoro "(nome lavoro)" navigando online e mi sono letto la descrizione del progetto.
 
-Ammiro davvero il modo in cui (elemento ricavato SOLO dalla sinossi ufficiale). Secondo me funziona perché (motivazione coerente e concreta).
+Ammiro davvero il modo in cui (elemento ricavato SOLO dalla sinossi ufficiale, citato CON le STESSE PAROLE / parafrasi MOLTO STRETTA della sinossi — niente interpretazioni libere, niente atmosfere inventate, niente claim emotivi inferiti). Secondo me funziona perché (motivazione concreta basata su dati della sinossi: genere, ambientazione, struttura).
+
+REGOLA STRETTA Template B: SE non puoi citare letteralmente un dettaglio della sinossi (titolo + 1 fatto concreto dal testo della sinossi), NON usare Template B. Declassa a Template C. Inventare una descrizione plausibile = FALLIMENTO ASSOLUTO della task.
 
 (INCOLLA QUI IL BLOCCO FISSO)
 
@@ -413,6 +415,11 @@ GIRO 5 — coerenza subject ↔ body (CRITICO):
 - ESEMPIO GIUSTO: subject="Monitus" + body cita "Monitus" e la sua trama.
 - Pick ONE lavoro e stai su quello. NON mischiare due lavori diversi nello stesso messaggio.
 - Se hai dubbi su quale lavoro citare → scegli quello con piu' info documentate.
+
+GIRO 6 — vincoli formali OBBLIGATORI (controllo finale):
+- **Lunghezza body MAX 260 parole** (saluto+firma inclusi). Conta. Se >260: riscrivi piu' stretto (taglia frasi ridondanti, accorcia il paragrafo "Ammiro davvero..."). NON superare 260.
+- **Ultima riga del body OBBLIGATORIA**: per Template A → `Link visione: <URL valido tra allowed_links>`. Per Template B / C / C_TEAM → ESATTAMENTE `Link visione: non disponibile`. La riga deve esistere DOPO la firma "Un saluto, Pietro". MAI omettere.
+- pietromontanti.com e Instagram pietro_montanti_composer NON contano come "link visione" — sono la firma di Pietro. Vanno SEMPRE nel body (sono nel BLOCCO FISSO).
 
 REGOLA FINALE:
 Meglio Template C onesto che Template A inventato.
