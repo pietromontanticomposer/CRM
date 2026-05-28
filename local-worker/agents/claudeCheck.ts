@@ -8,7 +8,7 @@ import {
   type ValidationPacket,
 } from "./shared";
 
-const CLAUDE_VALIDATOR_TIMEOUT_MS = 150_000;
+const CLAUDE_VALIDATOR_TIMEOUT_MS = 300_000;
 
 export const runClaudeCheck = async (
   packet: ValidationPacket,

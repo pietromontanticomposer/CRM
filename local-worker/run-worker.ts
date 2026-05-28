@@ -278,12 +278,17 @@ const persistAgentAudit = async (
   }
 };
 
-const runAllAgents = async (packet: ValidationPacket) =>
-  Promise.all([
-    runGeminiCheck(packet, PROJECT_ROOT),
-    runClaudeCheck(packet, PROJECT_ROOT),
-    runCodexCheck(packet, PROJECT_ROOT),
-  ]);
+// Diagnosi 2026-05-28 (Pietro): in parallelo i 3 CLI competono per CPU e
+// vanno tutti in timeout. Misura isolata: Gemini 81s, Claude 114s, Codex 216s.
+// In serie: ~411s totali, no contention, ognuno entro il suo timeout.
+const runAllAgents = async (
+  packet: ValidationPacket
+): Promise<AgentRunResult[]> => {
+  const gemini = await runGeminiCheck(packet, PROJECT_ROOT);
+  const claude = await runClaudeCheck(packet, PROJECT_ROOT);
+  const codex = await runCodexCheck(packet, PROJECT_ROOT);
+  return [gemini, claude, codex];
+};
 
 const describeAgentIssues = (agent: AiAgentName, result: AgentRunResult) => {
   const firstIssue = result.issues[0];

@@ -8,7 +8,7 @@ import {
   type ValidationPacket,
 } from "./shared";
 
-const GEMINI_VALIDATOR_TIMEOUT_MS = 180_000;
+const GEMINI_VALIDATOR_TIMEOUT_MS = 300_000;
 
 export const runGeminiCheck = async (
   packet: ValidationPacket,

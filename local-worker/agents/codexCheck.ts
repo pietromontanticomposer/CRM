@@ -12,7 +12,7 @@ import {
   type ValidationPacket,
 } from "./shared";
 
-const CODEX_VALIDATOR_TIMEOUT_MS = 240_000;
+const CODEX_VALIDATOR_TIMEOUT_MS = 360_000;
 
 export const runCodexCheck = async (
   packet: ValidationPacket,
