@@ -44,9 +44,11 @@ type AgentEmailProposal = {
   raw_output: string;
 };
 
-const GEMINI_TIMEOUT_MS = 60_000;
-const CLAUDE_TIMEOUT_MS = 90_000;
-const CODEX_TIMEOUT_MS = 120_000;
+// Timeout calibrati col PDF gia' chunked dal worker: payload medio 5KB
+// invece di 50KB+, risposte tipiche 15-40s.
+const GEMINI_TIMEOUT_MS = 45_000;
+const CLAUDE_TIMEOUT_MS = 60_000;
+const CODEX_TIMEOUT_MS = 75_000;
 
 const JUNK_EMAIL_SUFFIXES = [
   ".png",

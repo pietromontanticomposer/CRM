@@ -63,13 +63,46 @@ const WORKER_POLL_MS = Math.max(
   5000,
   Number.parseInt(process.env.OUTREACH_WORKER_POLL_MS ?? "15000", 10) || 15000
 );
+// Concorrenza piu' aggressiva (10 contatti contemporaneamente). Su Mac
+// M-series con 9 CLI calls per contatto (3 enrichment + 1 writer + 3
+// validatori, parzialmente seriali) restiamo sotto ai limiti pratici.
 const WORKER_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.OUTREACH_WORKER_CONCURRENCY ?? "5", 10) || 5
+  Number.parseInt(process.env.OUTREACH_WORKER_CONCURRENCY ?? "10", 10) || 10
 );
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
+
+// Estrae dal pdf_full_text una finestra di ±radius caratteri attorno al nome
+// del destinatario. Usata SOLO per l'enrichment (ricerca email): mandare il
+// PDF intero a 3 AI per ogni contatto e' rumore e tempo sprecato. Writer e
+// validatori continuano a ricevere il pdf_full_text completo perche' devono
+// poter verificare i claim contro l'intero documento.
+const extractContextChunk = (
+  fullText: string | null | undefined,
+  name: string,
+  radius = 5000
+): string | null => {
+  if (!fullText || !fullText.trim() || !name?.trim()) return fullText ?? null;
+  // Match case-insensitive del nome (o di una sua variante separata da spazi)
+  const safe = name
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+");
+  const regex = new RegExp(safe, "i");
+  const match = regex.exec(fullText);
+  if (!match || match.index === undefined) {
+    // Nome non trovato: meglio mandare i primi 10k caratteri che niente
+    return fullText.slice(0, Math.min(fullText.length, radius * 2));
+  }
+  const start = Math.max(0, match.index - radius);
+  const end = Math.min(fullText.length, match.index + name.length + radius);
+  let chunk = fullText.slice(start, end);
+  if (start > 0) chunk = "[…contesto precedente troncato…]\n" + chunk;
+  if (end < fullText.length) chunk += "\n[…contesto seguente troncato…]";
+  return chunk;
+};
 
 const getSupabase = () =>
   createClient(getRequiredEnv("SUPABASE_URL"), getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
@@ -348,6 +381,13 @@ const processContact = async (
       typeof facts.pdf_full_text === "string" ? facts.pdf_full_text : null;
     const sourceFile =
       typeof facts.source_file === "string" ? facts.source_file : null;
+    // Per la ricerca email mando solo il pezzo di PDF attorno al nome (1/10
+    // del payload medio) — velocita' notevole senza perdere disambiguazione.
+    const pdfChunkForEnrichment = extractContextChunk(
+      pdfFullText,
+      contact.name,
+      5000
+    );
     const enrichment = await findPublicEmail(
       {
         name: contact.name,
@@ -356,7 +396,7 @@ const processContact = async (
         notes: contact.notes,
         city: null,
         language: contact.language,
-        pdf_full_text: pdfFullText,
+        pdf_full_text: pdfChunkForEnrichment,
         source_file: sourceFile,
       },
       PROJECT_ROOT

@@ -47,9 +47,11 @@ type AgentDraftAttempt = {
   outcome: WriterDraftResult | WriterDraftError;
 };
 
-const CLAUDE_TIMEOUT_MS = 180_000;
-const GEMINI_TIMEOUT_MS = 120_000;
-const CODEX_TIMEOUT_MS = 180_000;
+// Solo Claude scrive le bozze ora (vedi runWriterDraft sotto). Gemini/Codex
+// restano in file ma con timeout abbassato come fallback non usato.
+const CLAUDE_TIMEOUT_MS = 120_000;
+const GEMINI_TIMEOUT_MS = 90_000;
+const CODEX_TIMEOUT_MS = 120_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
