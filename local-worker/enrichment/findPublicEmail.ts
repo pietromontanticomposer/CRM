@@ -44,12 +44,13 @@ type AgentEmailProposal = {
   raw_output: string;
 };
 
-// Timeout aggressivi: con chunk a 2.5KB le AI sono molto piu' veloci.
-// Se una delle 3 va in timeout non e' un problema: il consensus sopravvive
-// con le altre 2 (e' proprio per questo che ne lanciamo 3).
-const GEMINI_TIMEOUT_MS = 30_000;
-const CLAUDE_TIMEOUT_MS = 45_000;
-const CODEX_TIMEOUT_MS = 60_000;
+// Timeout generosi: il vero collo di bottiglia non e' la dimensione del
+// prompt ma il numero/latenza di WebSearch + WebFetch che ogni AI fa per
+// verificare l'email. 30/45/60s erano troppo poco — diagnosticato dai log
+// (Pietro 2026-05-28): tutti e 3 in timeout su "diego carli monitus verona".
+const GEMINI_TIMEOUT_MS = 90_000;
+const CLAUDE_TIMEOUT_MS = 120_000;
+const CODEX_TIMEOUT_MS = 150_000;
 
 const JUNK_EMAIL_SUFFIXES = [
   ".png",

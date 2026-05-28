@@ -23,23 +23,24 @@ export const runCodexCheck = async (
       VALIDATOR_PROMPT_FILENAME,
       packet
     );
+    // tempDirectory serve solo per --output-last-message; lo schema non lo
+    // usiamo piu' ma riutilizzo createSchemaTempFile() perche' crea la dir
+    // temp che gia' ci serve.
     const tempFiles = await createSchemaTempFile();
     tempDirectory = tempFiles.directory;
     const outputFile = path.join(tempFiles.directory, "last-message.json");
     // Web access: il sandbox read-only blocca anche la rete su molte versioni
     // del CLI. workspace-write permette network ed e' sicuro perche' la dir
     // di lavoro e' temporanea.
-    // medium reasoning: i validatori non hanno bisogno di reasoning xhigh,
-    // controllano regole + cercano su web se serve disambiguazione.
+    // Diagnostica Pietro 2026-05-28: con --output-schema + reasoning medium
+    // Codex usciva con exit code 1 senza output. Tolgo --output-schema:
+    // parseAgentOutput estrae comunque il JSON dal testo. Lascio reasoning
+    // default (xhigh).
     const args = [
       "exec",
       "--skip-git-repo-check",
       "--sandbox",
       "workspace-write",
-      "-c",
-      "model_reasoning_effort=medium",
-      "--output-schema",
-      tempFiles.file,
       "--output-last-message",
       outputFile,
       "-",

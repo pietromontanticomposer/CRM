@@ -2,7 +2,6 @@ import {
   VALIDATOR_PROMPT_FILENAME,
   buildFailedResult,
   buildValidationPrompt,
-  getInlineSchema,
   parseAgentOutput,
   runCommand,
   type AgentRunResult,
@@ -18,9 +17,11 @@ export const runClaudeCheck = async (
       VALIDATOR_PROMPT_FILENAME,
       packet
     );
-    // Web access: WebSearch + WebFetch sono i tool di Claude per cercare
-    // online e leggere pagine. Senza, il validatore non puo' verificare i
-    // claim contro fonti pubbliche.
+    // Web access: WebSearch + WebFetch per verificare i claim contro fonti
+    // pubbliche. NON usiamo --json-schema: con tool use attivo Claude a
+    // volte mescola la risposta finale a output intermedio, e il vincolo
+    // schema forzato puo' far svuotare l'output. Il parser robusto in
+    // parseAgentOutput estrae comunque il JSON dal testo.
     const args = [
       "-p",
       prompt,
@@ -32,8 +33,6 @@ export const runClaudeCheck = async (
       "--output-format",
       "text",
       "--no-session-persistence",
-      "--json-schema",
-      getInlineSchema(),
     ];
 
     const model =
