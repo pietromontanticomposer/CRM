@@ -576,23 +576,17 @@ const processContact = async (
   const draftAlreadyExists =
     isNonEmptyString(contact.ai_email_subject) &&
     isNonEmptyString(contact.ai_email_body);
-  // MOSSA INTELLIGENTE #2 (Pietro 2026-06-01): salta anche le email DEBOLI.
-  // Un'email con confidence < 0.5 verrebbe bloccata comunque dai 3 validatori
-  // (stessa soglia che usano loro per i domini generici) -> scrivere la bozza e
-  // validarla e' ~5 min sprecati. Tengo il lavoro completo SOLO per email solide.
-  const emailDebole =
-    typeof contact.email_confidence === "number" &&
-    contact.email_confidence < 0.5;
-  const emailInutilizzabile =
-    !isNonEmptyString(contact.email) || emailDebole;
+  // FIX 2026-06-04: salta SOLO se non e' stata trovata NESSUNA email.
+  // BUG precedente: saltava anche le email con confidence < 0.5. Ma con
+  // l'enrichment a 2 AI un'email trovata da UN SOLO agente vale 0.4
+  // (needs_review) -> sono PROPRIO i lead che Pietro vuole rivedere a mano,
+  // e la soglia 0.5 li cancellava TUTTI. L'email "debole" la ricontrollano
+  // comunque i 3 validatori + l'approvazione manuale: e' il senso del sistema.
+  const emailInutilizzabile = !isNonEmptyString(contact.email);
   if (emailInutilizzabile && !draftAlreadyExists) {
-    await markSkippedNoEmail(supabase, contact, emailDebole);
+    await markSkippedNoEmail(supabase, contact);
     console.log(
-      `${logPrefix(contact)} SALTATO -> ${
-        emailDebole
-          ? "email troppo debole (confidence < 0.5)"
-          : "nessuna email trovata dopo ricerca esaustiva"
-      }`
+      `${logPrefix(contact)} SALTATO -> nessuna email trovata dopo ricerca esaustiva`
     );
     return;
   }
