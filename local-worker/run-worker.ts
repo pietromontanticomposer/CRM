@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { execSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -826,42 +825,48 @@ const releaseLock = () => {
 // lock, cosi' non si accumulano mai piu' istanze che competono per la CPU
 // (causa concreta della lentezza diagnosticata 2026-05-28).
 const terminateOtherWorkers = () => {
-  let pids: number[] = [];
+  // Cross-platform (Mac e Windows): il PID del worker precedente e' salvato nel
+  // lock file da acquireLock(). Niente "pgrep"/"sleep" (non esistono su
+  // Windows): il lancio piu' recente VINCE e chiude il predecessore.
+  let previousPid: number | null = null;
   try {
-    const out = execSync('pgrep -f "run-worker.ts"', { encoding: "utf8" });
-    pids = out
-      .split(/\s+/)
-      .map((value) => Number.parseInt(value, 10))
-      .filter((value) => Number.isFinite(value));
+    if (existsSync(LOCK_FILE)) {
+      const parsed = Number.parseInt(readFileSync(LOCK_FILE, "utf8").trim(), 10);
+      if (Number.isFinite(parsed)) previousPid = parsed;
+    }
   } catch {
-    // pgrep esce 1 (nessun match) o non disponibile: niente da fare.
     return;
   }
-  const others = pids.filter(
-    (pid) => pid !== process.pid && pid !== process.ppid
-  );
-  if (!others.length) return;
-  for (const pid of others) {
-    try {
-      process.kill(pid, "SIGTERM");
-      console.warn(`[worker] takeover: chiudo worker preesistente PID ${pid}`);
-    } catch {
-      /* gia' morto */
-    }
+  if (
+    previousPid === null ||
+    previousPid === process.pid ||
+    previousPid === process.ppid
+  ) {
+    return;
   }
-  // Diamo 2s per lo shutdown pulito (releaseLock), poi SIGKILL i superstiti.
   try {
-    execSync("sleep 2");
+    process.kill(previousPid, 0); // 0 = solo signal-check, no kill
+  } catch {
+    return; // gia' morto: niente da fare
+  }
+  try {
+    process.kill(previousPid, "SIGTERM");
+    console.warn(`[worker] takeover: chiudo worker preesistente PID ${previousPid}`);
+  } catch {
+    return;
+  }
+  // Attesa sincrona ~2s (cross-platform, senza comandi esterni) per lasciare
+  // tempo allo shutdown pulito (releaseLock), poi SIGKILL se ancora vivo.
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
   } catch {
     /* noop */
   }
-  for (const pid of others) {
-    try {
-      process.kill(pid, 0);
-      process.kill(pid, "SIGKILL");
-    } catch {
-      /* gia' morto: ok */
-    }
+  try {
+    process.kill(previousPid, 0);
+    process.kill(previousPid, "SIGKILL");
+  } catch {
+    /* gia' morto: ok */
   }
 };
 
