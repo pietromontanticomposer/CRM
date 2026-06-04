@@ -52,17 +52,13 @@ const RESULT_SCHEMA = {
     email_ok: { type: "boolean" },
     draft_ok: { type: "boolean" },
     send_allowed: { type: "boolean" },
+    // NB: array di SOLE stringhe. Serve per essere strict-compatibile con
+    // `codex --output-schema` (OpenAI structured output: niente
+    // additionalProperties:true, niente anyOf con oggetti liberi). Il prompt
+    // chiede comunque issue come stringhe brevi, e normalizeIssues le gestisce.
     issues: {
       type: "array",
-      items: {
-        anyOf: [
-          { type: "string" },
-          {
-            type: "object",
-            additionalProperties: true,
-          },
-        ],
-      },
+      items: { type: "string" },
     },
     suggested_status: { type: "string" },
   },

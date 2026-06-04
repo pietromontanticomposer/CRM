@@ -55,7 +55,12 @@ const computeSteps = (
     { label: "3-agent", state: "pending" as StepState },
     { label: "Review", state: "pending" as StepState },
   ];
-  if (!status || status === "not_checked" || status === "imported") {
+  if (
+    !status ||
+    status === "not_checked" ||
+    status === "imported" ||
+    status === "processing"
+  ) {
     steps[1].state = "active";
     return steps;
   }
@@ -103,6 +108,8 @@ const summarizeStatus = (status: string | null) => {
   switch (status) {
     case "imported":
       return "In coda — il Writer sta per partire";
+    case "processing":
+      return "In lavorazione — sta cercando l'email e scrivendo la bozza";
     case "draft_ready":
       return "Bozza generata — i 3 agenti la stanno controllando";
     case "approved":
@@ -123,7 +130,12 @@ const isReady = (status: string | null) =>
 
 const priorityOf = (status: string | null) => {
   if (status === "needs_review") return 0;
-  if (status === "draft_ready" || status === "imported") return 1;
+  if (
+    status === "draft_ready" ||
+    status === "imported" ||
+    status === "processing"
+  )
+    return 1;
   if (status === "approved") return 2;
   if (status === "blocked") return 3;
   return 4;
@@ -199,6 +211,15 @@ const readApiError = async (response: Response, fallback: string) => {
   return fallback;
 };
 
+const formatDuration = (ms: number) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+};
+
 export function OutreachBatchClient({ batchId }: { batchId: string }) {
   const [contacts, setContacts] = useState<BatchContact[]>([]);
   const [batchName, setBatchName] = useState<string | null>(null);
@@ -253,14 +274,49 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   useEffect(() => {
     const stillProcessing = contacts.some(
       (contact) =>
-        contact.ai_status === "imported" || contact.ai_status === "draft_ready"
+        contact.ai_status === "imported" || contact.ai_status === "draft_ready" || contact.ai_status === "processing"
     );
     if (!stillProcessing) return;
     const id = window.setInterval(() => {
       void loadBatch({ silent: true });
-    }, 3000);
+    }, 1000);
     return () => window.clearInterval(id);
   }, [contacts, loadBatch]);
+
+  const stillProcessing = useMemo(
+    () =>
+      contacts.some(
+        (contact) =>
+          contact.ai_status === "imported" ||
+          contact.ai_status === "draft_ready" ||
+          contact.ai_status === "processing"
+      ),
+    [contacts]
+  );
+
+  // Timer di elaborazione: da quanto il worker sta lavorando questo batch.
+  // Lo start e' persistito in localStorage (sopravvive ai refresh), e si
+  // "congela" quando non c'e' piu' niente in coda (fine giro).
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    const key = `outreach_timer_${batchId}`;
+    if (stillProcessing) {
+      let start = Number(window.localStorage.getItem(key) || 0);
+      if (!start) {
+        start = Date.now();
+        window.localStorage.setItem(key, String(start));
+      }
+      const tick = () => setElapsedMs(Date.now() - start);
+      tick();
+      const id = window.setInterval(tick, 1000);
+      return () => window.clearInterval(id);
+    }
+    const start = Number(window.localStorage.getItem(key) || 0);
+    if (start) {
+      setElapsedMs(Date.now() - start);
+      window.localStorage.removeItem(key);
+    }
+  }, [stillProcessing, batchId]);
 
   const counts = useMemo(() => {
     let processed = 0;
@@ -300,7 +356,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     () =>
       contacts.some(
         (contact) =>
-          contact.ai_status === "imported" || contact.ai_status === "draft_ready"
+          contact.ai_status === "imported" || contact.ai_status === "draft_ready" || contact.ai_status === "processing"
       ),
     [contacts]
   );
@@ -492,6 +548,20 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            {(stillProcessing || elapsedMs > 0) && (
+              <span
+                className={`rounded-full border px-3 py-1 font-semibold tabular-nums ${
+                  stillProcessing
+                    ? "border-sky-500/40 bg-sky-500/10 text-sky-200"
+                    : "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)]"
+                }`}
+                title="Tempo di elaborazione del worker su questo batch"
+              >
+                {stillProcessing ? "⏱ " : "✓ "}
+                {formatDuration(elapsedMs)}
+                {stillProcessing ? "" : " totali"}
+              </span>
+            )}
             <span className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 font-semibold text-[var(--muted)]">
               {counts.processed}/{counts.total} processati
             </span>
@@ -685,6 +755,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                         }`}
                       >
                         {(contact.ai_status === "imported" ||
+                          contact.ai_status === "processing" ||
                           contact.ai_status === "draft_ready" ||
                           !contact.ai_status ||
                           contact.ai_status === "not_checked") && (

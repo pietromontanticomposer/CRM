@@ -506,10 +506,14 @@ export const findPublicEmail = async (
   }
 
   try {
+    // FIX 2026-06-01 (E1 sovraccarico): enrichment con 2 AI invece di 3.
+    // Con worker concurrency e enrichment in parallelo si arrivava a ~9 CLI
+    // pesanti insieme -> saturazione rete/CPU -> timeout a catena e crash.
+    // Tolto codex (il piu' lento, ~150s, e quello che si impalla): resta il
+    // consenso gemini+claude, e i 3 validatori ricontrollano comunque l'email.
     const proposals = await Promise.all([
       searchByGemini(input, workingDirectory),
       searchByClaude(input, workingDirectory),
-      searchByCodex(input, workingDirectory),
     ]);
     return consensusFromProposals(proposals);
   } catch (error) {

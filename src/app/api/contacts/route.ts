@@ -729,7 +729,40 @@ export async function POST(request: Request) {
         );
       }
 
+      // ANTI-DOPPIONI (Pietro 2026-06-01): re-importare lo stesso PDF NON deve
+      // creare copie. Salto i registi gia' presenti in outreach_drafts (stesso
+      // owner, per nome) e i doppioni dentro lo stesso import.
+      const existingNames = new Set<string>();
+      try {
+        const existingRes = await fetch(
+          `${supabaseUrl}/rest/v1/outreach_drafts?owner_id=eq.${user.id}&select=name&limit=100000`,
+          {
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+            },
+          }
+        );
+        if (existingRes.ok) {
+          const existing = (await existingRes.json()) as { name?: string }[];
+          for (const e of existing) {
+            if (typeof e.name === "string" && e.name.trim()) {
+              existingNames.add(e.name.trim().toLowerCase());
+            }
+          }
+        }
+      } catch {
+        // se il check fallisce proseguo senza dedup: meglio importare che bloccare
+      }
+      let skippedDuplicates = 0;
+
       for (const row of importPayload.contacts) {
+        const dupKey = row.name.trim().toLowerCase();
+        if (dupKey && existingNames.has(dupKey)) {
+          skippedDuplicates += 1;
+          continue;
+        }
+        if (dupKey) existingNames.add(dupKey);
         const draftPayload = {
           owner_id: user.id,
           batch_id: batchId,
@@ -776,6 +809,15 @@ export async function POST(request: Request) {
           const errPayload = await response
             .json()
             .catch(() => ({ message: response.statusText }));
+          // BLINDATURA ANTI-DOPPIONI: la regola UNIQUE del DB (owner_id + nome
+          // normalizzato) rifiuta i doppioni con 409 / codice 23505. NON e' un
+          // errore: e' la rete di sicurezza. Salto la riga e proseguo invece di
+          // interrompere tutto l'import.
+          const errCode = (errPayload as { code?: string })?.code;
+          if (response.status === 409 || errCode === "23505") {
+            skippedDuplicates += 1;
+            continue;
+          }
           console.error("POST /api/contacts outreach draft insert failed", errPayload);
           return NextResponse.json(
             {
@@ -797,6 +839,7 @@ export async function POST(request: Request) {
             id: batchId,
             name: importPayload.batchName,
             total_contacts: drafts.length,
+            skipped_duplicates: skippedDuplicates,
           },
           drafts,
         },

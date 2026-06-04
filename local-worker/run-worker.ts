@@ -1,4 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { execSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadEnv } from "dotenv";
@@ -10,6 +12,7 @@ import { runCodexCheck } from "./agents/codexCheck";
 import { runGeminiCheck } from "./agents/geminiCheck";
 import type { AgentRunResult, ValidationPacket } from "./agents/shared";
 import { runWriterDraft, type WriterDraftResult } from "./agents/writerDraft";
+import { runContactTriage } from "./agents/triageContact";
 import {
   findPublicEmail,
   type EnrichmentResult,
@@ -38,6 +41,9 @@ type DraftQueueRow = {
   ai_status: string;
   ai_email_subject: string | null;
   ai_email_body: string | null;
+  ai_template_used: string | null;
+  ai_link_visione: string | null;
+  ai_risk_score_numeric: number | null;
   verified_facts_json: unknown;
   source_link: string | null;
   prompt_master_rules: string | null;
@@ -64,12 +70,23 @@ const WORKER_POLL_MS = Math.max(
   5000,
   Number.parseInt(process.env.OUTREACH_WORKER_POLL_MS ?? "15000", 10) || 15000
 );
-// Concorrenza piu' aggressiva (10 contatti contemporaneamente). Su Mac
-// M-series con 9 CLI calls per contatto (3 enrichment + 1 writer + 3
-// validatori, parzialmente seriali) restiamo sotto ai limiti pratici.
+// Concorrenza calibrata sulla CPU REALE della macchina. Ogni contatto puo'
+// scatenare fino a 9 CLI calls pesanti (3 enrichment + 1 writer + 3
+// validatori, gia' seriali tra loro). Su questo Mac (Intel i7, 4 core
+// fisici / 8 logici, 2014) tenere 10 contatti in volo = thrash di CPU e
+// timeout a catena: ERA il vero motivo della lentezza. Regola: ~1 contatto
+// ogni 3 core logici, clamp [2,4]. Override con OUTREACH_WORKER_CONCURRENCY.
+const CPU_COUNT = os.cpus().length || 4;
+// FIX 2026-06-01 (E1 sovraccarico): clamp abbassato [2,4] -> [1,2]. Con
+// enrichment ora a 2 AI e worker a 2 contatti, il picco scende da ~9 a ~4 CLI
+// pesanti insieme: niente piu' saturazione/crash sul Mac 4-core.
+const DEFAULT_CONCURRENCY = Math.max(1, Math.min(2, Math.round(CPU_COUNT / 3)));
 const WORKER_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.OUTREACH_WORKER_CONCURRENCY ?? "10", 10) || 10
+  Number.parseInt(
+    process.env.OUTREACH_WORKER_CONCURRENCY ?? String(DEFAULT_CONCURRENCY),
+    10
+  ) || DEFAULT_CONCURRENCY
 );
 
 const isNonEmptyString = (value: unknown): value is string =>
@@ -109,6 +126,22 @@ const getSupabase = () =>
   createClient(getRequiredEnv("SUPABASE_URL"), getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+// Pietro 2026-06-01: i contatti che NON approva personalmente NON devono
+// restare nel database. Cancello la riga via REST col service key (il client
+// supabase-js a volte non cancella per una policy RLS; la REST col service role
+// funziona sempre, come la route /approve).
+const deleteDraftRow = async (id: string) => {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return;
+  await fetch(`${url}/rest/v1/outreach_drafts?id=eq.${id}`, {
+    method: "DELETE",
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  }).catch((e) => {
+    console.warn(`[worker] delete draft ${id.slice(0, 8)} fallito:`, e);
+  });
+};
 
 // NOTA: alcune frasi che potrebbero sembrare "AI-cringe" sono in realta'
 // nel BLOCCO FISSO autorizzato di Pietro (es. "match creativo", "raccontare
@@ -209,9 +242,9 @@ const buildPacket = (contact: DraftQueueRow): ValidationPacket => {
     verified_facts_json: contact.verified_facts_json ?? {},
     draft_subject: contact.ai_email_subject?.trim() ?? "",
     draft_body: contact.ai_email_body?.trim() ?? "",
-    draft_link_visione: "",
-    draft_template_used: "",
-    draft_risk_score: null,
+    draft_link_visione: contact.ai_link_visione?.trim() ?? "",
+    draft_template_used: contact.ai_template_used?.trim() ?? "",
+    draft_risk_score: contact.ai_risk_score_numeric ?? null,
     source_link: contact.source_link,
     notes: contact.notes,
     prompt_master_rules: contact.prompt_master_rules,
@@ -230,9 +263,9 @@ const fetchQueue = async (supabase: ReturnType<typeof getSupabase>) => {
   const { data, error } = await supabase
     .from("outreach_drafts")
     .select(
-      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason"
+      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, ai_template_used, ai_link_visione, ai_risk_score_numeric, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason"
     )
-    .in("ai_status", ["imported", "draft_ready"])
+    .in("ai_status", ["imported", "draft_ready", "processing"])
     .order("updated_at", { ascending: true })
     .limit(WORKER_LIMIT);
 
@@ -261,6 +294,34 @@ const setContactError = async (
       ai_agent_checks_json: {},
     })
     .eq("id", contact.id);
+};
+
+// Scartato dal triage: non e' una persona reale (titolo di film, nazione,
+// intestazione, spazzatura). Riusiamo lo stato "blocked" cosi' non serve una
+// nuova migration; il summary spiega che e' stato scartato in automatico.
+// Pietro NON deve toccarlo a mano: resta visibile come "bloccato" e basta.
+const markDiscarded = async (
+  _supabase: ReturnType<typeof getSupabase>,
+  contact: DraftQueueRow,
+  _reason: string
+) => {
+  // Non e' un regista reale -> non approvabile -> CANCELLO la riga (il motivo
+  // e' gia' loggato dal chiamante). Niente "blocked" che resta nel DB.
+  await deleteDraftRow(contact.id);
+};
+
+// MOSSA INTELLIGENTE (Pietro 2026-06-01): l'email e' stata cercata a fondo
+// dall'enrichment (2 AI, ricerche multiple) ma NON e' stata trovata. Senza
+// email il contatto non e' mandabile: inutile sprecare ~5 min in writer + 3
+// validatori. Lo saltiamo qui. Riusiamo lo stato "blocked" (niente migration).
+const markSkippedNoEmail = async (
+  _supabase: ReturnType<typeof getSupabase>,
+  contact: DraftQueueRow,
+  _weak = false
+) => {
+  // Niente email (o troppo debole) = non mandabile = non approvabile.
+  // CANCELLO la riga invece di lasciare un "blocked" nel DB.
+  await deleteDraftRow(contact.id);
 };
 
 const persistAgentAudit = async (
@@ -347,6 +408,9 @@ const persistDraft = async (
 
   contact.ai_email_subject = draft.subject;
   contact.ai_email_body = draft.body;
+  contact.ai_template_used = draft.template_used;
+  contact.ai_link_visione = draft.link_visione;
+  contact.ai_risk_score_numeric = draft.risk_score;
 };
 
 const persistEnrichment = async (
@@ -386,22 +450,89 @@ const processContact = async (
 ) => {
   console.log(`${logPrefix(contact)} processing`);
 
+  // Segna SUBITO lo stato "processing" cosi' la pagina mostra il regista
+  // "in lavorazione" in tempo reale (prima restava "in coda" per 3-4 min,
+  // mentre cercava email + scriveva). wasImported: il triage gira solo sui
+  // contatti freschi, e ora lo stato cambia, quindi me lo ricordo qui.
+  const wasImported = contact.ai_status === "imported";
+  if (contact.ai_status === "imported" || contact.ai_status === "draft_ready") {
+    const previousStatus = contact.ai_status;
+    contact.ai_status = "processing";
+    const { error: procErr } = await supabase
+      .from("outreach_drafts")
+      .update({ ai_status: "processing" })
+      .eq("id", contact.id);
+    if (procErr) {
+      contact.ai_status = previousStatus;
+      console.warn(`${logPrefix(contact)} set processing fallito: ${procErr.message}`);
+    }
+  }
+
+  const facts =
+    contact.verified_facts_json &&
+    typeof contact.verified_facts_json === "object" &&
+    !Array.isArray(contact.verified_facts_json)
+      ? (contact.verified_facts_json as Record<string, unknown>)
+      : {};
+  const pdfFullText =
+    typeof facts.pdf_full_text === "string" ? facts.pdf_full_text : null;
+  const sourceFile =
+    typeof facts.source_file === "string" ? facts.source_file : null;
+
+  // TRIAGE (solo al primo passaggio, stato "imported"): un giudice AI locale
+  // (claude -p) verifica che il contatto sia davvero una persona reale e non
+  // spazzatura estratta per errore dai PDF (titoli di film, nazioni,
+  // intestazioni, testo "titolo+nome" attaccato). Se non lo e', lo scartiamo
+  // PRIMA di sprecare enrichment + writer + 3 validatori. Se il nome e'
+  // sporco, lo ripuliamo. Cosi' Pietro non deve pulire niente a mano.
+  if (wasImported) {
+    const triage = await runContactTriage(
+      {
+        name: contact.name,
+        company: contact.company,
+        section: contact.section,
+        notes: contact.notes,
+        source_file: sourceFile,
+        pdf_context: extractContextChunk(pdfFullText, contact.name, 1500),
+      },
+      PROJECT_ROOT
+    );
+    if (!("error" in triage)) {
+      if (!triage.is_real_person) {
+        await markDiscarded(supabase, contact, triage.reason);
+        console.log(
+          `${logPrefix(contact)} SCARTATO in triage -> ${triage.reason}`
+        );
+        return;
+      }
+      const cleaned = triage.cleaned_name.trim();
+      if (cleaned.length >= 2 && cleaned !== contact.name) {
+        const { error: renameError } = await supabase
+          .from("outreach_drafts")
+          .update({ name: cleaned })
+          .eq("id", contact.id);
+        if (!renameError) {
+          console.log(
+            `${logPrefix(contact)} nome ripulito "${contact.name}" -> "${cleaned}"`
+          );
+          contact.name = cleaned;
+        }
+      }
+    } else {
+      // Fail-open: se il triage fallisce non perdiamo il contatto, lo lasciamo
+      // proseguire — i 3 validatori controllano comunque contact_ok.
+      console.warn(
+        `${logPrefix(contact)} triage non disponibile (proseguo): ${triage.error}`
+      );
+    }
+  }
+
   if (
     !isNonEmptyString(contact.email) &&
     contact.email_enrichment_status !== "not_found" &&
     contact.email_enrichment_status !== "error"
   ) {
     console.log(`${logPrefix(contact)} email mancante, avvio enrichment`);
-    const facts =
-      contact.verified_facts_json &&
-      typeof contact.verified_facts_json === "object" &&
-      !Array.isArray(contact.verified_facts_json)
-        ? (contact.verified_facts_json as Record<string, unknown>)
-        : {};
-    const pdfFullText =
-      typeof facts.pdf_full_text === "string" ? facts.pdf_full_text : null;
-    const sourceFile =
-      typeof facts.source_file === "string" ? facts.source_file : null;
     // Per la ricerca email mando solo il pezzo di PDF attorno al nome (1/20
     // del payload medio) — il contesto stretto basta per disambiguare.
     const pdfChunkForEnrichment = extractContextChunk(
@@ -436,6 +567,35 @@ const processContact = async (
       reason: "Email presente nel file di import originale.",
       found_at: new Date().toISOString(),
     });
+  }
+
+  // MOSSA INTELLIGENTE: cancello sull'email. Se dopo la ricerca esaustiva NON
+  // c'e' un'email, saltiamo SUBITO (niente writer, niente 3 validatori). Cosi'
+  // il lavoro pesante lo facciamo SOLO sui registi contattabili. Non si perde
+  // niente: senza email non li mandavi comunque. Eccezione: se la bozza
+  // esisteva gia' (rilancio di un draft gia' scritto), lasciamo proseguire.
+  const draftAlreadyExists =
+    isNonEmptyString(contact.ai_email_subject) &&
+    isNonEmptyString(contact.ai_email_body);
+  // MOSSA INTELLIGENTE #2 (Pietro 2026-06-01): salta anche le email DEBOLI.
+  // Un'email con confidence < 0.5 verrebbe bloccata comunque dai 3 validatori
+  // (stessa soglia che usano loro per i domini generici) -> scrivere la bozza e
+  // validarla e' ~5 min sprecati. Tengo il lavoro completo SOLO per email solide.
+  const emailDebole =
+    typeof contact.email_confidence === "number" &&
+    contact.email_confidence < 0.5;
+  const emailInutilizzabile =
+    !isNonEmptyString(contact.email) || emailDebole;
+  if (emailInutilizzabile && !draftAlreadyExists) {
+    await markSkippedNoEmail(supabase, contact, emailDebole);
+    console.log(
+      `${logPrefix(contact)} SALTATO -> ${
+        emailDebole
+          ? "email troppo debole (confidence < 0.5)"
+          : "nessuna email trovata dopo ricerca esaustiva"
+      }`
+    );
+    return;
   }
 
   if (
@@ -483,7 +643,11 @@ const processContact = async (
     );
   }
 
-  if (contact.ai_status === "imported") {
+  if (
+    contact.ai_status === "imported" ||
+    contact.ai_status === "processing"
+  ) {
+    contact.ai_status = "draft_ready";
     await supabase
       .from("outreach_drafts")
       .update({ ai_status: "draft_ready" })
@@ -492,14 +656,37 @@ const processContact = async (
 
   const packet = buildPacket(contact);
   // Hydrate the draft slice of the packet with the just-persisted Writer output so the validators see everything.
+  // FIX 2026-05-31: prima si idratavano SOLO subject/body, lasciando i
+  // validatori a controllare con template/link/risk vuoti (PARTE 3 m,n alla
+  // cieca). Ora passiamo l'intera bozza: template, link visione e risk inclusi.
   if (isNonEmptyString(contact.ai_email_subject)) {
     packet.draft_subject = contact.ai_email_subject.trim();
   }
   if (isNonEmptyString(contact.ai_email_body)) {
     packet.draft_body = contact.ai_email_body.trim();
   }
+  if (isNonEmptyString(contact.ai_template_used)) {
+    packet.draft_template_used = contact.ai_template_used.trim();
+  }
+  if (isNonEmptyString(contact.ai_link_visione)) {
+    packet.draft_link_visione = contact.ai_link_visione.trim();
+  }
+  if (typeof contact.ai_risk_score_numeric === "number") {
+    packet.draft_risk_score = contact.ai_risk_score_numeric;
+  }
   const results = await runAllAgents(packet);
   const aggregated = aggregateResults(results);
+
+  // Pietro: i BLOCCATI non restano nel DB. Sopravvivono SOLO i contatti che
+  // devi approvare tu (needs_review / passed). Niente audit per i bloccati:
+  // cancello la riga e via (cosi' niente record orfani).
+  if (aggregated.ai_status === "blocked") {
+    await deleteDraftRow(contact.id);
+    console.log(
+      `${logPrefix(contact)} bloccato dai controlli -> CANCELLATO (non approvato)`
+    );
+    return;
+  }
 
   await persistAgentAudit(supabase, contact, results);
 
@@ -633,11 +820,60 @@ const releaseLock = () => {
   }
 };
 
+// Takeover all'avvio: se restano worker vecchi (es. orfani re-parented a
+// launchd dopo la chiusura della finestra del Terminale, che NON ricevono
+// SIGHUP), il lancio piu' recente VINCE. Li chiudiamo prima di prendere il
+// lock, cosi' non si accumulano mai piu' istanze che competono per la CPU
+// (causa concreta della lentezza diagnosticata 2026-05-28).
+const terminateOtherWorkers = () => {
+  let pids: number[] = [];
+  try {
+    const out = execSync('pgrep -f "run-worker.ts"', { encoding: "utf8" });
+    pids = out
+      .split(/\s+/)
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value));
+  } catch {
+    // pgrep esce 1 (nessun match) o non disponibile: niente da fare.
+    return;
+  }
+  const others = pids.filter(
+    (pid) => pid !== process.pid && pid !== process.ppid
+  );
+  if (!others.length) return;
+  for (const pid of others) {
+    try {
+      process.kill(pid, "SIGTERM");
+      console.warn(`[worker] takeover: chiudo worker preesistente PID ${pid}`);
+    } catch {
+      /* gia' morto */
+    }
+  }
+  // Diamo 2s per lo shutdown pulito (releaseLock), poi SIGKILL i superstiti.
+  try {
+    execSync("sleep 2");
+  } catch {
+    /* noop */
+  }
+  for (const pid of others) {
+    try {
+      process.kill(pid, 0);
+      process.kill(pid, "SIGKILL");
+    } catch {
+      /* gia' morto: ok */
+    }
+  }
+};
+
+terminateOtherWorkers();
 if (!acquireLock()) {
   process.exit(1);
 }
 process.on("SIGINT", () => { releaseLock(); process.exit(0); });
 process.on("SIGTERM", () => { releaseLock(); process.exit(0); });
+// SIGHUP = la finestra del Terminale e' stata chiusa. Senza questo handler il
+// worker veniva orfanato e restava a girare (PPID 1), accumulandosi.
+process.on("SIGHUP", () => { releaseLock(); process.exit(0); });
 process.on("exit", releaseLock);
 
 main().catch((error) => {

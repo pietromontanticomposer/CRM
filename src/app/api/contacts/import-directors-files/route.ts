@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { extractText, getDocumentProxy } from "unpdf";
+import { parseDirectorsPdf } from "@/lib/server/parseDirectorsPdf";
 import { isUnauthorizedError, requireCurrentUser } from "@/lib/server/currentUser";
 
 export const runtime = "nodejs";
@@ -289,14 +289,6 @@ const extractFromFreeText = (text: string): ParsedRow[] => {
   return rows;
 };
 
-const readPdfText = async (file: File): Promise<string> => {
-  const buffer = await file.arrayBuffer();
-  const document = await getDocumentProxy(new Uint8Array(buffer));
-  const { text } = await extractText(document, { mergePages: true });
-  if (Array.isArray(text)) return text.join("\n");
-  return text || "";
-};
-
 const parseFile = async (file: File): Promise<FileReport> => {
   const fileName = file.name;
   const lowerName = fileName.toLowerCase();
@@ -318,8 +310,9 @@ const parseFile = async (file: File): Promise<FileReport> => {
     } else if (lowerName.endsWith(".csv") || fileType === "text/csv") {
       rows = parseCsv(await file.text());
     } else if (lowerName.endsWith(".pdf") || fileType === "application/pdf") {
-      const text = await readPdfText(file);
-      if (!text.trim()) {
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      const { text, directors } = await parseDirectorsPdf(buffer);
+      if (!text.trim() && directors.length === 0) {
         report.status = "file_not_readable";
         report.errors.push(
           "Il PDF non contiene testo estraibile (forse è scansionato senza OCR)."
@@ -327,7 +320,19 @@ const parseFile = async (file: File): Promise<FileReport> => {
         return report;
       }
       report.raw_text = text;
-      rows = extractFromFreeText(text);
+      if (directors.length > 0) {
+        // Parser tabellare posizionale: una riga per regista, col film come
+        // company e sezione/paese/anno nelle note. Niente più nomi spezzati.
+        rows = directors.map((d) => {
+          const row = baseRow(d.name, null);
+          row.company = d.film;
+          row.notes = d.context;
+          return row;
+        });
+      } else {
+        // PDF non tabellare: vecchia estrazione a testo libero (email-first).
+        rows = extractFromFreeText(text);
+      }
     } else if (
       lowerName.endsWith(".txt") ||
       fileType.startsWith("text/")

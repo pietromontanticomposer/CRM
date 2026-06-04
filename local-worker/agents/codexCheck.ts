@@ -12,7 +12,11 @@ import {
   type ValidationPacket,
 } from "./shared";
 
-const CODEX_VALIDATOR_TIMEOUT_MS = 360_000;
+// 210s: i completamenti legittimi stanno entro ~120s. Se codex entra nel suo
+// stato "appeso" (loop di tool / ragionamento), meglio fallire in 3,5 min che
+// in 6: gemini+claude (affidabili, anch'essi con web) reggono la verifica e
+// l'aggregatore gestisce un codex failed come non-approvato.
+const CODEX_VALIDATOR_TIMEOUT_MS = 210_000;
 
 export const runCodexCheck = async (
   packet: ValidationPacket,
@@ -41,11 +45,28 @@ export const runCodexCheck = async (
       const tempFiles = await createSchemaTempFile();
       tempDirectory = tempFiles.directory;
       const outputFile = path.join(tempFiles.directory, "last-message.json");
+      // model_reasoning_effort=medium: il default GLOBALE di Pietro e' "xhigh"
+      // (il piu' lento). Lo forziamo a medium: basta per controllare claim.
+      // tools.web_search=true: il validatore DEVE poter verificare online.
+      // --output-schema: vincola la risposta finale allo schema JSON. Oltre a
+      //   garantire output parsabile, IMPEDISCE a codex di divagare/loopare
+      //   all'infinito (era la causa dei timeout intermittenti a 360s: il
+      //   modello entrava in un loop di tool/ragionamento senza un formato di
+      //   uscita obbligato).
+      // --ephemeral: niente file di sessione su disco (CODEX_HOME di Pietro ha
+      //   75MB di logs + 28MB di state); riduce I/O e contaminazione.
       const args = [
         "exec",
         "--skip-git-repo-check",
         "--sandbox",
         "workspace-write",
+        "--ephemeral",
+        "-c",
+        "model_reasoning_effort=medium",
+        "-c",
+        "tools.web_search=true",
+        "--output-schema",
+        tempFiles.file,
         "--output-last-message",
         outputFile,
         "-",

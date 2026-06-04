@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { aggregateResults } from "../aggregateResults";
 import type { AgentRunResult } from "../agents/shared";
 import { parseAgentOutput } from "../agents/shared";
+import { parseTriageOutput } from "../agents/triageContact";
 import type { AiAgentName } from "../../src/lib/aiOutreach";
 
 type Override = Partial<AgentRunResult>;
@@ -217,6 +218,62 @@ run("aggregator: 3/3 failed => blocked, ai_send_allowed=false", () => {
   ]);
   assert.equal(out.ai_status, "blocked");
   assert.equal(out.ai_send_allowed, false);
+});
+
+// --- parseTriageOutput ---
+
+run("triage: persona valida => is_real_person=true, nome ripulito", () => {
+  const raw = JSON.stringify({
+    is_real_person: true,
+    cleaned_name: "Zhang Wei",
+    confidence: 0.92,
+    reason: "Nome e cognome plausibili di un regista.",
+  });
+  const result = parseTriageOutput(raw);
+  assert.ok(!("error" in result));
+  if (!("error" in result)) {
+    assert.equal(result.is_real_person, true);
+    assert.equal(result.cleaned_name, "Zhang Wei");
+    assert.equal(result.confidence, 0.92);
+  }
+});
+
+run("triage: spazzatura (titolo film) => is_real_person=false", () => {
+  const raw = JSON.stringify({
+    is_real_person: false,
+    cleaned_name: "",
+    confidence: 0.96,
+    reason: "È un titolo di film, non una persona.",
+  });
+  const result = parseTriageOutput(raw);
+  assert.ok(!("error" in result));
+  if (!("error" in result)) {
+    assert.equal(result.is_real_person, false);
+  }
+});
+
+run("triage: JSON invalido => error", () => {
+  const result = parseTriageOutput("non json");
+  assert.ok("error" in result);
+});
+
+run("triage: manca is_real_person => error", () => {
+  const result = parseTriageOutput(JSON.stringify({ cleaned_name: "Tizio" }));
+  assert.ok("error" in result);
+});
+
+run("triage: estrae JSON da markdown fences + confidence di default", () => {
+  const raw =
+    "```json\n" +
+    JSON.stringify({ is_real_person: true, cleaned_name: "Maria Rossi", reason: "ok" }) +
+    "\n```";
+  const result = parseTriageOutput(raw);
+  assert.ok(!("error" in result));
+  if (!("error" in result)) {
+    assert.equal(result.is_real_person, true);
+    assert.equal(result.cleaned_name, "Maria Rossi");
+    assert.equal(result.confidence, 0.5);
+  }
 });
 
 if (process.exitCode === 1) {

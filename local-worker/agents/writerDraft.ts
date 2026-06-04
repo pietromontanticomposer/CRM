@@ -301,6 +301,9 @@ const runViaCodex = async (
         // reasoning_effort=medium e' un ottimo compromesso: xhigh (default su
         // gpt-5) e' molto piu' lento e raramente porta gain misurabile per
         // questa task. -c override del config.toml.
+        // tools.web_search=true: ABILITA la ricerca web (di default `codex exec`
+        // gira SENZA web search). Serve per scavare info specifiche e verificate
+        // sui registi non famosi prima di scrivere un complimento concreto.
         const args = [
           "exec",
           "--skip-git-repo-check",
@@ -308,6 +311,8 @@ const runViaCodex = async (
           "workspace-write",
           "-c",
           "model_reasoning_effort=medium",
+          "-c",
+          "tools.web_search=true",
           "--output-last-message",
           outputFile,
           "-",

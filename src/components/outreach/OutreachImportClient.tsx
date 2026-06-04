@@ -164,38 +164,6 @@ export function OutreachImportClient() {
     event.target.value = "";
   };
 
-  const updateRow = (
-    blockId: string,
-    rowIndex: number,
-    patch: Partial<ImportedRow>
-  ) => {
-    setFiles((prev) =>
-      prev.map((block) =>
-        block.id !== blockId
-          ? block
-          : {
-              ...block,
-              rows: block.rows.map((row, i) =>
-                i === rowIndex ? { ...row, ...patch } : row
-              ),
-            }
-      )
-    );
-  };
-
-  const removeRow = (blockId: string, rowIndex: number) => {
-    setFiles((prev) =>
-      prev.map((block) =>
-        block.id !== blockId
-          ? block
-          : {
-              ...block,
-              rows: block.rows.filter((_, i) => i !== rowIndex),
-            }
-      )
-    );
-  };
-
   const removeBlock = (blockId: string) => {
     setFiles((prev) => prev.filter((b) => b.id !== blockId));
   };
@@ -404,7 +372,7 @@ export function OutreachImportClient() {
                 >
                   2
                 </span>
-                <span>Controlla e pulisci</span>
+                <span>Anteprima</span>
               </div>
               <button
                 type="button"
@@ -414,6 +382,15 @@ export function OutreachImportClient() {
                 Svuota tutto
               </button>
             </div>
+
+            <p className="mb-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[11px] leading-relaxed text-[var(--muted-strong)]">
+              Questo è solo un riepilogo di ciò che è stato letto. Non devi
+              sistemare niente a mano: le 3 AI cercano le email, scrivono le
+              bozze e <span className="font-medium text-[var(--ink)]">scartano
+              da sole</span> le righe che non sono registi reali (titoli di
+              film, nazioni, intestazioni). Se un intero file è sbagliato puoi
+              rimuoverlo.
+            </p>
 
             <div className="space-y-4">
               {files.map((block) => (
@@ -456,16 +433,15 @@ export function OutreachImportClient() {
                       <table className="w-full table-fixed border-collapse text-sm">
                         <thead className="sticky top-0 z-10 bg-[var(--panel)] text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--muted)]">
                           <tr>
-                            <th className="w-[36%] px-4 py-2 text-left">
+                            <th className="w-[40%] px-4 py-2 text-left">
                               Nome
                             </th>
-                            <th className="w-[44%] px-2 py-2 text-left">
+                            <th className="w-[42%] px-2 py-2 text-left">
                               Email
                             </th>
-                            <th className="w-[16%] px-2 py-2 text-left">
+                            <th className="w-[18%] px-2 py-2 text-left">
                               Stato
                             </th>
-                            <th className="w-[4%]" />
                           </tr>
                         </thead>
                         <tbody>
@@ -474,37 +450,17 @@ export function OutreachImportClient() {
                             return (
                               <tr
                                 key={`${block.id}-${index}`}
-                                className="group border-t border-[var(--line)] transition hover:bg-[var(--panel-strong)]/40"
+                                className="border-t border-[var(--line)]"
                               >
-                                <td className="px-4 py-1.5">
-                                  <input
-                                    className="w-full truncate border-0 bg-transparent px-0 py-0 text-sm text-[var(--ink)] focus:ring-0"
-                                    style={{ boxShadow: "none" }}
-                                    value={row.name}
-                                    onChange={(event) =>
-                                      updateRow(block.id, index, {
-                                        name: event.target.value,
-                                      })
-                                    }
-                                  />
+                                <td className="truncate px-4 py-1.5 text-sm text-[var(--ink)]">
+                                  {row.name}
                                 </td>
-                                <td className="px-2 py-1.5">
-                                  <input
-                                    className="w-full truncate border-0 bg-transparent px-0 py-0 text-sm text-[var(--muted-strong)] placeholder:text-[var(--muted)] focus:ring-0"
-                                    style={{ boxShadow: "none" }}
-                                    placeholder="aggiungi email…"
-                                    value={row.email ?? ""}
-                                    onChange={(event) => {
-                                      const value = event.target.value.trim();
-                                      updateRow(block.id, index, {
-                                        email: value || null,
-                                        email_status: value
-                                          ? "present"
-                                          : "missing",
-                                        email_confidence: value ? 1 : null,
-                                      });
-                                    }}
-                                  />
+                                <td className="truncate px-2 py-1.5 text-sm text-[var(--muted-strong)]">
+                                  {row.email ?? (
+                                    <span className="text-[var(--muted)]">
+                                      la cercano le AI
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-2 py-1.5">
                                   <span
@@ -521,18 +477,8 @@ export function OutreachImportClient() {
                                           : "bg-amber-400"
                                       }`}
                                     />
-                                    {hasEmail ? "OK" : "Manca email"}
+                                    {hasEmail ? "Email nel file" : "Da cercare"}
                                   </span>
-                                </td>
-                                <td className="px-2 py-1.5 text-right">
-                                  <button
-                                    type="button"
-                                    aria-label="Rimuovi riga"
-                                    onClick={() => removeRow(block.id, index)}
-                                    className="rounded-md px-1.5 py-0.5 text-[var(--muted)] opacity-0 transition hover:text-red-300 group-hover:opacity-100"
-                                  >
-                                    ✕
-                                  </button>
                                 </td>
                               </tr>
                             );
