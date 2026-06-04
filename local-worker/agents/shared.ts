@@ -123,6 +123,10 @@ export const runCommand = async ({
         cwd,
         env: process.env,
         stdio: "pipe",
+        // Su Windows i CLI (claude/gemini/codex) sono file .cmd: senza shell
+        // spawn non li avvia (ENOENT) e ogni ricerca email fallisce. La shell
+        // serve SOLO su Windows; su Mac/Linux il comportamento resta identico.
+        shell: process.platform === "win32",
       });
 
       let stdout = "";
