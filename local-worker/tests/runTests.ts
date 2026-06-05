@@ -153,13 +153,41 @@ run("aggregator: 1/3 approved => needs_review (revisione manuale)", () => {
   assert.equal(out.ai_validation_status, "needs_review");
 });
 
-run("aggregator: 0/3 approved => blocked", () => {
+run("aggregator: maggioranza respinge il contenuto (draft_ok=false) => blocked", () => {
   const out = aggregateResults([
-    makeResult("gemini", { approved: false }),
-    makeResult("claude", { approved: false }),
-    makeResult("codex", { approved: false }),
+    makeResult("gemini", { approved: false, draft_ok: false }),
+    makeResult("claude", { approved: false, draft_ok: false }),
+    makeResult("codex", { approved: false, draft_ok: false }),
   ]);
   assert.equal(out.ai_status, "blocked");
+});
+
+run("aggregator: 2 su 3 respingono il contenuto, 1 lo manca => blocked (maggioranza, anti-cazzate Hans Zimmer)", () => {
+  const out = aggregateResults([
+    makeResult("gemini"),
+    makeResult("claude", { approved: false, draft_ok: false }),
+    makeResult("codex", { approved: false, draft_ok: false }),
+  ]);
+  assert.equal(out.ai_status, "blocked");
+});
+
+run("aggregator: contenuto ok ma email da confermare (send_allowed=false) => needs_review", () => {
+  const out = aggregateResults([
+    makeResult("gemini", { approved: false, send_allowed: false }),
+    makeResult("claude", { approved: false, send_allowed: false }),
+    makeResult("codex", { approved: false, send_allowed: false }),
+  ]);
+  assert.equal(out.ai_status, "needs_review");
+  assert.equal(out.ai_send_allowed, false);
+});
+
+run("aggregator: solo 1 su 3 respinge il contenuto (minoranza) => needs_review", () => {
+  const out = aggregateResults([
+    makeResult("gemini"),
+    makeResult("claude"),
+    makeResult("codex", { approved: false, draft_ok: false }),
+  ]);
+  assert.equal(out.ai_status, "needs_review");
 });
 
 run("aggregator: 1 failed + 2 approved => needs_review (failed conta come non-approved)", () => {
@@ -210,13 +238,13 @@ run("aggregator: 3/3 approved ma contact_ok=false su uno => needs_review", () =>
   assert.equal(out.ai_status, "needs_review");
 });
 
-run("aggregator: 3/3 failed => blocked, ai_send_allowed=false", () => {
+run("aggregator: 3/3 falliti (rete) => needs_review, NON bloccare/cancellare", () => {
   const out = aggregateResults([
     makeResult("gemini", { failed: true, approved: false, send_allowed: false }),
     makeResult("claude", { failed: true, approved: false, send_allowed: false }),
     makeResult("codex", { failed: true, approved: false, send_allowed: false }),
   ]);
-  assert.equal(out.ai_status, "blocked");
+  assert.equal(out.ai_status, "needs_review");
   assert.equal(out.ai_send_allowed, false);
 });
 

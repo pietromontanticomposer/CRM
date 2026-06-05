@@ -8,7 +8,6 @@ import type { AiAgentName } from "../src/lib/aiOutreach";
 import { aggregateResults } from "./aggregateResults";
 import { runClaudeCheck } from "./agents/claudeCheck";
 import { runCodexCheck } from "./agents/codexCheck";
-import { runGeminiCheck } from "./agents/geminiCheck";
 import type { AgentRunResult, ValidationPacket } from "./agents/shared";
 import { runWriterDraft, type WriterDraftResult } from "./agents/writerDraft";
 import { runContactTriage } from "./agents/triageContact";
@@ -76,10 +75,17 @@ const WORKER_POLL_MS = Math.max(
 // timeout a catena: ERA il vero motivo della lentezza. Regola: ~1 contatto
 // ogni 3 core logici, clamp [2,4]. Override con OUTREACH_WORKER_CONCURRENCY.
 const CPU_COUNT = os.cpus().length || 4;
-// FIX 2026-06-01 (E1 sovraccarico): clamp abbassato [2,4] -> [1,2]. Con
-// enrichment ora a 2 AI e worker a 2 contatti, il picco scende da ~9 a ~4 CLI
-// pesanti insieme: niente piu' saturazione/crash sul Mac 4-core.
-const DEFAULT_CONCURRENCY = Math.max(1, Math.min(2, Math.round(CPU_COUNT / 3)));
+void CPU_COUNT;
+// FLESSIBILE ANTI-INTASAMENTO (Pietro 2026-06-05): il collo di bottiglia e' la
+// RETE, non la CPU. Ogni contatto in enrichment lancia 2 ricerche AI pesanti
+// (Claude + Codex). Per non mettere in coda (-> timeout della ricerca) ne'
+// saturare la rete, processiamo floor(tetto_rete / 2) contatti insieme, dove il
+// tetto e' MAX_CONCURRENT_CLI (lo stesso semaforo globale di shared.ts). Mac
+// (tetto 3) -> 1 contatto alla volta; Windows con MAX_CONCURRENT_CLI=6 -> 3.
+// Una manopola sola (MAX_CONCURRENT_CLI), si adatta da sola, non intasa mai.
+// Override esplicito: OUTREACH_WORKER_CONCURRENCY.
+const CLI_CAP = Math.max(1, Number(process.env.MAX_CONCURRENT_CLI) || 3);
+const DEFAULT_CONCURRENCY = Math.max(1, Math.floor(CLI_CAP / 2));
 const WORKER_CONCURRENCY = Math.max(
   1,
   Number.parseInt(
@@ -121,9 +127,29 @@ const extractContextChunk = (
   return chunk;
 };
 
+// Fetch con RITENTATIVI (Pietro 2026-06-05): sotto carico la rete ha dei
+// singhiozzi ("fetch failed"). Senza ritentativi una chiamata al DB persa
+// poteva far sbagliare o perdere un contatto. Qui ogni chiamata riprova fino a
+// 3 volte con attesa crescente. Vale per TUTTE le chiamate Supabase del worker.
+const retryingFetch = async (
+  ...args: Parameters<typeof fetch>
+): Promise<Response> => {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await fetch(...args);
+    } catch (err) {
+      lastErr = err;
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+};
+
 const getSupabase = () =>
   createClient(getRequiredEnv("SUPABASE_URL"), getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: retryingFetch },
   });
 
 // Pietro 2026-06-01: i contatti che NON approva personalmente NON devono
@@ -134,7 +160,7 @@ const deleteDraftRow = async (id: string) => {
   const url = process.env.SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !key) return;
-  await fetch(`${url}/rest/v1/outreach_drafts?id=eq.${id}`, {
+  await retryingFetch(`${url}/rest/v1/outreach_drafts?id=eq.${id}`, {
     method: "DELETE",
     headers: { apikey: key, Authorization: `Bearer ${key}` },
   }).catch((e) => {
@@ -354,16 +380,18 @@ const persistAgentAudit = async (
   }
 };
 
-// Diagnosi 2026-05-28 (Pietro): in parallelo i 3 CLI competono per CPU e
-// vanno tutti in timeout. Misura isolata: Gemini 81s, Claude 114s, Codex 216s.
-// In serie: ~411s totali, no contention, ognuno entro il suo timeout.
+// Controllo a DUE (Pietro 2026-06-05): tolto Gemini, era solo un peso (free
+// tier strozzato -> timeout costanti, ~5 min sprecati a contatto, contributo
+// nullo). Claude + Codex sono affidabili e bastano: l'aggregatore blocca se la
+// MAGGIORANZA respinge il contenuto, quindi con 2 servono entrambi i no per
+// bloccare (sicurezza solida, vista su Hans Zimmer). In serie per non far
+// competere i CLI sulla rete.
 const runAllAgents = async (
   packet: ValidationPacket
 ): Promise<AgentRunResult[]> => {
-  const gemini = await runGeminiCheck(packet, PROJECT_ROOT);
   const claude = await runClaudeCheck(packet, PROJECT_ROOT);
   const codex = await runCodexCheck(packet, PROJECT_ROOT);
-  return [gemini, claude, codex];
+  return [claude, codex];
 };
 
 const describeAgentIssues = (agent: AiAgentName, result: AgentRunResult) => {
@@ -528,8 +556,9 @@ const processContact = async (
 
   if (
     !isNonEmptyString(contact.email) &&
-    contact.email_enrichment_status !== "not_found" &&
-    contact.email_enrichment_status !== "error"
+    // "error" (rete/timeout) NON e' escluso: la ricerca si RIPROVA. Solo
+    // "not_found" (ricerca riuscita, nessuna email pubblica) ferma i tentativi.
+    contact.email_enrichment_status !== "not_found"
   ) {
     console.log(`${logPrefix(contact)} email mancante, avvio enrichment`);
     // Per la ricerca email mando solo il pezzo di PDF attorno al nome (1/20
@@ -582,6 +611,14 @@ const processContact = async (
   // (needs_review) -> sono PROPRIO i lead che Pietro vuole rivedere a mano,
   // e la soglia 0.5 li cancellava TUTTI. L'email "debole" la ricontrollano
   // comunque i 3 validatori + l'approvazione manuale: e' il senso del sistema.
+  // MAI cancellare se la ricerca email e' ANDATA IN ERRORE (rete/timeout): non
+  // sappiamo se l'email esiste. Lascio il contatto e si riprova al prossimo giro.
+  if (contact.email_enrichment_status === "error" && !draftAlreadyExists) {
+    console.log(
+      `${logPrefix(contact)} ricerca email fallita per rete -> NON cancello, riprovo al prossimo giro`
+    );
+    return;
+  }
   const emailInutilizzabile = !isNonEmptyString(contact.email);
   if (emailInutilizzabile && !draftAlreadyExists) {
     await markSkippedNoEmail(supabase, contact);
@@ -670,10 +707,35 @@ const processContact = async (
   const results = await runAllAgents(packet);
   const aggregated = aggregateResults(results);
 
+  // Log conciso dei verdetti dei validatori (utile per capire perche' un
+  // contatto e' stato bloccato/tenuto: i bloccati vengono cancellati senza audit).
+  console.log(
+    `${logPrefix(contact)} verdetti: ${results
+      .map(
+        (result) =>
+          `${result.agent_name}=${
+            result.failed ? "fallito" : result.approved ? "ok" : "respinto"
+          }`
+      )
+      .join(" ")}`
+  );
+
   // Pietro: i BLOCCATI non restano nel DB. Sopravvivono SOLO i contatti che
   // devi approvare tu (needs_review / passed). Niente audit per i bloccati:
   // cancello la riga e via (cosi' niente record orfani).
   if (aggregated.ai_status === "blocked") {
+    // MAI cancellare per un FALLIMENTO di rete (Pietro 2026-06-05). Se i
+    // validatori non hanno funzionato (timeout/fetch failed), NON e' una
+    // bocciatura vera: lascio il contatto com'e' (resta draft_ready) e si
+    // riprova al giro dopo. Cancello SOLO se i validatori hanno DAVVERO
+    // girato e respinto (failed=false).
+    const failedCount = results.filter((result) => result.failed).length;
+    if (failedCount >= 2) {
+      console.log(
+        `${logPrefix(contact)} blocco da FALLIMENTI rete (${failedCount}/3 falliti) -> NON cancello, riprovo al prossimo giro`
+      );
+      return;
+    }
     await deleteDraftRow(contact.id);
     console.log(
       `${logPrefix(contact)} bloccato dai controlli -> CANCELLATO (non approvato)`

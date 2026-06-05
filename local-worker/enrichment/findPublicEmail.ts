@@ -37,6 +37,9 @@ export type EnrichmentResult = {
 type AgentEmailProposal = {
   agent: "gemini" | "claude" | "codex";
   found: boolean;
+  // true = l'AI NON ha potuto cercare (timeout/rete/CLI fallita); diverso da
+  // "ha cercato e non ha trovato". Serve a non cancellare per un errore di rete.
+  failed: boolean;
   email: string | null;
   source_url: string | null;
   source_type: string | null;
@@ -48,9 +51,12 @@ type AgentEmailProposal = {
 // prompt ma il numero/latenza di WebSearch + WebFetch che ogni AI fa per
 // verificare l'email. 30/45/60s erano troppo poco — diagnosticato dai log
 // (Pietro 2026-05-28): tutti e 3 in timeout su "diego carli monitus verona".
-const GEMINI_TIMEOUT_MS = 90_000;
-const CLAUDE_TIMEOUT_MS = 120_000;
-const CODEX_TIMEOUT_MS = 150_000;
+// RECALL > velocita' (Pietro 2026-06-05: "le mail disponibili online DEVONO
+// essere trovate; se si pianta non importa"). Timeout alzati: Gemini veniva
+// tagliato a 90s prima di finire la ricerca -> email esistenti perse.
+const GEMINI_TIMEOUT_MS = 150_000;
+const CLAUDE_TIMEOUT_MS = 180_000;
+const CODEX_TIMEOUT_MS = 200_000;
 
 const JUNK_EMAIL_SUFFIXES = [
   ".png",
@@ -208,6 +214,7 @@ const parseProposal = (
     return {
       agent,
       found: false,
+      failed: true,
       email: null,
       source_url: null,
       source_type: null,
@@ -224,6 +231,7 @@ const parseProposal = (
   return {
     agent,
     found: Boolean(email),
+    failed: false,
     email,
     source_url:
       typeof parsed.source_url === "string" && parsed.source_url.trim()
@@ -264,6 +272,7 @@ const failedProposal = (
 ): AgentEmailProposal => ({
   agent,
   found: false,
+  failed: true,
   email: null,
   source_url: null,
   source_type: null,
@@ -441,7 +450,24 @@ const consensusFromProposals = (
   const now = new Date().toISOString();
   const debug = summarizeProposals(proposals);
 
+  // Se TUTTI gli agenti hanno FALLITO (timeout/rete/output illeggibile) non
+  // possiamo concludere "nessuna email": e' un ERRORE, non un not_found. Cosi'
+  // il worker NON cancella il contatto e riprova al giro dopo.
+  const tuttiFalliti =
+    proposals.length > 0 && proposals.every((proposal) => proposal.failed);
+
   if (votes.size === 0) {
+    if (tuttiFalliti) {
+      return {
+        email: null,
+        source_url: null,
+        source_type: null,
+        confidence: 0,
+        status: "error",
+        reason: `Tutti gli agenti hanno fallito la ricerca (rete/timeout): nessuno ha potuto cercare davvero. ${debug}`,
+        found_at: null,
+      };
+    }
     return {
       email: null,
       source_url: null,
@@ -506,14 +532,13 @@ export const findPublicEmail = async (
   }
 
   try {
-    // FIX 2026-06-01 (E1 sovraccarico): enrichment con 2 AI invece di 3.
-    // Con worker concurrency e enrichment in parallelo si arrivava a ~9 CLI
-    // pesanti insieme -> saturazione rete/CPU -> timeout a catena e crash.
-    // Tolto codex (il piu' lento, ~150s, e quello che si impalla): resta il
-    // consenso gemini+claude, e i 3 validatori ricontrollano comunque l'email.
+    // RICERCA a DUE (Pietro 2026-06-05): Claude + Codex, i due affidabili.
+    // Tolto Gemini (free tier strozzato -> timeout, instabile, faceva perdere
+    // tempo). Le email che esistono online vanno trovate: 2 cercatori solidi
+    // sono meglio di 3 con uno che si pianta. Se concordano, confidence 0.78.
     const proposals = await Promise.all([
-      searchByGemini(input, workingDirectory),
       searchByClaude(input, workingDirectory),
+      searchByCodex(input, workingDirectory),
     ]);
     return consensusFromProposals(proposals);
   } catch (error) {

@@ -106,6 +106,36 @@ export const cleanupTempDirectory = async (directory: string) => {
 
 export const getInlineSchema = () => JSON.stringify(RESULT_SCHEMA);
 
+// LIMITE FLESSIBILE ANTI-INTASAMENTO (Pietro 2026-06-05): tutte le chiamate
+// alle AI (ricerca email + validatori) passano da qui. Un semaforo globale
+// fa partire al MASSIMO MAX_CONCURRENT_CLI ricerche pesanti insieme; le altre
+// aspettano in coda. Cosi' la rete non si strozza, qualunque sia la
+// concorrenza del worker o il numero di AI. Regolabile per macchina via env
+// MAX_CONCURRENT_CLI (Mac lento: 3; Windows piu' potente: anche 6+).
+const MAX_CONCURRENT_CLI = Math.max(
+  1,
+  Number(process.env.MAX_CONCURRENT_CLI) || 3
+);
+let activeCli = 0;
+const cliWaiters: Array<() => void> = [];
+const acquireCli = (): Promise<void> =>
+  new Promise((resolve) => {
+    if (activeCli < MAX_CONCURRENT_CLI) {
+      activeCli += 1;
+      resolve();
+    } else {
+      cliWaiters.push(resolve);
+    }
+  });
+const releaseCli = () => {
+  const next = cliWaiters.shift();
+  if (next) {
+    next(); // slot passato al prossimo in coda: activeCli resta invariato
+  } else {
+    activeCli -= 1;
+  }
+};
+
 export const runCommand = async ({
   command,
   args,
@@ -116,9 +146,14 @@ export const runCommand = async ({
   args: string[];
   cwd: string;
   stdin?: string;
-}) =>
-  new Promise<{ code: number | null; stdout: string; stderr: string }>(
-    (resolve, reject) => {
+}): Promise<{ code: number | null; stdout: string; stderr: string }> => {
+  await acquireCli();
+  try {
+    return await new Promise<{
+      code: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve, reject) => {
       const child = spawn(command, args, {
         cwd,
         env: process.env,
@@ -152,8 +187,11 @@ export const runCommand = async ({
         child.stdin.write(stdin);
       }
       child.stdin.end();
-    }
-  );
+    });
+  } finally {
+    releaseCli();
+  }
+};
 
 const normalizeIssues = (value: unknown) => {
   if (!Array.isArray(value)) return [];

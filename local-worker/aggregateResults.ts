@@ -49,56 +49,67 @@ export const aggregateResults = (
     (result) => result.send_allowed && !result.failed
   );
 
-  const approvedCount = results.filter(
-    (result) => result.approved && !result.failed
-  ).length;
+  const nonFailed = results.filter((result) => !result.failed);
 
   const failedAgents = results
     .filter((result) => result.failed)
     .map((result) => labelOf(result.agent_name));
 
-  const rejected = results
-    .filter((result) => !result.approved && !result.failed)
-    .map((result) => labelOf(result.agent_name));
-
-  // Override: se almeno un agente segnala contact_ok=false, lo stato minimo e' needs_review.
-  const hasContactDoubt = results.some(
-    (result) => !result.failed && !result.contact_ok
+  // Un validatore approva il CONTENUTO se: persona giusta (contact_ok) + email
+  // valida (email_ok) + bozza senza claim falsi (draft_ok). send_allowed
+  // riguarda solo l'invio AUTOMATICO (es. email a confidence bassa): non e' un
+  // problema di contenuto, quindi NON conta per bloccare/cancellare.
+  const contentOk = nonFailed.filter(
+    (result) => result.contact_ok && result.email_ok && result.draft_ok
   );
+  const contentRejectCount = nonFailed.length - contentOk.length;
+  const rejected = nonFailed
+    .filter(
+      (result) => !(result.contact_ok && result.email_ok && result.draft_ok)
+    )
+    .map((result) => labelOf(result.agent_name));
+  const hasContactDoubt = nonFailed.some((result) => !result.contact_ok);
 
   let ai_status: AiWorkflowStatus;
   let ai_validation_status: AiValidationStatus;
   let summary: string;
 
-  if (approvedCount === results.length && results.length > 0) {
-    if (hasContactDoubt) {
-      ai_status = "needs_review";
-      ai_validation_status = "needs_review";
-      summary =
-        "Validazione completata ma contact_ok=false segnalato: serve revisione manuale.";
-    } else {
-      ai_status = "approved";
-      ai_validation_status = "passed";
-      summary = "Validazione completata: Gemini, Claude e Codex approvano.";
-    }
-  } else if (approvedCount >= 1) {
-    // Pietro 2026-05-29: se ALMENO 1 validatore approva, la bozza va a
-    // revisione manuale (non bloccata). Il writer puo' aver citato un lavoro
-    // vero che gli altri validatori non riescono a verificare via web in
-    // questa sessione — meglio che decida Pietro.
+  if (nonFailed.length === 0) {
+    // TUTTI i validatori falliti (rete/timeout): NON e' una bocciatura. Stato
+    // needs_review cosi' il worker NON cancella e si riprova al giro dopo.
     ai_status = "needs_review";
     ai_validation_status = "needs_review";
-    const blockers = [...rejected, ...failedAgents].join(", ");
-    summary = blockers
-      ? `Serve revisione manuale: ${blockers} ha segnalato problemi.`
-      : "Serve revisione manuale.";
-  } else {
+    summary = `Validatori non disponibili (${failedAgents.join(
+      ", "
+    )}): nessuno ha potuto controllare, serve riprovare.`;
+  } else if (contentRejectCount > contentOk.length) {
+    // ANTI-CAZZATE: la MAGGIORANZA dei validatori che hanno girato ha respinto
+    // il CONTENUTO (claim falso/non documentato, persona sbagliata, riferimento
+    // musicale errato). BOCCIATO, anche se uno non l'ha beccato.
     ai_status = "blocked";
     ai_validation_status = "blocked";
-    const blockers = [...rejected, ...failedAgents].join(", ");
-    summary = blockers
-      ? `Invio bloccato: ${blockers} hanno respinto la bozza.`
-      : "Invio bloccato: nessun agente ha approvato.";
+    summary = `Invio bloccato: ${rejected.join(
+      ", "
+    )} hanno respinto il contenuto (claim non verificati o errati).`;
+  } else if (
+    failedAgents.length === 0 &&
+    contentOk.length === nonFailed.length &&
+    nonFailed.every((result) => result.approved) &&
+    !hasContactDoubt
+  ) {
+    // Tutti e 3 i validatori hanno girato e approvano tutto, invio incluso.
+    ai_status = "approved";
+    ai_validation_status = "passed";
+    summary = "Validazione completata: tutti i validatori approvano.";
+  } else {
+    // Contenuto per lo piu' ok, ma serve l'occhio di Pietro: email da
+    // confermare (confidence bassa) oppure una MINORANZA ha sollevato dubbi.
+    // Revisione manuale: il lead resta nella lista "da approvare".
+    ai_status = "needs_review";
+    ai_validation_status = "needs_review";
+    summary = rejected.length
+      ? `Serve revisione manuale: dubbi sollevati da ${rejected.join(", ")}.`
+      : "Serve revisione manuale: email da confermare a mano.";
   }
 
   return {

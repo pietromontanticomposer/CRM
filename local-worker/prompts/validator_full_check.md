@@ -29,6 +29,8 @@ Obiettivo: ogni riferimento concreto ai LAVORI o ATTIVITÀ del destinatario deve
 
 Procedura obbligatoria, esegui LINE BY LINE:
 
+STEP 0 OBBLIGATORIO — IL PDF È UNA FONTE: prima di marcare QUALSIASI claim come "non documentato", cercalo nel `verified_facts_json.pdf_full_text`. Se il titolo del film, il festival, la sezione, l'anno o il paese compaiono nel pdf_full_text vicino (entro ±500 caratteri) al nome del destinatario → quel claim è DOCUMENTATO (fonte = il PDF), anche se la ricerca web non lo conferma in sessione. Marcarlo "nessuna fonte" / `draft_ok=false` quando è scritto nel PDF è un ERRORE GRAVE. Esempio reale: se la bozza cita il film "Kronoshock" e "Kronoshock" compare nel pdf_full_text accanto a "Ignasi López Fàbregas", il titolo è documentato — NON bocciarlo. Il web serve a verificare i dettagli AGGIUNTI dal Writer che NON sono nel PDF (scene, scelte di regia): quelli sì, se non confermati, vanno bocciati. NOTA — NON sempre c'è un PDF: se `pdf_full_text` è vuoto o assente, questo passo non si applica e la verifica si fa SOLO via web (un claim è documentato se lo confermi online, altrimenti è non documentato). NON dare per scontato che esista un documento: lavora con i materiali che ci sono.
+
 1. Estrai dal `draft_subject` e `draft_body` ogni claim concreto sul destinatario. Esempi di claim:
    - Titolo di un film/cortometraggio/documentario
    - Anno di produzione o di un festival
@@ -70,7 +72,7 @@ Per OGNI film citato nella bozza, verifica via web (IMDb/Wikipedia):
 
 Esito:
 - Devi ESEGUIRE la ricerca per ciascun film+compositore, non fidarti della memoria. Se un film non esiste, o il compositore è sbagliato/inventato, o l'abbinamento è errato → CLAIM FALSO: `draft_ok=false`, `send_allowed=false`, issue "Riferimento musicale errato: '<film> (<compositore>)' — non confermato".
-- Se NON riesci a confermare l'abbinamento film↔compositore con una ricerca in questa sessione (anche se "ti sembra giusto") → NON passarlo in silenzio: issue "Riferimento musicale non confermato in sessione: '<film> (<compositore>)'" e `suggested_status="needs_review"`. Una colonna sonora attribuita al compositore sbagliato è una figura pessima per Pietro, che È un compositore: meglio una revisione manuale che un invio non verificato.
+- Se NON riesci a confermare l'abbinamento film↔compositore in questa sessione MA non hai la PROVA che sia sbagliato: NON mettere `draft_ok=false`. Questi 3 film sono titoli NOTI scelti da Pietro come riferimento di stile (NON sono claim sul regista destinatario): lascia `draft_ok=true`, aggiungi solo issue "Riferimento musicale da confermare: '<film> (<compositore>)'" e `suggested_status="needs_review"`. Metti `draft_ok=false` su un riferimento musicale SOLO quando hai la prova concreta che quel compositore NON ha firmato quel film (abbinamento palesemente sbagliato), MAI per semplice "non confermato in sessione".
 - Se la bozza NON cita film ma usa la frase generica "un sound originale tarato sul tono del progetto" → nessun controllo qui, OK.
 
 ═══════════════════════════════════════════
@@ -82,8 +84,8 @@ b. TLD plausibile (no .local, .test, .invalid, .example, .localhost). Sospetto: 
 c. Local-part non bot (`noreply`, `no-reply`, `donotreply`, `mailer-daemon`, `postmaster`, `notifications`): `email_ok=false`.
 d. Domini di esempio (example.com, test.com, domain.com, ecc.): `email_ok=false`.
 e. `email_enrichment_status`:
-   - "found_public" → richiede `email_source_url` valido (http/https, host plausibile) e `email_confidence ≥ 0.5`. Altrimenti `send_allowed=false`.
-   - "needs_review" → `send_allowed=false`.
+   - "found_public" → richiede `email_source_url` valido (http/https, host plausibile). Con `email_confidence ≥ 0.5`: ok. Con confidence < 0.5: `send_allowed=false` + `suggested_status="needs_review"` (NON `email_ok=false`: l'email c'e' ed e' valida, va solo confermata a mano).
+   - "needs_review" → l'email E' STATA TROVATA, ma da una sola fonte/AI (confidence ~0.4). Questo NON e' un motivo per bocciare il contatto: se il formato e' valido tieni `email_ok=true`, metti `send_allowed=false` (niente invio automatico) e `suggested_status="needs_review"`. NON mettere `email_ok=false` ne' `contact_ok=false` solo per la confidence bassa: il lead deve arrivare alla revisione manuale di Pietro, NON essere cancellato.
    - "not_found" / "error" → `email_ok=false`, `send_allowed=false`.
 f. Dominio email generico (gmail.com, yahoo.com, hotmail.com, icloud.com, libero.it, ecc.) ammesso se TUTTE queste condizioni sono true:
    - `email_source_url` e' settato e NON e' un dominio di esempio
@@ -91,7 +93,7 @@ f. Dominio email generico (gmail.com, yahoo.com, hotmail.com, icloud.com, libero
    - (preferibile ma non obbligatorio) puoi verificare via web che l'URL sia raggiungibile
    Se `email_source_url` e' settato a un URL plausibile (es. sito ufficiale, trepalchi.it, sito festival, IMDb, FilmFreeway, Vimeo, sito produzione), considera l'email VALIDA anche se non puoi fetcharlo in questo momento. NON bloccare per "non verificabile in questa sessione".
    Solo se `email_source_url` e' null OR puntare a placeholder/example.com → blocca.
-g. Coerenza nome ↔ email/dominio: il local-part deve contenere almeno un token del nome del destinatario, oppure il dominio deve contenere almeno un token della produzione. Se nessuna delle due: `contact_ok=false`.
+g. Coerenza nome ↔ email/dominio: OK se il local-part contiene un token del nome, OPPURE il dominio contiene un token del nome/della produzione/del film, OPPURE `email_source_url` e' una fonte credibile (sito ufficiale del regista o della sua casa di produzione) da cui proviene l'email. Gli indirizzi generici di produzione (info@, contact@, hello@, studio@, bonjour@) su un dominio che e' chiaramente il sito del regista o della sua produzione sono ACCETTABILI per la revisione manuale: in quel caso `email_ok=true` e `suggested_status="needs_review"` (NON `contact_ok=false`). Metti `contact_ok=false` SOLO se l'email appartiene palesemente a un'altra persona/azienda non collegata al destinatario.
 h. Verifica via web che l'email proposta non appartenga PALESEMENTE a un'altra persona (es. cerca l'email su Google e vedi a chi è associata).
 
 ═══════════════════════════════════════════
@@ -112,7 +114,7 @@ j. Body:
 
 k. Niente `forbidden_words` né frasi tipiche da IA: "I hope this email finds you well", "Spero che questa email ti trovi bene", "leverage", "sinergia", "value proposition", "outside the box", "win-win", "touch base", "best regards from afar", "trust this email finds you", "reaching out". Se presente: `draft_ok=false`.
 
-l. Forma "lei" o "tu" 100% coerente in tutto subject + body. Inconsistenza: `draft_ok=false`.
+l. Forma di cortesia + LINGUA coerenti. La mail può essere in ITALIANO (apertura `Salve (Nome)!`) o in INGLESE (apertura `Hi (Nome),`): ENTRAMBE le aperture sono valide, NON bocciarle. La regola lei/voi vale SOLO per l'italiano: `lei`/`suo` = singolare formale, `voi`/`vostro` = plurale (team); devono essere coerenti tra loro nel corpo. Inconsistenza VERA da bocciare (`draft_ok=false`): mix nel corpo tipo `suo` + `vostro`, oppure `tu`/`tuo` esplicito insieme a `lei`/`suo`. `Salve Nome!` + corpo tutto al `lei` = CORRETTO. Per le mail in INGLESE la regola lei/voi NON si applica (si usa "you/your"). Verifica però che la LINGUA sia coerente in tutta la mail: una mail in inglese NON deve avere pezzi in italiano (es. `Salve` italiano + corpo inglese = incoerenza → `suggested_status="needs_review"`, non blocco fatale).
 
 m. Template (A, B, C, C_TEAM, NOT_READY) coerente con materiale disponibile:
    - A: opera concreta verificata + link visione presente in `allowed_links`
