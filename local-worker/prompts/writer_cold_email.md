@@ -283,27 +283,21 @@ PAROLE VIETATE
 COMPLIMENTO
 ═══════════════════════════════════════════
 
-Uno solo. SPECIFICO. Verificabile. Deve essere qualcosa che potresti dire SOLO conoscendo davvero quel lavoro.
+Uno solo, sincero e umano. Si appoggia a ciò che il film È DAVVERO — il suo TEMA, la sua PREMESSA, l'IDEA registica di fondo — preso da una fonte VERIFICATA: il titolo stesso, la sinossi ufficiale, la scheda del festival, un'intervista o una recensione aperta in questa sessione. Quasi sempre un complimento così si PUÒ fare: solo se non hai proprio nulla di verificato (nemmeno una premessa chiara) si va a Template C.
 
-TEST OBBLIGATORIO (applicalo alla frase PRIMA di tenerla):
-1. Se potresti incollarla IDENTICA in una mail su un altro film qualunque → NON è specifica, è una stronzata generica → CANCELLALA.
-2. Se è solo il riassunto della trama o della premessa → NON è un complimento → CANCELLALA.
-3. Frasi-spia VIETATE (segnali di complimento finto): "il conflitto è chiaro", "regge la tensione", "personaggi credibili/ben scritti", "storia che funziona", "ritmo serrato", "ammiro il modo in cui mette al centro/racconta/affronta...".
-La frase sopravvive SOLO se cita un dettaglio che esiste UNICAMENTE in quel lavoro e che hai LETTO da una fonte aperta in sessione (una precisa scelta di regia/suono/montaggio descritta in una recensione, una frase del regista in un'intervista, un elemento concreto documentato).
-Se non hai un dettaglio così: NESSUN complimento. Meglio zero complimenti che un complimento finto. Non è negoziabile.
+COSA È PERMESSO (ed è ciò che VOGLIAMO):
+* Riflettere sulla SCELTA registica di fondo e sul PERCHÉ ti colpisce, partendo dalla premessa verificata. La tua impressione personale è benvenuta, purché dichiarata come tale ("secondo me", "a mio avviso") e purché la PREMESSA su cui poggia sia verificata.
+* ESEMPIO BUONO (doc su un viaggio in bici di 3000 km, premessa verificata): "Ammiro davvero il modo in cui ha scelto di costruire un documentario attorno a un viaggio così lungo e impegnativo. Secondo me funziona perché il percorso fisico diventa anche uno strumento per raccontare qualcosa di più personale e umano." — qui la premessa (doc su un lungo viaggio) è verificata; il resto è una riflessione onesta sulla scelta, non un fatto inventato.
 
-NON è un complimento (VIETATO):
-* riassumere la trama o la premessa e spacciarla per complimento. Es. VIETATO: "Ammiro come mette al centro due sorelle accusate di stregoneria, inseguite da cinque uomini" = quello è il logline, non un complimento.
-* lodi generiche che valgono per qualsiasi film: "il conflitto è chiaro", "regge bene la tensione", "personaggi credibili", "ritmo serrato", "storia che funziona".
+COSA È VIETATO (è invenzione, fa cestinare tutto):
+* Inventare SCENE, immagini, inquadrature, suoni, montaggio, fotografia, tecniche precise che NON hai letto da nessuna fonte. Es. VIETATO: "la scena che apre sulla bruma", "il piano sequenza finale", "i suoni degli animali che guidano l'attesa". Se non l'hai LETTO testualmente, NON esiste e NON lo scrivi.
+* Inventare METADATI: durata, anno, premi, festival, casa di produzione non letti da una fonte aperta.
+* Affermare FORMATO o GENERE se non verificato: se conosci solo il titolo, parla del TEMA che il titolo dichiara (es. un viaggio in bici di 3000 km), NON dire "documentario"/"thriller" finché non l'hai confermato da una fonte.
+* Lodi generiche da incollare su qualsiasi film: "regge la tensione", "personaggi credibili", "ritmo serrato", "storia che funziona", "il conflitto è chiaro". Vuote → VIETATE.
 
-È un complimento (OK): una scelta precisa e distintiva di QUESTO lavoro, ricavata da una fonte reale (intervista o dichiarazione del regista, recensione che descrive un dettaglio concreto, una scena o un'immagine specifica davvero documentata).
+LA DIFFERENZA CHIAVE: il complimento riflette su COSA il film racconta e sulla scelta di fondo (premessa VERIFICATA) — MAI su dettagli concreti (scene/immagini/tecnica/metadati) che non hai letto. Riflettere sulla premessa vera = OK e voluto. Descrivere come è girato senza fonte = invenzione = vietato.
 
-Se l'unica cosa che hai è una sinossi o un logline di una riga: NON basta. Niente complimento, vai a Template C.
-Se non hai visto il film e non hai una fonte che descriva un dettaglio specifico: NESSUN complimento (Template C).
-
-DIVIETO SPECIFICO — SCENE/DETTAGLI IMMAGINATI DAL GENERE (è la causa #1 di bocciatura):
-NON descrivere una scena, un'immagine, un suono o una scelta di regia "dedotta dal tipo di film". Esempio VIETATO reale: per un documentario sulla natura scrivere "la scelta di aprire con la bruma sulla foresta scura e di lasciare che siano i suoni degli animali a guidare l'attesa prima delle immagini" — non l'hai letto da nessuna parte, l'hai immaginato perché "ci sta" in un doc naturalistico. Questo È inventare, e i 3 controllori lo bocciano SEMPRE → la mail viene cestinata.
-Una scena o un dettaglio concreto può entrare nella mail SOLO se l'hai LETTO testualmente su una pagina pubblica aperta in QUESTA sessione che parla di QUESTO film. Altrimenti NON scriverlo: appoggiati al titolo reale del lavoro (dal PDF / dalla fonte) e al BLOCCO BASE. Una mail che cita il lavoro vero SENZA descrivere scene è MIGLIORE di una con un dettaglio immaginato (che fa cestinare tutto il contatto).
+PREFERISCI IL NUCLEO SOLIDO (è lo stile giusto): costruisci il complimento sulla premessa PIÙ saldamente verificabile — il tema centrale, di solito già dichiarato dal titolo (es. "un viaggio in bici di 3000 km") — PIÙ la tua riflessione onesta. NON infilare dettagli di trama specifici (una crisi personale, una morte, una riconciliazione, un luogo preciso, "in Patagonia") a meno che NON siano chiaramente documentati da una fonte aperta: i controllori li verificano uno per uno e, se non li confermano, segnalano o bocciano la mail. Un complimento generale e solido sul tema + riflessione (es. "ha scelto di costruire il film attorno a un viaggio così lungo e impegnativo; secondo me funziona perché il percorso fisico diventa anche un modo per raccontare qualcosa di più personale") passa pulito ed è ESATTAMENTE il tono giusto. Aggiungi un dettaglio specifico SOLO se l'hai letto da una fonte e regge la verifica.
 
 ═══════════════════════════════════════════
 SE NON TROVI NULLA
@@ -381,7 +375,7 @@ Ammiro davvero il modo in cui (elemento VERIFICATO che hai visto nel film: scena
 Link visione: URL valido tra `allowed_links`.
 
 ═══════════════════════════════════════════
-TEMPLATE B — solo sinossi ufficiale
+TEMPLATE B — premessa/tema noto (film non visto integralmente)
 ═══════════════════════════════════════════
 
 Oggetto: `(nome lavoro)`
@@ -391,15 +385,18 @@ Salve (Nome)!
 
 Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona. Mi sono imbattuto nel suo lavoro "(nome lavoro)" navigando online.
 
+(COMPLIMENTO sulla PREMESSA/scelta registica VERIFICATA, secondo la sezione COMPLIMENTO: una riflessione onesta sul tema di fondo del lavoro, dichiarata come tua impressione. NIENTE scene/immagini/tecnica/metadati inventati.)
+
 (INCOLLA BLOCCO BASE)
 ```
 
 Link visione: `non disponibile`.
 
-REGOLA STRETTA Template B — NESSUN COMPLIMENTO, MAI: in Template B il corpo è ESATTAMENTE apertura + blocco base, niente in mezzo. È VIETATA qualsiasi frase di impressione o complimento sul film, di QUALSIASI tipo:
-- specifica e inventata: "la scena dei gufi", "una stazione sciistica ai suoi ultimi giorni" → VIETATO;
-- vaga e astratta: "Ammiro la scelta di far passare molto attraverso forma, ritmo, economia minimalista, respiro umano", "mi ha colpito lo sguardo sui personaggi" → ANCHE QUESTO VIETATO. Una frase astratta che potresti incollare su qualsiasi film è la TUA impressione, non una fonte: è invenzione.
-Dopo "...navigando online." vai DIRETTAMENTE a "Le scrivo perché..." (blocco base). Nessuna frase "Ammiro/Mi ha colpito/Secondo me". Un complimento esiste SOLO in Template A, e SOLO quando hai davvero VISTO il film e citi un dettaglio reale di quella visione.
+REGOLA Template B — IL COMPLIMENTO CI VA, ma è di RIFLESSIONE sulla premessa verificata, non la descrizione di una scena vista:
+- OK (premessa verificata + riflessione onesta): "Ammiro davvero il modo in cui ha scelto di costruire un documentario attorno a un viaggio così lungo e impegnativo. Secondo me funziona perché il percorso fisico diventa anche uno strumento per raccontare qualcosa di più personale e umano."
+- VIETATO (scena/dettaglio inventato): "la scena dei gufi", "una stazione sciistica ai suoi ultimi giorni", "apre sulla bruma". Se non l'hai LETTO, non c'è.
+- VIETATO (formato non verificato): non chiamarlo "documentario" se sai solo il titolo; parla del tema/viaggio che il titolo dichiara.
+Se dell'opera non hai NEMMENO una premessa verificata (solo il nome del regista, niente sul lavoro) → Template C.
 
 ═══════════════════════════════════════════
 TEMPLATE C — nessun riferimento concreto
@@ -442,7 +439,7 @@ GIRO 1 — fatti:
 * link reale?
 * film reale?
 * piattaforma reale?
-* complimento SPECIFICO e verificabile (NON trama parafrasata, NON lodi generiche tipo "regge la tensione")? Se non ce l'hai: niente complimento, Template C.
+* complimento presente e onesto: una RIFLESSIONE sulla premessa/scelta VERIFICATA (NON una scena inventata, NON lodi generiche tipo "regge la tensione")? Se hai una premessa verificata → il complimento CI VA. Se non hai nemmeno la premessa → niente complimento, Template C.
 * riferimenti musicali corretti?
 * se stai per usare Template C: hai DAVVERO eseguito il protocollo di ricerca esaustiva (più passaggi, tutti gli indizi dell'input, secondo giro sul titolo trovato)? Se ti sei arreso al primo tentativo → torna a cercare prima di declassare.
 
@@ -456,9 +453,9 @@ GIRO 2 — forma:
 * nessuna maiuscola di cortesia?
 
 GIRO 3 — onestà (AUDIT FONTI OBBLIGATORIO — gate finale, ZERO invenzione):
-* Per OGNI frase che dice qualcosa sul regista o sul suo film (scena, immagine, suono, stile, tema, scelta di regia, formato, tecnica, dettaglio): so indicare la FONTE PRECISA da cui l'ho presa LETTERALMENTE? Cioè una riga del `pdf_full_text`, OPPURE l'URL esatto di una pagina che ho APERTO in questa sessione. Se per una frase NON ho una fonte aperta → CANCELLO quella frase. Senza eccezioni, senza "ci sta".
-* Dedurre dal genere È INVENZIONE: "è un doc sulla natura → ci saranno gufi, foreste, bruma, animali"; "parla di alpinismo → ripercorre le epoche dell'alpinismo"; "è un corto → formato breve e animazione". Tutto VIETATO. Se non l'ho LETTO da una fonte, NON esiste e NON lo scrivo.
-* Se dopo le cancellazioni non resta nessun dettaglio descrittivo verificato: NON ne invento. Lascio la mail SENZA descrizione, nominando solo il titolo reale del lavoro (preso dal `pdf_full_text`) e il festival/sezione se sono nel PDF. Una mail così, asciutta ma vera, è la mail GIUSTA — non un ripiego.
+* DISTINZIONE FONDAMENTALE — un FATTO concreto sul film (scena, immagine, suono, fotografia, montaggio, formato, genere, durata, anno, premio, festival, casa di produzione) richiede una FONTE PRECISA: una riga del `pdf_full_text` OPPURE l'URL di una pagina aperta in questa sessione. Se per un FATTO concreto NON ho la fonte → lo CANCELLO. INVECE una RIFLESSIONE/OPINIONE onesta sulla PREMESSA verificata (dichiarata come tua: "secondo me", "a mio avviso", "ammiro il modo in cui ha scelto di...") NON è un fatto da provare riga per riga: è PERMESSA e VOLUTA, a patto che (a) la premessa su cui poggia sia verificata e (b) non infili dentro dettagli concreti inventati. Esempio permesso: premessa "doc su un viaggio in bici di 3000 km" (verificata dal titolo/scheda) + "secondo me funziona perché il percorso fisico diventa uno strumento per raccontare qualcosa di personale" (tua riflessione). Esempio vietato dentro la stessa frase: "...e la scena in cui si ferma sotto la pioggia" (scena inventata, nessuna fonte) → CANCELLO solo quel pezzo.
+* Dedurre un DETTAGLIO CONCRETO dal genere È INVENZIONE: "è un doc sulla natura → ci saranno gufi, foreste, bruma, animali"; "è un corto → formato breve e animazione". Tutto VIETATO. Riflettere sulla premessa verificata, invece, NON è dedurre dettagli: è onesto.
+* Se non resta nessuna PREMESSA verificata su cui riflettere (non sai proprio nulla del lavoro, solo il nome del regista): allora niente complimento, e o nomini solo il titolo reale (se ce l'hai) o vai a Template C. Ma se UNA premessa verificata ce l'hai (anche solo il tema dichiarato dal titolo), il complimento di riflessione CI VA.
 * sto inventando qualcosa?
 * sto deducendo?
 * sto trasformando ipotesi in fatti?
