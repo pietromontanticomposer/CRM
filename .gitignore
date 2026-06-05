@@ -43,3 +43,5 @@ next-env.d.ts
 
 # local-worker runtime lock
 .local-worker.lock
+.local-worker.handover
+local-worker/_tmp_*.ts

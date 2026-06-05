@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -166,6 +166,77 @@ const deleteDraftRow = async (id: string) => {
   }).catch((e) => {
     console.warn(`[worker] delete draft ${id.slice(0, 8)} fallito:`, e);
   });
+};
+
+// Pietro 2026-06-05: outreach_drafts e' uno SPAZIO DI LAVORO TEMPORANEO. Quando
+// Pietro APPROVA una bozza, questa viene SPOSTATA in `contacts` (permanente, via
+// /api/outreach/drafts/[id]/approve) e cancellata da qui. Quindi TUTTO cio' che
+// resta in outreach_drafts e' roba NON approvata da lui e NON deve sopravvivere
+// alla sessione: si svuota alla chiusura del worker. ATTENZIONE: i contatti
+// approvati sono al sicuro in `contacts`, qui non si perde NULLA di approvato.
+const wipeAllDrafts = async (reason: string): Promise<number> => {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return 0;
+  try {
+    const res = await retryingFetch(
+      `${url}/rest/v1/outreach_drafts?id=not.is.null`,
+      {
+        method: "DELETE",
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Prefer: "return=representation",
+        },
+      }
+    );
+    const body = (await res.json().catch(() => [])) as unknown[];
+    const n = Array.isArray(body) ? body.length : 0;
+    console.warn(
+      `[worker] PULIZIA (${reason}): cancellati ${n} draft NON approvati.`
+    );
+    return n;
+  } catch (error) {
+    console.warn(`[worker] PULIZIA (${reason}) fallita:`, error);
+    return 0;
+  }
+};
+
+// Backstop all'avvio: ripulisce SOLO i draft "vecchi" — leftover di una sessione
+// morta male (crash o kill -9, senza shutdown pulito) — senza toccare gli import
+// FRESCHI che l'utente ha appena caricato e sta per far lavorare.
+const wipeStaleDrafts = async (
+  hours: number,
+  reason: string
+): Promise<number> => {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) return 0;
+  const cutoff = new Date(Date.now() - hours * 3600_000).toISOString();
+  try {
+    const res = await retryingFetch(
+      `${url}/rest/v1/outreach_drafts?created_at=lt.${cutoff}`,
+      {
+        method: "DELETE",
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Prefer: "return=representation",
+        },
+      }
+    );
+    const body = (await res.json().catch(() => [])) as unknown[];
+    const n = Array.isArray(body) ? body.length : 0;
+    if (n > 0) {
+      console.warn(
+        `[worker] PULIZIA avvio (${reason}): rimossi ${n} draft vecchi (> ${hours}h).`
+      );
+    }
+    return n;
+  } catch (error) {
+    console.warn(`[worker] PULIZIA stale (${reason}) fallita:`, error);
+    return 0;
+  }
 };
 
 // NOTA: alcune frasi che potrebbero sembrare "AI-cringe" sono in realta'
@@ -834,6 +905,28 @@ const main = async () => {
 // lo stesso draft 2 volte (bug diagnosticato 2026-05-28, double validator runs).
 const LOCK_FILE = path.join(PROJECT_ROOT, ".local-worker.lock");
 
+// File "handover": quando un NUOVO worker fa takeover di uno vecchio (relaunch),
+// lo scrive PRIMA di mandare SIGTERM. Il worker che muore, vedendolo, NON svuota
+// i draft (li passa al successore). Cosi' un relaunch dopo un import NON cancella
+// per sbaglio i contatti appena importati. Solo una chiusura VERA (Ctrl-C,
+// finestra chiusa, kill) — senza successore — svuota i draft.
+const HANDOVER_FILE = path.join(PROJECT_ROOT, ".local-worker.handover");
+const STALE_DRAFT_HOURS = Math.max(
+  0.25,
+  Number(process.env.OUTREACH_DRAFT_STALE_HOURS) || 2
+);
+const isHandoverInProgress = (): boolean => {
+  try {
+    if (!existsSync(HANDOVER_FILE)) return false;
+    const ageMs = Date.now() - statSync(HANDOVER_FILE).mtimeMs;
+    if (ageMs > 20_000) return false; // handover stantio: ignoralo
+    const pid = Number.parseInt(readFileSync(HANDOVER_FILE, "utf8").trim(), 10);
+    return Number.isFinite(pid) && pid !== process.pid;
+  } catch {
+    return false;
+  }
+};
+
 const acquireLock = (): boolean => {
   if (existsSync(LOCK_FILE)) {
     try {
@@ -880,10 +973,12 @@ const releaseLock = () => {
 // SIGHUP), il lancio piu' recente VINCE. Li chiudiamo prima di prendere il
 // lock, cosi' non si accumulano mai piu' istanze che competono per la CPU
 // (causa concreta della lentezza diagnosticata 2026-05-28).
-const terminateOtherWorkers = () => {
+const terminateOtherWorkers = (): boolean => {
   // Cross-platform (Mac e Windows): il PID del worker precedente e' salvato nel
   // lock file da acquireLock(). Niente "pgrep"/"sleep" (non esistono su
   // Windows): il lancio piu' recente VINCE e chiude il predecessore.
+  // Ritorna true se ha davvero rilevato e chiuso un worker preesistente
+  // (takeover): in quel caso i draft NON vanno svuotati, sono un handover.
   let previousPid: number | null = null;
   try {
     if (existsSync(LOCK_FILE)) {
@@ -891,25 +986,32 @@ const terminateOtherWorkers = () => {
       if (Number.isFinite(parsed)) previousPid = parsed;
     }
   } catch {
-    return;
+    return false;
   }
   if (
     previousPid === null ||
     previousPid === process.pid ||
     previousPid === process.ppid
   ) {
-    return;
+    return false;
   }
   try {
     process.kill(previousPid, 0); // 0 = solo signal-check, no kill
   } catch {
-    return; // gia' morto: niente da fare
+    return false; // gia' morto: niente da fare
+  }
+  // HANDOVER: avviso il predecessore che e' un takeover, cosi' NON svuota i
+  // draft morendo (li eredito io). Scritto PRIMA del SIGTERM.
+  try {
+    writeFileSync(HANDOVER_FILE, String(process.pid), "utf8");
+  } catch {
+    /* noop */
   }
   try {
     process.kill(previousPid, "SIGTERM");
     console.warn(`[worker] takeover: chiudo worker preesistente PID ${previousPid}`);
   } catch {
-    return;
+    return false;
   }
   // Attesa sincrona ~2s (cross-platform, senza comandi esterni) per lasciare
   // tempo allo shutdown pulito (releaseLock), poi SIGKILL se ancora vivo.
@@ -924,20 +1026,67 @@ const terminateOtherWorkers = () => {
   } catch {
     /* gia' morto: ok */
   }
+  return true;
 };
 
-terminateOtherWorkers();
+const tookOver = terminateOtherWorkers();
 if (!acquireLock()) {
   process.exit(1);
 }
-process.on("SIGINT", () => { releaseLock(); process.exit(0); });
-process.on("SIGTERM", () => { releaseLock(); process.exit(0); });
+// Lock acquisito: l'eventuale handover e' stato consumato (il predecessore e'
+// gia' uscito). Lo rimuovo cosi' una chiusura FUTURA di questo worker svuota
+// davvero i draft.
+try {
+  if (existsSync(HANDOVER_FILE)) unlinkSync(HANDOVER_FILE);
+} catch {
+  /* noop */
+}
+
+const ONCE = process.argv.includes("--once");
+
+// Chiusura del worker: svuota i draft NON approvati. Async perche' fa una
+// DELETE prima di uscire. Salta lo svuotamento solo se e' un takeover
+// (handover) o in modalita' --once (usata dai test). Guard anti doppio-exit.
+let shuttingDown = false;
+const gracefulShutdown = async (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
+    if (ONCE) {
+      /* modalita' test: non toccare il DB */
+    } else if (isHandoverInProgress()) {
+      console.warn(
+        `[worker] ${signal}: takeover in corso, passo i draft al nuovo worker (NON svuoto).`
+      );
+    } else {
+      await wipeAllDrafts(`worker chiuso: ${signal}`);
+    }
+  } finally {
+    releaseLock();
+    process.exit(0);
+  }
+};
+process.on("SIGINT", () => void gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => void gracefulShutdown("SIGTERM"));
 // SIGHUP = la finestra del Terminale e' stata chiusa. Senza questo handler il
 // worker veniva orfanato e restava a girare (PPID 1), accumulandosi.
-process.on("SIGHUP", () => { releaseLock(); process.exit(0); });
+process.on("SIGHUP", () => void gracefulShutdown("SIGHUP"));
 process.on("exit", releaseLock);
 
-main().catch((error) => {
+const bootstrap = async () => {
+  // Backstop avvio: ripulisce i leftover di una sessione morta male (crash/-9)
+  // senza toccare import freschi. Non in --once (test), non su takeover (i
+  // draft del predecessore sono validi e li sto ereditando).
+  if (!ONCE && !tookOver) {
+    await wipeStaleDrafts(
+      STALE_DRAFT_HOURS,
+      "leftover di sessione precedente"
+    );
+  }
+  await main();
+};
+
+bootstrap().catch((error) => {
   console.error("[worker] fatal error", error);
   process.exitCode = 1;
 });
