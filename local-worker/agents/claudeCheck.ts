@@ -33,9 +33,11 @@ export const runClaudeCheck = async (
         VALIDATOR_PROMPT_FILENAME,
         packet
       );
+      // Prompt via STDIN (non come argomento): su Windows la shell spezza un
+      // argomento lungo/multi-riga e Claude riceve spazzatura. stdin e' sicuro
+      // su Mac e Windows.
       const args = [
         "-p",
-        prompt,
         "--allowedTools",
         "WebSearch",
         "WebFetch",
@@ -55,6 +57,7 @@ export const runClaudeCheck = async (
         command: "claude",
         args,
         cwd: workingDirectory,
+        stdin: prompt,
       });
       const rawOutput = result.stdout.trim() || result.stderr.trim();
       if (result.code !== 0) {

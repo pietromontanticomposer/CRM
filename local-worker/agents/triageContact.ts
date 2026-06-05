@@ -140,7 +140,10 @@ export const runContactTriage = async (
   }
 
   const prompt = await buildTriagePrompt(input);
-  const args = ["-p", prompt, "--output-format", "text", "--no-session-persistence"];
+  // Il prompt va via STDIN, non come argomento: su Windows la shell spezza un
+  // argomento lungo/multi-riga (cmd.exe) e Claude riceve spazzatura. stdin e'
+  // sicuro su Mac e Windows. claude -p legge il prompt da stdin se non e' un arg.
+  const args = ["-p", "--output-format", "text", "--no-session-persistence"];
   const model =
     process.env.TRIAGE_MODEL?.trim() || process.env.CLAUDE_MODEL?.trim();
   if (model) {
@@ -150,7 +153,7 @@ export const runContactTriage = async (
   return withTimeout(
     (async (): Promise<TriageResult | TriageError> => {
       try {
-        const result = await runCommand({ command: "claude", args, cwd });
+        const result = await runCommand({ command: "claude", args, cwd, stdin: prompt });
         const rawOutput = result.stdout.trim() || result.stderr.trim();
         if (result.code !== 0) {
           return {

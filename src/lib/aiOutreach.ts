@@ -3,6 +3,7 @@ export const AI_WORKFLOW_STATUSES = [
   "not_checked",
   "imported",
   "draft_ready",
+  "processing",
   "approved",
   "needs_review",
   "blocked",
@@ -74,6 +75,8 @@ export const getAiWorkflowStatusLabel = (status?: string | null) => {
       return "Imported";
     case "draft_ready":
       return "Draft ready";
+    case "processing":
+      return "In lavorazione";
     case "approved":
       return "Approved";
     case "needs_review":

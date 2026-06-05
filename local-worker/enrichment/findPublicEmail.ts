@@ -327,9 +327,10 @@ const searchByClaude = async (
   const prompt = buildSearchPrompt(input);
   // Web access: senza WebSearch + WebFetch Claude non puo' verificare i claim
   // online. acceptEdits e' la permission-mode minima per eseguire i tool.
+  // Prompt via STDIN (non come argomento): su Windows la shell spezza un
+  // argomento lungo/multi-riga e Claude riceve spazzatura. stdin sicuro ovunque.
   const args = [
     "-p",
-    prompt,
     "--allowedTools",
     "WebSearch",
     "WebFetch",
@@ -345,7 +346,7 @@ const searchByClaude = async (
   return withTimeout(
     (async () => {
       try {
-        const result = await runCommand({ command: "claude", args, cwd });
+        const result = await runCommand({ command: "claude", args, cwd, stdin: prompt });
         const raw = result.stdout.trim() || result.stderr.trim();
         if (result.code !== 0) {
           return failedProposal(

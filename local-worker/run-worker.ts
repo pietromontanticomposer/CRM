@@ -656,6 +656,12 @@ const processContact = async (
     console.log(
       `${logPrefix(contact)} enrichment -> ${enrichment.status} confidence=${enrichment.confidence}`
     );
+    // Diagnostica: se la ricerca non ha prodotto un'email, mostro il dettaglio
+    // per-agente (es. "claude: ... · codex: Codex CLI exited 1") cosi' si vede
+    // SUBITO perche' una CLI fallisce (utile per diagnosticare Windows).
+    if (enrichment.status === "error" || enrichment.status === "not_found") {
+      console.log(`${logPrefix(contact)} enrichment dettaglio: ${enrichment.reason}`);
+    }
   } else if (isNonEmptyString(contact.email) && !contact.email_enrichment_status) {
     await persistEnrichment(supabase, contact, {
       email: contact.email,
