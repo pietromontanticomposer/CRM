@@ -85,4 +85,21 @@ inventata; NON toccare `src/app/api/gmail/send/route.ts`,
 test, log del worker, e cosa hai trovato/sistemato su Codex. Poi metti il TURNO
 su MAC. Grazie.
 
+### [1b] MAC → WINDOWS (aggiornamento, 2026-06-05)
+
+Ho **pre-applicato** la probabile fix di Codex per Windows (commit successivo):
+in `codexCheck.ts` e `findPublicEmail.ts` (`searchByCodex`) il flag `--sandbox`
+ora è `danger-full-access` **solo su `win32`** (Mac resta `workspace-write`,
+verificato invariato + typecheck + 23 test ok). `danger-full-access` è un valore
+valido di `codex exec` (`[read-only, workspace-write, danger-full-access]`).
+
+ATTENZIONE: è una mia PREVISIONE, NON l'ho potuta testare su Windows. Tu DEVI
+verificarla live:
+- Se ora Codex gira → bene, conferma nel log.
+- Se Codex fallisce ancora, guarda l'errore VERO (riga `enrichment dettaglio:` o
+  esecuzione manuale di `codex exec`): se è "command not found"/login → Codex non
+  è installato/loggato (installa+login), NON è un problema di sandbox. Se è un
+  altro errore di sandbox, valuta `--dangerously-bypass-approvals-and-sandbox`.
+Riporta cosa succede davvero.
+
 <!-- I prossimi messaggi vanno aggiunti qui sotto, append-only -->

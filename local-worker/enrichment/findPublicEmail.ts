@@ -389,7 +389,9 @@ const searchByCodex = async (
           "exec",
           "--skip-git-repo-check",
           "--sandbox",
-          "workspace-write",
+          // Windows: la sandbox OS-level di Codex (workspace-write) spesso non e'
+          // supportata -> errore. Li' usiamo danger-full-access. Mac/Linux uguali.
+          process.platform === "win32" ? "danger-full-access" : "workspace-write",
           "--output-last-message",
           outputFile,
           "-",

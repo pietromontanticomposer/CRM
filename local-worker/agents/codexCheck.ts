@@ -59,7 +59,10 @@ export const runCodexCheck = async (
         "exec",
         "--skip-git-repo-check",
         "--sandbox",
-        "workspace-write",
+        // Su Windows la sandbox OS-level di Codex (workspace-write) spesso non e'
+        // supportata e Codex esce in errore: li' usiamo danger-full-access (gira
+        // sulla macchina locale di Pietro, accettabile). Mac/Linux invariati.
+        process.platform === "win32" ? "danger-full-access" : "workspace-write",
         "--ephemeral",
         "-c",
         "model_reasoning_effort=medium",
