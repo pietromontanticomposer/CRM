@@ -52,7 +52,10 @@ type AgentDraftAttempt = {
 // e fa web search per verificare claim. 240s e' la finestra realistica.
 const CLAUDE_TIMEOUT_MS = 120_000;
 const GEMINI_TIMEOUT_MS = 90_000;
-const CODEX_TIMEOUT_MS = 240_000;
+// Pietro 2026-06-05: "preferisco piu' lento ma piu' preciso". Lo scrittore deve
+// avere tempo di scavare per un dettaglio specifico DOCUMENTATO (sinossi, scheda
+// festival, recensioni, interviste). 5 min: la precisione conta piu' della velocita'.
+const CODEX_TIMEOUT_MS = 300_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
