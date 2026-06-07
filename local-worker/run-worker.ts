@@ -495,6 +495,7 @@ const persistDraft = async (
       ai_risk_score: numericToRiskLabel(draft.risk_score),
       ai_risk_score_numeric: draft.risk_score,
       ai_link_visione: draft.link_visione,
+      ai_sources: draft.sources,
       ai_writer_reason: draft.reason,
       ai_generated_at: generatedAt,
     })
@@ -728,6 +729,7 @@ const processContact = async (
         email_source_url: contact.email_source_url,
         email_confidence: contact.email_confidence,
         email_enrichment_status: contact.email_enrichment_status,
+        prompt_master_rules: contact.prompt_master_rules,
       },
       PROJECT_ROOT
     );

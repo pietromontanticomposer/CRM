@@ -124,18 +124,18 @@ l. Forma di cortesia + LINGUA coerenti. La mail può essere in ITALIANO (apertur
 m. Template (A, B, C, C_TEAM, NOT_READY) coerente con materiale disponibile:
    - A: opera concreta verificata + link visione presente in `allowed_links`
    - B: materiale parziale verificato
-   - C / C_TEAM: nessun claim su opere specifiche, link deve dire "Link visione: non disponibile"
+   - C / C_TEAM: nessun claim su opere specifiche; campo `draft_link_visione` = "non disponibile"
    - NOT_READY: dati insufficienti, subject/body vuoti
    Se mismatch: `draft_ok=false`.
 
-n. Link visione: il body DEVE contenere su una riga la dicitura `Link visione: <URL>` (Template A) oppure ESATTAMENTE `Link visione: non disponibile` (Template B/C/C_TEAM). Se manca la riga "Link visione:" del tutto → `draft_ok=false`. Per Template A: l'URL dopo "Link visione:" deve essere uno tra `allowed_links`.
+n. Link visione (CAMPO SEPARATO, NON nel corpo): la verifica si fa sul campo `draft_link_visione` del packet, NON sul body. Template A → `draft_link_visione` deve essere un URL valido presente in `allowed_links`. Template B/C/C_TEAM → `draft_link_visione` = "non disponibile". Il `draft_body` (la mail che parte) NON deve contenere nessuna riga "Link visione" né elenchi di fonti/URL di verifica: se per errore ce l'ha → `draft_ok=false` (è roba interna che non va spedita). Le `sources` sono per la revisione di Pietro, non si controllano qui e non devono MAI comparire nel body.
 
 **IMPORTANTE — NON sono link visione e quindi NON vanno controllati**:
 - `pietromontanti.com` e `https://pietromontanti.com` (sito personale di Pietro, parte della firma)
 - `pietro_montanti_composer` (handle Instagram, parte della firma)
 - `https://www.instagram.com/pietro_montanti_composer`
 - `https://soundcloud.com/pietromontanticomposer/*` (portfolio)
-Questi compaiono SEMPRE nel body (sono nel BLOCCO FISSO autorizzato di Pietro) e NON devono essere segnalati come "URL non in allowed_links". Il check link visione si applica SOLO alla riga letterale `Link visione: ...`.
+Questi compaiono SEMPRE nel body (sono nel BLOCCO FISSO autorizzato di Pietro) e NON devono essere segnalati come "URL non in allowed_links". Sono gli UNICI URL ammessi nel body; qualsiasi ALTRO URL nel body (es. una fonte di verifica finita per errore nel testo) → `draft_ok=false`.
 
 o. Link visione URL valido: http/https, host plausibile, no localhost/IP raw/domini esempio. Altrimenti: `draft_ok=false`.
 

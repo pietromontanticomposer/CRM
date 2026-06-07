@@ -32,6 +32,7 @@ type BatchContact = {
   ai_send_allowed: boolean | null;
   ai_template_used: string | null;
   ai_link_visione: string | null;
+  ai_sources: string[] | null;
   source_link: string | null;
   email_source_url: string | null;
   email_source_type: string | null;
@@ -861,15 +862,27 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                       <div className="mt-1 text-sm text-[var(--ink)]">
                         {contact.ai_email_subject || "—"}
                       </div>
-                      {contact.ai_link_visione && (
-                        <>
-                          <div className="mt-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                            Link visione
+                      {(contact.ai_link_visione ||
+                        (contact.ai_sources &&
+                          contact.ai_sources.length > 0)) && (
+                        <div className="mt-3 rounded-lg border border-dashed border-[var(--line)] bg-[var(--panel)] p-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-600">
+                            Verifica / Fonti — solo per te, NON viene inviata
                           </div>
-                          <div className="mt-1 text-[11px] text-[var(--muted)] break-all">
-                            {contact.ai_link_visione}
-                          </div>
-                        </>
+                          {contact.ai_link_visione && (
+                            <div className="mt-1 text-[11px] text-[var(--muted)] break-all">
+                              Link visione: {contact.ai_link_visione}
+                            </div>
+                          )}
+                          {contact.ai_sources &&
+                            contact.ai_sources.length > 0 && (
+                              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-[var(--muted)] break-all">
+                                {contact.ai_sources.map((src, idx) => (
+                                  <li key={idx}>{src}</li>
+                                ))}
+                              </ul>
+                            )}
+                        </div>
                       )}
                     </div>
                     <div className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-3">

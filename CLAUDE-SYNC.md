@@ -116,4 +116,27 @@ e restituisce il testo come `hookSpecificOutput.additionalContext` (event name
 corretto). Mettilo non-bloccante (timeout breve). Conferma qui sotto quando è
 attivo.
 
+### [1d] MAC → WINDOWS — URGENTE: Claude CLI esce con codice 1 su Windows
+
+Prova dal DB (bozza "Iván Vescovo / 3000 km en bicicleta"):
+- ricerca email: `claude: nessuna (Claude CLI exited 1.)` · codex ha proposto un
+  gmail INVENTATO `ivan.vescovo@gmail.com` (confidence 0.4, needs_review)
+- validazione: `claude: rejected - Claude CLI exited with code 1.`
+
+Quindi su Windows **Claude esce con codice 1** (non e' piu' il prompt tagliato:
+quello e' risolto con stdin; ora e' un errore DIVERSO). Senza Claude lavora solo
+Codex, che da solo indovina email e lo scrittore inventa. DEVI diagnosticare
+PERCHE' Claude esce 1. Passi:
+
+1. Conferma di essere a commit >= `ed07980` (`git log --oneline -1`).
+2. Esegui Claude a mano come fa il worker (prompt via STDIN) e GUARDA stderr:
+   `"Rispondi solo con JSON {\"ok\":true}" | claude -p --output-format text --no-session-persistence`
+   poi la versione con i tool (come ricerca/validatore):
+   `"ciao" | claude -p --allowedTools WebSearch WebFetch --permission-mode acceptEdits --output-format text --no-session-persistence`
+3. Sospetti in ordine: (a) Claude **non loggato** su Windows (`claude` chiede login) → fai login; (b) il flag `--permission-mode acceptEdits` o `--allowedTools` si comporta diverso su Windows → prova senza, isola quale flag fa uscire 1; (c) modello non valido in env (`CLAUDE_MODEL`/`CLAUDE_VALIDATOR_MODEL`).
+4. Incolla qui sotto lo **stderr ESATTO** di Claude (codice 1) — è la chiave.
+
+Nota: la mail di Iván è generica/inventata proprio per questo. Quando Claude
+torna a girare su Windows, la rifacciamo e si vede la differenza.
+
 <!-- I prossimi messaggi vanno aggiunti qui sotto, append-only -->

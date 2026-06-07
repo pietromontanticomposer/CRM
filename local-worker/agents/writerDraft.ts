@@ -24,6 +24,9 @@ export type WriterInput = {
   email_source_url?: string | null;
   email_confidence?: number | null;
   email_enrichment_status?: string | null;
+  // Istruzioni di personalizzazione di Pietro per questo import (es. frase Trento
+  // Film Festival). Hanno priorita' sul template base.
+  prompt_master_rules?: string | null;
 };
 
 export type WriterTemplate = "A" | "B" | "C" | "C_TEAM" | "NOT_READY";
@@ -32,6 +35,9 @@ export type WriterDraftResult = {
   subject: string;
   body: string;
   link_visione: string;
+  // Fonti pubbliche aperte per verificare lavoro/complimento. SOLO per la
+  // revisione di Pietro: non entrano MAI nella mail inviata.
+  sources: string[];
   template_used: WriterTemplate;
   risk_score: number;
   reason: string;
@@ -110,6 +116,25 @@ const buildWriterPrompt = async (input: WriterInput) => {
   )}\n`;
 };
 
+const normalizeSources = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry.length > 0)
+    .slice(0, 20);
+};
+
+// Rete di sicurezza: anche se lo scrittore disobbedisce e mette una riga
+// "Link visione: ..." nel corpo, la togliamo qui. Il corpo che parte deve
+// essere SOLO la mail (Pietro 2026-06-05).
+const stripInternalLinesFromBody = (raw: string): string =>
+  raw
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*link\s*visione\s*:/i.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
 const parseDraftOutput = (
   rawOutput: string
 ): WriterDraftResult | WriterDraftError => {
@@ -135,7 +160,8 @@ const parseDraftOutput = (
   ) {
     return { error: "Writer JSON con shape non valida.", raw_output: rawOutput };
   }
-  if (!subject.trim() || !body.trim()) {
+  const cleanedBody = stripInternalLinesFromBody(body);
+  if (!subject.trim() || !cleanedBody) {
     return {
       error: "Writer ha dichiarato dati insufficienti per generare la bozza.",
       raw_output: rawOutput,
@@ -143,8 +169,9 @@ const parseDraftOutput = (
   }
   return {
     subject: subject.trim(),
-    body: body.trim(),
+    body: cleanedBody,
     link_visione: link_visione.trim() || "non disponibile",
+    sources: normalizeSources(parsed.sources),
     template_used,
     risk_score: riskNumeric,
     reason: typeof reason === "string" ? reason : "",

@@ -433,18 +433,26 @@ export function AiOutreachImport({
               onDraftChange({ ...draft, batchName: event.target.value })
             }
           />
-          <textarea
-            className="w-full"
-            rows={3}
-            placeholder="Prompt master rules (opzionale)"
-            value={draft.promptMasterRules}
-            onChange={(event) =>
-              onDraftChange({
-                ...draft,
-                promptMasterRules: event.target.value,
-              })
-            }
-          />
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+              Personalizzazione (vale per TUTTI i contatti di questo import)
+            </label>
+            <textarea
+              className="w-full"
+              rows={4}
+              placeholder={
+                "Istruzioni in più per lo scrittore, applicate a ogni mail di questo import. Es:\n" +
+                "Sono tutti registi del Trento Film Festival 2026. Aggiungi alla mail: \"ho visto il tuo lavoro al festival di Trento e ho provato ad avvicinarti ma non ti ho trovato\"."
+              }
+              value={draft.promptMasterRules}
+              onChange={(event) =>
+                onDraftChange({
+                  ...draft,
+                  promptMasterRules: event.target.value,
+                })
+              }
+            />
+          </div>
         </div>
       )}
 
