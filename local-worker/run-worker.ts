@@ -9,6 +9,7 @@ import { aggregateResults } from "./aggregateResults";
 import { runClaudeCheck } from "./agents/claudeCheck";
 import { runCodexCheck } from "./agents/codexCheck";
 import type { AgentRunResult, ValidationPacket } from "./agents/shared";
+import { noteCliCongestion, getCliCap } from "./agents/shared";
 import { runWriterDraft, type WriterDraftResult } from "./agents/writerDraft";
 import { runContactTriage } from "./agents/triageContact";
 import {
@@ -76,16 +77,15 @@ const WORKER_POLL_MS = Math.max(
 // ogni 3 core logici, clamp [2,4]. Override con OUTREACH_WORKER_CONCURRENCY.
 const CPU_COUNT = os.cpus().length || 4;
 void CPU_COUNT;
-// FLESSIBILE ANTI-INTASAMENTO (Pietro 2026-06-05): il collo di bottiglia e' la
-// RETE, non la CPU. Ogni contatto in enrichment lancia 2 ricerche AI pesanti
-// (Claude + Codex). Per non mettere in coda (-> timeout della ricerca) ne'
-// saturare la rete, processiamo floor(tetto_rete / 2) contatti insieme, dove il
-// tetto e' MAX_CONCURRENT_CLI (lo stesso semaforo globale di shared.ts). Mac
-// (tetto 3) -> 1 contatto alla volta; Windows con MAX_CONCURRENT_CLI=6 -> 3.
-// Una manopola sola (MAX_CONCURRENT_CLI), si adatta da sola, non intasa mai.
-// Override esplicito: OUTREACH_WORKER_CONCURRENCY.
-const CLI_CAP = Math.max(1, Number(process.env.MAX_CONCURRENT_CLI) || 3);
-const DEFAULT_CONCURRENCY = Math.max(1, Math.floor(CLI_CAP / 2));
+// FLESSIBILE AUTO-ADATTIVO (Pietro 2026-06-07): il collo di bottiglia e' la RETE.
+// Mettiamo TANTI contatti in volo; a governare la rete ci pensa il semaforo CLI
+// ADATTIVO di shared.ts (AIMD): alza le ricerche in parallelo quando la rete
+// regge e le DIMEZZA appena qualcosa va in timeout / "fetch failed". Cosi' va
+// veloce quando puo' e non intasa mai, su qualunque macchina. La concorrenza
+// reale e' quella del semaforo, non questo numero: qui teniamo solo abbastanza
+// contatti pronti da alimentare il pool. Override: OUTREACH_WORKER_CONCURRENCY.
+const CLI_MAX = Math.max(2, Number(process.env.MAX_CONCURRENT_CLI) || 6);
+const DEFAULT_CONCURRENCY = CLI_MAX;
 const WORKER_CONCURRENCY = Math.max(
   1,
   Number.parseInt(
@@ -140,6 +140,9 @@ const retryingFetch = async (
       return await fetch(...args);
     } catch (err) {
       lastErr = err;
+      // "fetch failed"/ConnectTimeout = la rete e' satura: segnala intasamento
+      // cosi' il semaforo CLI dimezza la concorrenza e si sgonfia da solo.
+      noteCliCongestion();
       await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
     }
   }
@@ -864,7 +867,7 @@ const runCycle = async () => {
   }
 
   console.log(
-    `[worker] fetched ${queue.length} contact(s), concurrency=${WORKER_CONCURRENCY}`
+    `[worker] fetched ${queue.length} contact(s), contatti=${WORKER_CONCURRENCY} · rete(CLI)=${getCliCap()} [auto]`
   );
 
   const runOne = async (contact: DraftQueueRow) => {

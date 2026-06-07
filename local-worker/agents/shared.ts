@@ -106,35 +106,58 @@ export const cleanupTempDirectory = async (directory: string) => {
 
 export const getInlineSchema = () => JSON.stringify(RESULT_SCHEMA);
 
-// LIMITE FLESSIBILE ANTI-INTASAMENTO (Pietro 2026-06-05): tutte le chiamate
-// alle AI (ricerca email + validatori) passano da qui. Un semaforo globale
-// fa partire al MASSIMO MAX_CONCURRENT_CLI ricerche pesanti insieme; le altre
-// aspettano in coda. Cosi' la rete non si strozza, qualunque sia la
-// concorrenza del worker o il numero di AI. Regolabile per macchina via env
-// MAX_CONCURRENT_CLI (Mac lento: 3; Windows piu' potente: anche 6+).
-const MAX_CONCURRENT_CLI = Math.max(
-  1,
-  Number(process.env.MAX_CONCURRENT_CLI) || 3
+// LIMITE FLESSIBILE AUTO-ADATTIVO (Pietro 2026-06-07): la rete si regola DA SOLA
+// (controllo AIMD, come il congestion control di TCP). Tutte le chiamate alle AI
+// passano da qui. Parte da CLI_START chiamate in parallelo; dopo RAMP_OK successi
+// consecutivi alza il tetto di 1 (la rete regge -> piu' veloce); a ogni segnale
+// di intasamento (timeout o "fetch failed", via noteCliCongestion) DIMEZZA il
+// tetto. Range [CLI_MIN, CLI_MAX]. Niente piu' numero fisso: su rete lenta scende,
+// su rete buona sale, senza intasare mai. Override START/MAX via env.
+const CLI_MIN = 1;
+const CLI_MAX = Math.max(2, Number(process.env.MAX_CONCURRENT_CLI) || 6);
+const CLI_START = Math.min(
+  CLI_MAX,
+  Math.max(CLI_MIN, Number(process.env.START_CONCURRENT_CLI) || 3)
 );
+const RAMP_OK = 4;
+let cliCap = CLI_START;
 let activeCli = 0;
+let consecutiveOk = 0;
 const cliWaiters: Array<() => void> = [];
-const acquireCli = (): Promise<void> =>
-  new Promise((resolve) => {
-    if (activeCli < MAX_CONCURRENT_CLI) {
-      activeCli += 1;
-      resolve();
-    } else {
-      cliWaiters.push(resolve);
-    }
-  });
-const releaseCli = () => {
-  const next = cliWaiters.shift();
-  if (next) {
-    next(); // slot passato al prossimo in coda: activeCli resta invariato
-  } else {
-    activeCli -= 1;
+
+const pumpCli = () => {
+  while (activeCli < cliCap && cliWaiters.length > 0) {
+    const next = cliWaiters.shift();
+    if (!next) break;
+    activeCli += 1;
+    next();
   }
 };
+const acquireCli = (): Promise<void> =>
+  new Promise((resolve) => {
+    cliWaiters.push(resolve);
+    pumpCli();
+  });
+const releaseCli = () => {
+  activeCli = Math.max(0, activeCli - 1);
+  pumpCli();
+};
+
+// La rete ha retto: dopo un po' di successi alza il tetto di 1 (fino a CLI_MAX).
+export const noteCliSuccess = () => {
+  consecutiveOk += 1;
+  if (consecutiveOk >= RAMP_OK && cliCap < CLI_MAX) {
+    cliCap += 1;
+    consecutiveOk = 0;
+  }
+};
+// La rete si sta intasando (timeout / fetch failed): dimezza il tetto e riparte.
+export const noteCliCongestion = () => {
+  consecutiveOk = 0;
+  const next = Math.max(CLI_MIN, Math.floor(cliCap / 2));
+  if (next < cliCap) cliCap = next;
+};
+export const getCliCap = () => cliCap;
 
 export const runCommand = async ({
   command,
@@ -176,10 +199,12 @@ export const runCommand = async ({
       });
 
       child.on("error", (error) => {
+        noteCliCongestion(); // spawn fallito (es. risorse esaurite): frena
         reject(error);
       });
 
       child.on("close", (code) => {
+        if (code === 0) noteCliSuccess(); // andata bene: la rete puo' salire
         resolve({ code, stdout, stderr });
       });
 
