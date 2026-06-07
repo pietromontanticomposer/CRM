@@ -496,6 +496,9 @@ const persistDraft = async (
       ai_risk_score_numeric: draft.risk_score,
       ai_link_visione: draft.link_visione,
       ai_sources: draft.sources,
+      ai_director_tier: draft.director_tier,
+      ai_director_tier_reason: draft.director_tier_reason,
+      ai_director_photo_url: draft.director_photo_url,
       ai_writer_reason: draft.reason,
       ai_generated_at: generatedAt,
     })

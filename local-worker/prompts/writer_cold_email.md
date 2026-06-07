@@ -496,6 +496,9 @@ OUTPUT — SOLO JSON, NIENTE MARKDOWN, NIENTE TESTO PRIMA O DOPO
   "body": "<SOLO la mail: apertura + (eventuale complimento verificato) + BLOCCO BASE + chiusura 'Un saluto, Pietro'. NIENTE riga 'Link visione', NIENTE fonti/URL qui dentro>",
   "link_visione": "<URL valido per A; 'non disponibile' per B/C/C_TEAM> (campo separato, NON nel body)",
   "sources": ["<URL della pagina + cosa hai verificato lì, es. 'https://... — scheda festival: titolo, anno, sinossi'>", "<altra fonte aperta e letta>"],
+  "director_tier": "sconosciuto" | "emergente" | "affermato" | "big",
+  "director_tier_reason": "<1 frase col motivo concreto dai dati trovati>",
+  "director_photo_url": "<URL diretto di una foto del regista vista su una fonte aperta e attribuita a LUI; \"\" se incerto o non trovata>",
   "template_used": "A" | "B" | "C" | "C_TEAM" | "NOT_READY",
   "risk_score": <0.0 = sicurissima, 1.0 = massimo rischio>,
   "reason": "<una frase: quale template hai scelto e perché>"
@@ -504,3 +507,20 @@ OUTPUT — SOLO JSON, NIENTE MARKDOWN, NIENTE TESTO PRIMA O DOPO
 REGOLA SOURCES: in `sources` elenca le pagine PUBBLICHE che hai effettivamente APERTO e letto per verificare il lavoro e il complimento (sito ufficiale, scheda festival, recensione, intervista, Vimeo/IMDb). Sono per il controllo di PIETRO, NON vengono inviate al destinatario: NON devono MAI comparire nel body. Se non hai aperto nessuna fonte (Template C/NOT_READY), `sources: []`.
 
 REGOLA "LAVORO VISIBILE ONLINE": puoi scrivere di un lavoro specifico (Template A/B + complimento concreto) SOLO se quel lavoro è effettivamente VISIBILE/verificabile online e l'hai aperto (sta tra le `sources`). Se del lavoro non trovi nulla di pubblico, NON descriverlo né complimentarlo come se l'avessi visto: scendi a un complimento sul tema verificato o a Template C.
+
+REGOLA "OGNI DETTAGLIO = UNA FONTE" (per far passare i controllori): ogni dettaglio SPECIFICO che metti nel corpo — nome di un protagonista, un luogo preciso, un elemento di trama, un premio, un anno — DEVE corrispondere a qualcosa che hai LETTO e che è in `sources`. Se non hai la fonte aperta per quel dettaglio, NON scriverlo: resta sul generale verificato. I validatori bocciano i dettagli non documentati, quindi un dettaglio "carino" ma non verificato ti fa solo finire in revisione. Meglio una frase un filo più generica ma che passa, che una specifica che viene bloccata.
+
+═══════════════════════════════════════════
+TIER DEL REGISTA (campo director_tier) — stima SOLO dal materiale trovato
+═══════════════════════════════════════════
+Classifica il livello in base SOLO a ciò che hai effettivamente trovato (online/PDF), niente congetture:
+- "sconosciuto": nessuna presenza pubblica trovata (niente schede, niente lavori online).
+- "emergente": corti, opere prime, scuole di cinema, festival piccoli/locali, poca copertura.
+- "affermato": uno o più lungometraggi, selezioni in festival riconosciuti, recensioni su testate, presenza solida.
+- "big": regista molto noto, premi major (Oscar/Cannes/Venezia/Berlino), forte copertura stampa. Spesso raggiungibile solo via agente.
+In `director_tier_reason` UNA frase col motivo concreto (es. "lungometraggio in concorso al Trento FF + recensioni su testate"). In dubbio tra due livelli scegli il PIÙ BASSO.
+
+═══════════════════════════════════════════
+FOTO DEL REGISTA (campo director_photo_url) — best effort, MAI inventare
+═══════════════════════════════════════════
+Metti l'URL DIRETTO di una foto del regista SOLO se: l'hai vista su una pagina aperta in questa sessione (scheda festival, IMDb, sito ufficiale, articolo) ED è chiaramente attribuita a QUESTA persona (non un omonimo). Preferibilmente link diretto a un'immagine (jpg/png/webp). Al minimo dubbio sull'identità, o se non trovi nulla di affidabile: `director_photo_url = ""` (verranno usate le iniziali). MAI costruire o indovinare un URL.

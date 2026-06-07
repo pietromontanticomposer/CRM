@@ -33,6 +33,9 @@ type BatchContact = {
   ai_template_used: string | null;
   ai_link_visione: string | null;
   ai_sources: string[] | null;
+  ai_director_tier: string | null;
+  ai_director_tier_reason: string | null;
+  ai_director_photo_url: string | null;
   source_link: string | null;
   email_source_url: string | null;
   email_source_type: string | null;
@@ -732,8 +735,22 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
-                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[var(--accent)]/15 text-base font-semibold text-[var(--accent)]">
+                    <div className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--accent)]/15 text-base font-semibold text-[var(--accent)]">
                       {contact.name?.charAt(0)?.toUpperCase() || "?"}
+                      {contact.ai_director_photo_url && (
+                        /* foto auto-trovata: se non carica (link rotto) si
+                           nasconde e restano le iniziali. eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={contact.ai_director_photo_url}
+                          alt={contact.name || "regista"}
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                          className="absolute inset-0 h-full w-full object-cover"
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                          }}
+                        />
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-[var(--ink)]">
@@ -742,6 +759,39 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                       <div className="text-[11px] text-[var(--muted)]">
                         {contact.email || "email ancora da cercare"}
                       </div>
+                      {(() => {
+                        const t = contact.ai_director_tier || "sconosciuto";
+                        const map: Record<
+                          string,
+                          { l: string; c: string }
+                        > = {
+                          sconosciuto: {
+                            l: "Sconosciuto",
+                            c: "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]",
+                          },
+                          emergente: {
+                            l: "Emergente",
+                            c: "border-sky-500/40 bg-sky-500/10 text-sky-200",
+                          },
+                          affermato: {
+                            l: "Affermato",
+                            c: "border-violet-500/40 bg-violet-500/10 text-violet-200",
+                          },
+                          big: {
+                            l: "Big",
+                            c: "border-amber-500/50 bg-amber-500/15 text-amber-200",
+                          },
+                        };
+                        const ui = map[t] ?? map.sconosciuto;
+                        return (
+                          <span
+                            title={contact.ai_director_tier_reason ?? ""}
+                            className={`mt-1 mr-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${ui.c}`}
+                          >
+                            Tier: {ui.l}
+                          </span>
+                        );
+                      })()}
                       <div
                         className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                           contact.ai_status === "approved"

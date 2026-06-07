@@ -31,6 +31,14 @@ export type WriterInput = {
 
 export type WriterTemplate = "A" | "B" | "C" | "C_TEAM" | "NOT_READY";
 
+export const DIRECTOR_TIERS = [
+  "sconosciuto",
+  "emergente",
+  "affermato",
+  "big",
+] as const;
+export type DirectorTier = (typeof DIRECTOR_TIERS)[number];
+
 export type WriterDraftResult = {
   subject: string;
   body: string;
@@ -38,6 +46,10 @@ export type WriterDraftResult = {
   // Fonti pubbliche aperte per verificare lavoro/complimento. SOLO per la
   // revisione di Pietro: non entrano MAI nella mail inviata.
   sources: string[];
+  // Profilo regista (stima dal materiale trovato): livello + motivo + foto.
+  director_tier: DirectorTier;
+  director_tier_reason: string;
+  director_photo_url: string;
   template_used: WriterTemplate;
   risk_score: number;
   reason: string;
@@ -116,6 +128,26 @@ const buildWriterPrompt = async (input: WriterInput) => {
   )}\n`;
 };
 
+const normalizeTier = (value: unknown): DirectorTier => {
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if ((DIRECTOR_TIERS as readonly string[]).includes(v)) {
+      return v as DirectorTier;
+    }
+  }
+  return "sconosciuto";
+};
+
+// Foto: accetta SOLO un URL http(s) plausibile. Mai costruirla qui; se lo
+// scrittore non ha trovato nulla di affidabile resta "" (si usano le iniziali).
+const normalizePhotoUrl = (value: unknown): string => {
+  if (typeof value !== "string") return "";
+  const v = value.trim();
+  if (!/^https?:\/\/\S+$/i.test(v)) return "";
+  if (v.length > 600) return "";
+  return v;
+};
+
 const normalizeSources = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value
@@ -172,6 +204,12 @@ const parseDraftOutput = (
     body: cleanedBody,
     link_visione: link_visione.trim() || "non disponibile",
     sources: normalizeSources(parsed.sources),
+    director_tier: normalizeTier(parsed.director_tier),
+    director_tier_reason:
+      typeof parsed.director_tier_reason === "string"
+        ? parsed.director_tier_reason.trim()
+        : "",
+    director_photo_url: normalizePhotoUrl(parsed.director_photo_url),
     template_used,
     risk_score: riskNumeric,
     reason: typeof reason === "string" ? reason : "",
