@@ -809,46 +809,152 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                     contact.ai_template_used ||
                     validationDone;
                   if (!hasAnything) return null;
+
+                  // VERDETTO IN CHIARO (Pietro 2026-06-07): basta gergo. Un solo
+                  // stato in italiano + cosa fare + checklist; il tecnico sotto
+                  // "Dettagli".
+                  const checksArr = [
+                    checks.claude,
+                    checks.codex,
+                    checks.gemini,
+                  ].filter(Boolean) as Array<{
+                    contact_ok?: boolean;
+                    email_ok?: boolean;
+                    draft_ok?: boolean;
+                    issues?: Array<string | { message?: string }>;
+                  }>;
+                  const conf =
+                    typeof contact.email_confidence === "number"
+                      ? Math.round(contact.email_confidence * 100)
+                      : null;
+                  const emailStrong =
+                    (contact.email_enrichment_status === "found_public" ||
+                      contact.email_enrichment_status === "present") &&
+                    (conf === null || conf >= 75);
+                  const emailWeak = Boolean(validationDone) && !emailStrong;
+                  const contentDoubt = checksArr.some(
+                    (c) => c.draft_ok === false
+                  );
+                  const personaDoubt =
+                    checksArr.some((c) => c.contact_ok === false) ||
+                    contact.ai_status === "blocked";
+                  const contentIssues = checksArr
+                    .filter((c) => c.draft_ok === false)
+                    .flatMap((c) =>
+                      (c.issues ?? []).map((i) =>
+                        typeof i === "string" ? i : i?.message ?? ""
+                      )
+                    )
+                    .filter(Boolean);
+
+                  let vTitle = "Da rivedere";
+                  let vAction = "Dai un'occhiata e approva.";
+                  let vTone = "border-amber-500/50 bg-amber-500/10 text-amber-100";
+                  if (contact.ai_status === "blocked") {
+                    vTitle = "Scartata";
+                    vAction = "Persona o contenuto non validi — non usarla.";
+                    vTone = "border-red-500/50 bg-red-500/10 text-red-100";
+                  } else if (contact.ai_status === "error") {
+                    vTitle = "Errore nel controllo";
+                    vAction = "Riprova: la verifica non è andata a buon fine.";
+                    vTone = "border-red-500/50 bg-red-500/10 text-red-100";
+                  } else if (
+                    contact.ai_status === "approved" &&
+                    contact.ai_send_allowed
+                  ) {
+                    vTitle = "Pronta da inviare";
+                    vAction = "Dai un'ultima letta e invia.";
+                    vTone =
+                      "border-emerald-500/50 bg-emerald-500/10 text-emerald-100";
+                  } else if (emailWeak && contentDoubt) {
+                    vAction =
+                      "Trova/conferma l'email (ora è indovinata) e controlla i dettagli segnalati nel testo.";
+                  } else if (emailWeak) {
+                    vAction = `Trova o conferma l'email: ora è solo indovinata${
+                      conf !== null ? ` (${conf}%)` : ""
+                    }.`;
+                  } else if (contentDoubt) {
+                    vAction =
+                      "Controlla i dettagli segnalati nel testo prima di inviare.";
+                  }
+
+                  const chk = (ok: boolean, label: string) => (
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
+                        ok
+                          ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
+                          : "border-amber-500/40 bg-amber-500/10 text-amber-100"
+                      }`}
+                    >
+                      <span aria-hidden>{ok ? "✓" : "!"}</span>
+                      {label}
+                    </span>
+                  );
+
                   return (
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]">
-                      {enrichmentLabel && (
-                        <span
-                          className={`rounded-full border px-2 py-0.5 font-medium ${enrichmentTone}`}
-                        >
-                          {enrichmentLabel}
-                          {typeof contact.email_confidence === "number" &&
-                            ` · ${Math.round(contact.email_confidence * 100)}%`}
-                        </span>
+                    <div className="mt-3 grid gap-2">
+                      <div className={`rounded-xl border px-3 py-2 ${vTone}`}>
+                        <div className="text-sm font-semibold">{vTitle}</div>
+                        <div className="mt-0.5 text-[12px] opacity-90">
+                          {vAction}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {chk(!personaDoubt, "Persona giusta")}
+                        {chk(
+                          !emailWeak,
+                          emailWeak
+                            ? `Email da confermare${
+                                conf !== null ? ` (${conf}%)` : ""
+                              }`
+                            : "Email ok"
+                        )}
+                        {chk(
+                          !contentDoubt,
+                          contentDoubt ? "Testo da rivedere" : "Testo ok"
+                        )}
+                      </div>
+                      {contentIssues.length > 0 && (
+                        <ul className="list-disc pl-5 text-[11px] text-amber-100/90">
+                          {contentIssues.slice(0, 3).map((msg, idx) => (
+                            <li key={idx}>{msg}</li>
+                          ))}
+                        </ul>
                       )}
-                      {sourceLabel && contact.email_source_url && (
-                        <a
-                          href={contact.email_source_url}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--ink)]"
-                        >
-                          via {sourceLabel}
-                        </a>
-                      )}
-                      {agentBadges}
-                      {contact.ai_template_used && (
-                        <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)]">
-                          Template {contact.ai_template_used}
-                        </span>
-                      )}
-                      {validationDone && (
-                        <span
-                          className={`rounded-full border px-2 py-0.5 font-semibold ${
-                            contact.ai_send_allowed
-                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                              : "border-red-500/40 bg-red-500/10 text-red-200"
-                          }`}
-                        >
-                          {contact.ai_send_allowed
-                            ? "pronto da inviare"
-                            : "non inviabile"}
-                        </span>
-                      )}
+                      <details className="text-[10px] text-[var(--muted)]">
+                        <summary className="cursor-pointer select-none">
+                          Dettagli tecnici
+                        </summary>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {enrichmentLabel && (
+                            <span
+                              className={`rounded-full border px-2 py-0.5 font-medium ${enrichmentTone}`}
+                            >
+                              {enrichmentLabel}
+                              {typeof contact.email_confidence === "number" &&
+                                ` · ${Math.round(
+                                  contact.email_confidence * 100
+                                )}%`}
+                            </span>
+                          )}
+                          {sourceLabel && contact.email_source_url && (
+                            <a
+                              href={contact.email_source_url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--ink)]"
+                            >
+                              via {sourceLabel}
+                            </a>
+                          )}
+                          {agentBadges}
+                          {contact.ai_template_used && (
+                            <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)]">
+                              Template {contact.ai_template_used}
+                            </span>
+                          )}
+                        </div>
+                      </details>
                     </div>
                   );
                 })()}
