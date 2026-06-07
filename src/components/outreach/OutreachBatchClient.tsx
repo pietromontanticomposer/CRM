@@ -531,6 +531,33 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     }
   };
 
+  // Anti-doppioni manuale (Pietro): azzera dal DB TUTTE le bozze importate OGGI
+  // (globale, tutti i batch). Gli approvati (tabella contacts) restano.
+  const deleteToday = async () => {
+    const confirmed = window.confirm(
+      "Elimino dal database TUTTE le bozze importate OGGI (non approvate), così non restano doppioni. I contatti già approvati restano intatti. Procedo?"
+    );
+    if (!confirmed) return;
+    setBulkPending("reject");
+    try {
+      const response = await fetch("/api/outreach/drafts/cleanup-today", {
+        method: "POST",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        deleted?: number;
+        error?: string;
+      };
+      if (!response.ok) {
+        window.alert(`Errore: ${data.error || response.statusText}`);
+        return;
+      }
+      window.alert(`Eliminate ${data.deleted ?? 0} bozze importate oggi.`);
+      await loadBatch({ silent: true });
+    } finally {
+      setBulkPending(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--panel)]/90 backdrop-blur">
@@ -619,6 +646,15 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
               title="Cancella dal database tutti i contatti non ancora approvati"
             >
               Svuota non approvati
+            </button>
+            <button
+              type="button"
+              disabled={!!bulkPending}
+              onClick={() => void deleteToday()}
+              className="rounded-full border border-red-500/50 bg-red-500/15 px-3 py-1 font-semibold text-red-200 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Cancella dal database tutte le bozze importate OGGI (anti-doppioni). Gli approvati restano."
+            >
+              Elimina importati oggi
             </button>
           </div>
         </div>
