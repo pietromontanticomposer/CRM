@@ -47,67 +47,6 @@ type BatchContact = {
 
 type Filter = "all" | "needs_review" | "approved" | "blocked";
 
-type StepState = "done" | "active" | "pending" | "error";
-
-const computeSteps = (
-  status: string | null,
-  validation: string | null
-): Array<{ label: string; state: StepState }> => {
-  const steps = [
-    { label: "Import", state: "done" as StepState },
-    { label: "Writer", state: "pending" as StepState },
-    { label: "3-agent", state: "pending" as StepState },
-    { label: "Review", state: "pending" as StepState },
-  ];
-  if (
-    !status ||
-    status === "not_checked" ||
-    status === "imported" ||
-    status === "processing"
-  ) {
-    steps[1].state = "active";
-    return steps;
-  }
-  if (status === "error") {
-    steps[1].state = "error";
-    return steps;
-  }
-  if (status === "draft_ready") {
-    steps[1].state = "done";
-    steps[2].state = "active";
-    return steps;
-  }
-  steps[1].state = "done";
-  steps[2].state = "done";
-  if (status === "approved" && validation === "passed") {
-    steps[3].state = "done";
-    return steps;
-  }
-  if (status === "needs_review") {
-    steps[3].state = "active";
-    return steps;
-  }
-  if (status === "blocked") {
-    steps[3].state = "error";
-    return steps;
-  }
-  steps[3].state = "active";
-  return steps;
-};
-
-const stepClass = (state: StepState) => {
-  switch (state) {
-    case "done":
-      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
-    case "active":
-      return "border-sky-500/40 bg-sky-500/10 text-sky-200 animate-pulse";
-    case "error":
-      return "border-red-500/40 bg-red-500/10 text-red-200";
-    default:
-      return "border-[var(--line)] bg-[var(--panel)] text-[var(--muted)]";
-  }
-};
-
 const summarizeStatus = (status: string | null) => {
   switch (status) {
     case "imported":
@@ -608,12 +547,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             )}
             {counts.blocked > 0 && (
               <span className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 font-semibold text-red-200">
-                {counts.blocked} bloccati
-              </span>
-            )}
-            {counts.sendAllowed > 0 && (
-              <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 font-semibold text-sky-200">
-                {counts.sendAllowed} send_allowed
+                {counts.blocked} scartati
               </span>
             )}
             <button
@@ -756,10 +690,6 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
 
         <div className="grid gap-4">
           {visible.map((contact) => {
-            const steps = computeSteps(
-              contact.ai_status,
-              contact.ai_validation_status
-            );
             const ready = isReady(contact.ai_status);
             const isEditing = editingId === contact.id;
             const pending = actionPendingId === contact.id;
@@ -854,16 +784,6 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                         {summarizeStatus(contact.ai_status)}
                       </div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {steps.map((step) => (
-                      <span
-                        key={step.label}
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${stepClass(step.state)}`}
-                      >
-                        {step.label}
-                      </span>
-                    ))}
                   </div>
                 </div>
 
