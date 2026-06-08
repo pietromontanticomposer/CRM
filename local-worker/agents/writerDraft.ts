@@ -35,7 +35,7 @@ export const DIRECTOR_TIERS = [
   "sconosciuto",
   "emergente",
   "affermato",
-  "big",
+  "star",
 ] as const;
 export type DirectorTier = (typeof DIRECTOR_TIERS)[number];
 

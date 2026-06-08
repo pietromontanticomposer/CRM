@@ -864,9 +864,13 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                             l: "Affermato",
                             c: "border-violet-500/40 bg-violet-500/10 text-violet-200",
                           },
+                          star: {
+                            l: "★ Star — troppo famoso",
+                            c: "border-amber-400/60 bg-amber-400/15 text-amber-200",
+                          },
                           big: {
-                            l: "Big",
-                            c: "border-amber-500/50 bg-amber-500/15 text-amber-200",
+                            l: "★ Star — troppo famoso",
+                            c: "border-amber-400/60 bg-amber-400/15 text-amber-200",
                           },
                         };
                         const ui = map[t] ?? map.sconosciuto;

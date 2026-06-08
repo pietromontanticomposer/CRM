@@ -496,7 +496,7 @@ OUTPUT — SOLO JSON, NIENTE MARKDOWN, NIENTE TESTO PRIMA O DOPO
   "body": "<SOLO la mail: apertura + (eventuale complimento verificato) + BLOCCO BASE + chiusura 'Un saluto, Pietro'. NIENTE riga 'Link visione', NIENTE fonti/URL qui dentro>",
   "link_visione": "<URL valido per A; 'non disponibile' per B/C/C_TEAM> (campo separato, NON nel body)",
   "sources": ["<URL della pagina + cosa hai verificato lì, es. 'https://... — scheda festival: titolo, anno, sinossi'>", "<altra fonte aperta e letta>"],
-  "director_tier": "sconosciuto" | "emergente" | "affermato" | "big",
+  "director_tier": "sconosciuto" | "emergente" | "affermato" | "star",
   "director_tier_reason": "<1 frase col motivo concreto dai dati trovati>",
   "director_photo_url": "<URL diretto di una foto del regista vista su una fonte aperta e attribuita a LUI; \"\" se incerto o non trovata>",
   "template_used": "A" | "B" | "C" | "C_TEAM" | "NOT_READY",
@@ -516,9 +516,9 @@ TIER DEL REGISTA (campo director_tier) — stima SOLO dal materiale trovato
 Classifica il livello in base SOLO a ciò che hai effettivamente trovato (online/PDF), niente congetture:
 - "sconosciuto": nessuna presenza pubblica trovata (niente schede, niente lavori online).
 - "emergente": corti, opere prime, scuole di cinema, festival piccoli/locali, poca copertura.
-- "affermato": uno o più lungometraggi, selezioni in festival riconosciuti, recensioni su testate, presenza solida.
-- "big": regista molto noto, premi major (Oscar/Cannes/Venezia/Berlino), forte copertura stampa. Spesso raggiungibile solo via agente.
-In `director_tier_reason` UNA frase col motivo concreto (es. "lungometraggio in concorso al Trento FF + recensioni su testate"). In dubbio tra due livelli scegli il PIÙ BASSO.
+- "affermato": uno o più lungometraggi, selezioni in festival riconosciuti, recensioni su testate. Regista VERO e di solito raggiungibile — è "a livello", ha senso scrivergli.
+- "star": famoso / celebrità / leggenda, nome noto al grande pubblico o premi major (Oscar/Cannes/Venezia/Berlino), grande copertura stampa (es. Robert Redford, Liliana Cavani, registi-celebrità). Raggiungibile SOLO tramite agente: di norma NON ha senso una mail a freddo. Serve a Pietro per capire chi è troppo "su".
+In `director_tier_reason` UNA frase col motivo concreto (es. "lungometraggio in concorso al Trento FF + recensioni" oppure "regista premio Oscar, raggiungibile solo via agente"). In dubbio tra due livelli scegli il PIÙ BASSO; "star" SOLO per nomi davvero celebri.
 
 ═══════════════════════════════════════════
 FOTO DEL REGISTA (campo director_photo_url) — best effort, MAI inventare
