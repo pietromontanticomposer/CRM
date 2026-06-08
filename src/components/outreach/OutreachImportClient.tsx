@@ -87,6 +87,9 @@ export function OutreachImportClient() {
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Personalizzazione: istruzioni in più per lo scrittore, valide per tutto
+  // l'import (es. preset festival).
+  const [personalization, setPersonalization] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const totals = useMemo(() => {
@@ -227,6 +230,7 @@ export function OutreachImportClient() {
           minute: "2-digit",
         })}`,
         section,
+        promptMasterRules: personalization.trim() || undefined,
         contacts: contactsPayload,
       }),
     }).catch(() => null);
@@ -552,6 +556,32 @@ export function OutreachImportClient() {
                     </div>
                   </div>
                 </div>
+              </div>
+              <div className="mt-5 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-3">
+                <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ink)]">
+                  Personalizzazione — vale per TUTTE le mail di questo import
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPersonalization(
+                      "Sono i registi del [SCRIVI QUI IL FESTIVAL, es: 74° Trento Film Festival 2026]. Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. APERTURA: NON dire “navigando online”; di’ invece che hai visto il loro film AL festival e che hai provato ad avvicinarti di persona ma non ci sei riuscito (al posto della frase online, non in aggiunta)."
+                    )
+                  }
+                  className="mb-2 rounded-full border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20"
+                >
+                  Preset: registi di un festival
+                </button>
+                <textarea
+                  className="w-full rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-sm text-[var(--ink)]"
+                  rows={4}
+                  placeholder={
+                    "Istruzioni in più per lo scrittore, applicate a ogni mail. Es:\n" +
+                    "Sono registi del Trento Film Festival 2026; cerca info solo sui loro film di quel festival."
+                  }
+                  value={personalization}
+                  onChange={(event) => setPersonalization(event.target.value)}
+                />
               </div>
               <button
                 type="button"
