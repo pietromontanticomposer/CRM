@@ -418,6 +418,19 @@ export function AiOutreachImport({
         <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ink)]">
           Personalizzazione — vale per TUTTI i contatti di questo import
         </label>
+        <button
+          type="button"
+          onClick={() =>
+            onDraftChange({
+              ...draft,
+              promptMasterRules:
+                "Sono i registi del [SCRIVI QUI IL FESTIVAL, es: 74° Trento Film Festival 2026]. Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. Aggiungi a ogni mail, nel punto naturale: “ho visto il tuo lavoro al festival e ho provato ad avvicinarti ma non ti ho trovato”.",
+            })
+          }
+          className="mb-2 rounded-full border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20"
+        >
+          Preset: registi di un festival
+        </button>
         <textarea
           className="w-full"
           rows={4}
