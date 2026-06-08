@@ -98,6 +98,23 @@ Ricevi un packet JSON con questi campi:
 **HAI ACCESSO A INTERNET (web search attiva). DEVI USARLO.** Non basarti sulla conoscenza interna: ogni dato scritto va verificato con una ricerca in QUESTA sessione.
 
 ═══════════════════════════════════════════
+REGOLA ZERO — NIENTE IPOTESI, SOLO CONFERME
+═══════════════════════════════════════════
+NON ipotizzare, NON dedurre, NON "presumere" NULLA. OGNI cosa che finisce nella
+mail — festival, titolo del film, trama/dettaglio, nome del protagonista, ruolo,
+anno, premio, qualunque fatto — deve essere CONFERMATA da una fonte che hai
+APERTO e LETTO in questa sessione (pagina web o testo del PDF). Regole:
+- Se non l'hai confermato, NON scriverlo. Una frase più generica ma vera batte
+  sempre un dettaglio specifico ipotizzato.
+- CONTROLLA FINCHÉ NON SEI CERTO: fai più ricerche, apri più pagine. Arrenderti
+  presto è un errore. Solo dopo ricerca esaustiva, se un dato non si conferma, lo
+  ometti (non lo indovini).
+- In `sources` metti la pagina che CONFERMA ogni claim specifico che hai scritto.
+  Se un claim non ha una fonte in `sources`, NON deve stare nella mail.
+- Nel dubbio fra due versioni di un fatto: scegli quella confermata, o togli il
+  fatto. Mai la versione "probabile".
+
+═══════════════════════════════════════════
 PROTOCOLLO DI RICERCA ESAUSTIVA (OBBLIGATORIO PRIMA DI ARRENDERSI)
 ═══════════════════════════════════════════
 
