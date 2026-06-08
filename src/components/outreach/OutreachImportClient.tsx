@@ -87,8 +87,10 @@ export function OutreachImportClient() {
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  // Personalizzazione: istruzioni in più per lo scrittore, valide per tutto
-  // l'import (es. preset festival).
+  // Festival del batch (se sono registi di un festival): se compilato, ogni mail
+  // apre con "ho visto il tuo film al (festival)…" invece di "navigando online".
+  const [festival, setFestival] = useState("");
+  // Personalizzazione: altre istruzioni libere per lo scrittore, per tutto l'import.
   const [personalization, setPersonalization] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -218,6 +220,14 @@ export function OutreachImportClient() {
         };
       });
 
+    const f = festival.trim();
+    const festivalInstruction = f
+      ? `Sono registi del "${f}". Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. APERTURA OBBLIGATORIA — UNA SOLA, SOSTITUISCE "navigando online" (mai tutte e due): di' che hai visto il loro film al "${f}" e che hai provato ad avvicinarti di persona ma non ci sei riuscito. Spirito ESATTO — EN: «I saw your "(title)" at the ${f} and I tried to get close to you but I couldn't.» · IT: «Ho visto il suo "(titolo)" al ${f} e ho provato ad avvicinarla di persona, ma non ci sono riuscito.» Usa il TITOLO dal contesto e il nome ESATTO "${f}"; NON inventare numeri/edizioni del festival.`
+      : "";
+    const masterRules =
+      [festivalInstruction, personalization.trim()].filter(Boolean).join("\n\n") ||
+      undefined;
+
     const response = await fetch("/api/contacts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -230,7 +240,7 @@ export function OutreachImportClient() {
           minute: "2-digit",
         })}`,
         section,
-        promptMasterRules: personalization.trim() || undefined,
+        promptMasterRules: masterRules,
         contacts: contactsPayload,
       }),
     }).catch(() => null);
@@ -559,26 +569,27 @@ export function OutreachImportClient() {
               </div>
               <div className="mt-5 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-3">
                 <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ink)]">
-                  Personalizzazione — vale per TUTTE le mail di questo import
+                  Festival del batch (se sono registi di un festival)
                 </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPersonalization(
-                      "Sono i registi del [SCRIVI QUI IL FESTIVAL, es: 74° Trento Film Festival 2026]. Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. APERTURA: NON dire “navigando online”; di’ invece che hai visto il loro film AL festival e che hai provato ad avvicinarti di persona ma non ci sei riuscito (al posto della frase online, non in aggiunta)."
-                    )
-                  }
-                  className="mb-2 rounded-full border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20"
-                >
-                  Preset: registi di un festival
-                </button>
+                <input
+                  className="w-full rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-sm text-[var(--ink)]"
+                  placeholder="es: 74° Trento Film Festival 2026  —  lascia vuoto se NON è un festival"
+                  value={festival}
+                  onChange={(event) => setFestival(event.target.value)}
+                />
+                <p className="mt-1 text-[11px] text-[var(--muted)]">
+                  Se lo compili, ogni mail apre con “Ho visto il suo film al{" "}
+                  {festival.trim() || "(festival)"} e ho provato ad avvicinarla ma
+                  non ci sono riuscito” (in italiano o in inglese), al posto di
+                  “navigando online”.
+                </p>
+                <label className="mb-1 mt-3 block text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Altre istruzioni (opzionale)
+                </label>
                 <textarea
                   className="w-full rounded-lg border border-[var(--line)] bg-[var(--panel-strong)] px-3 py-2 text-sm text-[var(--ink)]"
-                  rows={4}
-                  placeholder={
-                    "Istruzioni in più per lo scrittore, applicate a ogni mail. Es:\n" +
-                    "Sono registi del Trento Film Festival 2026; cerca info solo sui loro film di quel festival."
-                  }
+                  rows={3}
+                  placeholder="Istruzioni in più per lo scrittore, applicate a ogni mail (lascia vuoto se non serve)."
                   value={personalization}
                   onChange={(event) => setPersonalization(event.target.value)}
                 />
