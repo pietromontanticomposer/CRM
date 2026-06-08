@@ -20,11 +20,30 @@ type DraftRow = {
   ai_email_body: string | null;
 };
 
-// Inserisce la frase come nuovo paragrafo SUBITO DOPO l'apertura, senza toccare
-// il resto della mail. Niente AI, niente rigenerazione: istantaneo.
-const insertAfterOpening = (body: string, line: string): string => {
+type Position = "start" | "after_compliment" | "end";
+
+// Inserisce la frase come nuovo paragrafo nel punto scelto, senza toccare il
+// resto della mail. Niente AI, niente rigenerazione: istantaneo.
+const insertAtPosition = (
+  body: string,
+  line: string,
+  position: Position
+): string => {
   const paras = body.split(/\n{2,}/);
-  const at = Math.min(1, paras.length); // dopo il 1° paragrafo (apertura)
+  let at: number;
+  if (position === "end") {
+    // prima della firma finale
+    const sigIdx = paras.findIndex((p) =>
+      /^(un saluto|best,?|cordiali|a presto|kind regards|warm regards)/i.test(
+        p.trim()
+      )
+    );
+    at = sigIdx >= 0 ? sigIdx : Math.max(0, paras.length - 1);
+  } else if (position === "after_compliment") {
+    at = Math.min(2, paras.length); // dopo apertura + complimento
+  } else {
+    at = Math.min(1, paras.length); // inizio: dopo l'apertura
+  }
   paras.splice(at, 0, line);
   return paras.join("\n\n");
 };
@@ -39,9 +58,15 @@ export async function POST(request: Request) {
       batchId?: string;
       lineIt?: string;
       lineEn?: string;
+      position?: string;
     } | null;
     const batchId =
       typeof payload?.batchId === "string" ? payload.batchId.trim() : "";
+    const position: Position =
+      payload?.position === "after_compliment" ||
+      payload?.position === "end"
+        ? payload.position
+        : "start";
     const lineIt =
       typeof payload?.lineIt === "string" ? payload.lineIt.trim() : "";
     const lineEn =
@@ -102,7 +127,7 @@ export async function POST(request: Request) {
             skipped += 1; // niente da aggiungere o gia' presente
             return;
           }
-          const newBody = insertAfterOpening(body, line);
+          const newBody = insertAtPosition(body, line, position);
           const patchRes = await fetch(
             `${cfg.url}/rest/v1/outreach_drafts?id=eq.${draft.id}&owner_id=eq.${user.id}`,
             {
