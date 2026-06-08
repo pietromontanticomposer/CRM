@@ -4,6 +4,18 @@ Registro permanente per NON ripartire da zero. Aggiornare qui ogni volta che si
 verifica/rompe qualcosa. Ultima revisione: 2026-06-07.
 
 ## ✅ FUNZIONA (verificato dal vivo)
+- **[2026-06-07 sera] Apertura festival**: con il campo "Festival" all'import,
+  ogni mail apre con "Ho visto il suo (film) al 74° Trento Film Festival 2026 e
+  ho provato ad avvicinarla…" — nome ESATTO (riconosciuto dal PDF), SOSTITUISCE
+  "navigando online" (no doppia apertura), lingua giusta IT/EN. Verificato su 6
+  registi reali.
+- **[2026-06-07] Fonti mai nel corpo**: sanitizeMailBody (host vero) toglie
+  URL/righe "Fonti" non della firma. Monitor su 12 eventi: ZERO fonti nel corpo.
+- **[2026-06-07] Logica invio**: email confermata (78%, vista su pagina) →
+  approved+inviabile; email incerta (40%) → needs_review non inviabile. Corretto.
+- **[2026-06-07] Revisione Claude+Codex**: chiusi i fori (fonti-nel-corpo,
+  approvazione di scartate/vuote, pulizia non verificata, send_allowed lasco,
+  doppioni). Vincolo unico DB su contacts(owner,email) = doppioni impossibili.
 - **Concorrenza rete auto-adattiva** (semaforo CLI AIMD): parte da 3, sale a 6 se
   la rete regge, dimezza a ogni intasamento (testato 3→6 e 6→3→1). Il worker ora
   lavora ~6 contatti in parallelo (prima 1).
