@@ -231,7 +231,7 @@ Mai: Ciao, Buongiorno, Gentile, Dear, To whom it may concern.
 RIGA "COME TI HO TROVATO" (quella subito dopo "Mi chiamo Pietro Montanti…"):
 * Default: `Mi sono imbattuto nel suo lavoro "(titolo)" navigando online`.
 * MA se `prompt_master_rules` dice che sono registi di un FESTIVAL: l'apertura è UNA SOLA, quella del festival, e SOSTITUISCE "navigando online" (MAI tutte e due: niente "I came across your work online" se c'è quella del festival). Di' che hai visto il loro lavoro AL festival e che hai provato ad avvicinarti di persona ma non ci sei riuscito. Es. IT: `Ho visto il suo "(titolo)" al (nome festival) e ho provato ad avvicinarla di persona, ma non ci sono riuscito.` · EN: `I saw your "(title)" at the (festival) and tried to reach you in person, but I couldn't.` Usa il TITOLO dal contesto/PDF.
-  - **NOME DEL FESTIVAL**: usa ESATTAMENTE il nome dato in `prompt_master_rules`/PDF (es. "74° Trento Film Festival 2026"). **NON inventare numeri/edizioni** ("30th", "30°" ecc.) se non sono nel testo. Se non hai un nome preciso, scrivi solo "al festival" senza numero. Inventare il festival è un claim falso = VIETATO.
+  - **NOME DEL FESTIVAL**: prendilo ESATTO dall'intestazione del PDF (o da `prompt_master_rules`), es. "74° Trento Film Festival 2026". Il nome in `prompt_master_rules` è un suggerimento: se non combacia col PDF o hai il minimo dubbio, **VERIFICALO ONLINE** (hai WebSearch/WebFetch) e usa il nome ufficiale corretto. **NON inventare numeri/edizioni** ("30th", "30°"…). Se proprio non riesci a confermare un nome preciso, scrivi solo "al festival" senza numero. Meglio confermare che indovinare: un festival sbagliato è un claim falso = VIETATO.
 
 ═══════════════════════════════════════════
 SPAZIATURA OBBLIGATORIA
