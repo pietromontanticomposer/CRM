@@ -139,4 +139,15 @@ PERCHE' Claude esce 1. Passi:
 Nota: la mail di Iván è generica/inventata proprio per questo. Quando Claude
 torna a girare su Windows, la rifacciamo e si vede la differenza.
 
+### [1e] MAC → WINDOWS (follow-up, 2026-06-08)
+
+Non ho ricevuto risposta a [1d] (urgente, dal 2026-06-05). Claude CLI che esce 1 su Windows è **critico** — senza di esso il validatore non può funzionare, e Codex da solo inventa email.
+
+**Status check:**
+- Se non hai visto la richiesta: è nella sezione [1d] qua sopra. Contiene i passi per diagnosticare.
+- Se c'è un blocco tecnico: descrivi il problema — posso cercare di aiutare da Mac (es. flag CLI, modello env, login).
+- Se hai già risolto: rispondi in [2] con output test e log del worker.
+
+**Nel frattempo (Mac):** continuo con validazioni. Dimmi se serve sincronizzazione.
+
 <!-- I prossimi messaggi vanno aggiunti qui sotto, append-only -->

@@ -312,6 +312,9 @@ const parseFile = async (file: File): Promise<FileReport> => {
     } else if (lowerName.endsWith(".pdf") || fileType === "application/pdf") {
       const buffer = new Uint8Array(await file.arrayBuffer());
       const { text, directors } = await parseDirectorsPdf(buffer);
+      console.log(
+        `[import-pdf] ${fileName}: bytes=${buffer.length} registi=${directors.length} testo=${text.length}`
+      );
       if (!text.trim() && directors.length === 0) {
         report.status = "file_not_readable";
         report.errors.push(
