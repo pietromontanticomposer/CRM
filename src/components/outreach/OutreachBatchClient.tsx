@@ -165,6 +165,11 @@ const formatDuration = (ms: number) => {
 
 export function OutreachBatchClient({ batchId }: { batchId: string }) {
   const [contacts, setContacts] = useState<BatchContact[]>([]);
+  // Pannello "Modifica tutte le mail": aggiunge una frase a tutte le bozze.
+  const [addOpen, setAddOpen] = useState(false);
+  const [lineIt, setLineIt] = useState("");
+  const [lineEn, setLineEn] = useState("");
+  const [addPending, setAddPending] = useState(false);
   const [batchName, setBatchName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -497,6 +502,49 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     }
   };
 
+  // Aggiunge una frase a TUTTE le mail del batch (ognuna nella sua lingua),
+  // subito, senza rigenerare.
+  const addLineToAll = async () => {
+    if (!lineIt.trim() && !lineEn.trim()) {
+      window.alert("Scrivi la frase (almeno una delle due).");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Aggiungo questa frase a TUTTE le mail di questo batch (italiano agli italiani, inglese agli stranieri). Procedo?"
+      )
+    ) {
+      return;
+    }
+    setAddPending(true);
+    try {
+      const response = await fetch("/api/outreach/drafts/batch-add-line", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          batchId,
+          lineIt: lineIt.trim(),
+          lineEn: lineEn.trim(),
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        updated?: number;
+        error?: string;
+      };
+      if (!response.ok) {
+        window.alert(`Errore: ${data.error || response.statusText}`);
+        return;
+      }
+      window.alert(`Frase aggiunta a ${data.updated ?? 0} mail.`);
+      setLineIt("");
+      setLineEn("");
+      setAddOpen(false);
+      await loadBatch({ silent: true });
+    } finally {
+      setAddPending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--panel)]/90 backdrop-blur">
@@ -590,6 +638,14 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             >
               Elimina importati oggi
             </button>
+            <button
+              type="button"
+              onClick={() => setAddOpen((open) => !open)}
+              className="rounded-full border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-3 py-1 font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20"
+              title="Aggiungi una frase a TUTTE le mail di questo batch"
+            >
+              Modifica tutte le mail {addOpen ? "−" : "+"}
+            </button>
           </div>
         </div>
         <div className="mx-auto w-full max-w-6xl px-6 pb-3">
@@ -661,6 +717,64 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
           </button>
         </div>
       </header>
+
+      {addOpen && (
+        <div className="border-b border-[var(--line)] bg-[var(--panel)]/80">
+          <div className="mx-auto w-full max-w-6xl px-6 py-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)]">
+              Modifica tutte le mail — aggiungi una frase a ogni mail del batch
+            </div>
+            <p className="mt-1 text-[11px] text-[var(--muted)]">
+              La metto subito in tutte, ognuna nella sua lingua. Il sito non
+              traduce da solo: scrivila in italiano (per gli italiani) e in
+              inglese (per gli stranieri). Lascia vuota una se non ti serve.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Frase per i registi italiani
+                </label>
+                <textarea
+                  className="w-full"
+                  rows={2}
+                  placeholder="Es: ho visto il tuo lavoro al festival di Trento e ho provato ad avvicinarti ma non ti ho trovato"
+                  value={lineIt}
+                  onChange={(event) => setLineIt(event.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Frase per gli stranieri (in inglese)
+                </label>
+                <textarea
+                  className="w-full"
+                  rows={2}
+                  placeholder="Es: I saw your work at the Trento festival and tried to reach you but couldn't find you"
+                  value={lineEn}
+                  onChange={(event) => setLineEn(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                disabled={addPending}
+                onClick={() => void addLineToAll()}
+                className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {addPending ? "Aggiungo…" : "Aggiungi a tutte le mail"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddOpen(false)}
+                className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--ink)]"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto w-full max-w-6xl px-6 py-6">
         {error && (
