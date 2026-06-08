@@ -168,9 +168,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   // Pannello "Modifica tutte le mail": aggiunge una frase a tutte le bozze.
   const [addOpen, setAddOpen] = useState(false);
   const [lineIt, setLineIt] = useState("");
-  const [lineEn, setLineEn] = useState("");
   const [addPending, setAddPending] = useState(false);
-  const [translating, setTranslating] = useState(false);
   const [linePosition, setLinePosition] = useState<
     "start" | "after_compliment" | "end"
   >("start");
@@ -506,41 +504,11 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     }
   };
 
-  // Traduce in inglese la frase italiana (servizio gratuito lato sito).
-  const translateLine = async () => {
-    const text = lineIt.trim();
-    if (!text) {
-      window.alert("Scrivi prima la frase in italiano.");
-      return;
-    }
-    setTranslating(true);
-    try {
-      const response = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, from: "it", to: "en" }),
-      });
-      const data = (await response.json().catch(() => ({}))) as {
-        translated?: string;
-        error?: string;
-      };
-      if (!response.ok || !data.translated) {
-        window.alert(
-          data.error || "Traduzione non riuscita: scrivi l'inglese a mano."
-        );
-        return;
-      }
-      setLineEn(data.translated);
-    } finally {
-      setTranslating(false);
-    }
-  };
-
-  // Aggiunge una frase a TUTTE le mail del batch (ognuna nella sua lingua),
-  // subito, senza rigenerare.
+  // Aggiunge una frase a TUTTE le mail del batch. Pietro la scrive solo in
+  // italiano; il server traduce da solo in inglese per le mail in inglese.
   const addLineToAll = async () => {
-    if (!lineIt.trim() && !lineEn.trim()) {
-      window.alert("Scrivi la frase (almeno una delle due).");
+    if (!lineIt.trim()) {
+      window.alert("Scrivi la frase.");
       return;
     }
     if (
@@ -557,8 +525,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           batchId,
-          lineIt: lineIt.trim(),
-          lineEn: lineEn.trim(),
+          line: lineIt.trim(),
           position: linePosition,
         }),
       });
@@ -572,7 +539,6 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       }
       window.alert(`Frase aggiunta a ${data.updated ?? 0} mail.`);
       setLineIt("");
-      setLineEn("");
       setAddOpen(false);
       await loadBatch({ silent: true });
     } finally {
@@ -760,43 +726,20 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
               Modifica tutte le mail — aggiungi una frase a ogni mail del batch
             </div>
             <p className="mt-1 text-[11px] text-[var(--muted)]">
-              Scrivi la frase in italiano, premi “Traduci” per l’inglese (puoi
-              correggerlo), scegli dove metterla: la inserisco subito in tutte le
-              mail — italiano agli italiani, inglese agli stranieri.
+              Scrivi la frase in italiano: la inserisco subito in tutte le mail
+              del batch e la traduco da solo in inglese per quelle in inglese.
             </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                  Frase (italiano)
-                </label>
-                <textarea
-                  className="w-full"
-                  rows={2}
-                  placeholder="Es: ho visto il tuo lavoro al festival di Trento e ho provato ad avvicinarti ma non ti ho trovato"
-                  value={lineIt}
-                  onChange={(event) => setLineIt(event.target.value)}
-                />
-                <button
-                  type="button"
-                  disabled={translating || !lineIt.trim()}
-                  onClick={() => void translateLine()}
-                  className="mt-1 rounded-full border border-[var(--line)] px-3 py-1 text-[11px] font-semibold text-[var(--muted)] hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {translating ? "Traduco…" : "Traduci in inglese →"}
-                </button>
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
-                  Frase (inglese) — tradotta, correggibile
-                </label>
-                <textarea
-                  className="w-full"
-                  rows={2}
-                  placeholder="Premi “Traduci”, oppure scrivila qui"
-                  value={lineEn}
-                  onChange={(event) => setLineEn(event.target.value)}
-                />
-              </div>
+            <div className="mt-3">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
+                Frase (in italiano)
+              </label>
+              <textarea
+                className="w-full"
+                rows={2}
+                placeholder="Es: ho visto il tuo lavoro al festival di Trento e ho provato ad avvicinarti ma non ti ho trovato"
+                value={lineIt}
+                onChange={(event) => setLineIt(event.target.value)}
+              />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <label className="text-[11px] font-semibold text-[var(--muted)]">
