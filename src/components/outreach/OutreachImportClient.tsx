@@ -80,6 +80,59 @@ const FILE_STATUS_TONE: Record<FileReport["status"], string> = {
   error: "bg-red-500/10 text-red-300 border-red-500/30",
 };
 
+// Riconoscimento FLESSIBILE del festival dall'intestazione di QUALSIASI pdf
+// (best-effort): "74° Trento Film Festival 2026", "Festival di Cannes 2025",
+// "Sundance Film Festival 2026", "Torino Film Festival 2025", ecc. Non assume un
+// formato rigido. Se becca male o non trova, il campo Festival resta modificabile.
+const FESTIVAL_WORD = "[A-Za-zÀ-ÿ.&'-]+";
+const FESTIVAL_NUM = "(?:\\d{1,3}\\s*(?:[°ªºo]|th|st|nd|rd)?\\s*)?";
+const FESTIVAL_PATTERNS = [
+  new RegExp(
+    "(" + FESTIVAL_NUM + FESTIVAL_WORD + "(?: " + FESTIVAL_WORD +
+      "){0,4} film festival(?:\\s+\\d{4})?)",
+    "i"
+  ),
+  new RegExp(
+    "(festival\\s+(?:di|del|della|de|du|of)\\s+" + FESTIVAL_WORD + "(?: " +
+      FESTIVAL_WORD + "){0,4}(?:\\s+\\d{4})?)",
+    "i"
+  ),
+  new RegExp(
+    "(" + FESTIVAL_NUM + FESTIVAL_WORD + "(?: " + FESTIVAL_WORD +
+      "){0,3} festival\\s+\\d{4})",
+    "i"
+  ),
+];
+const titleCaseFestival = (s: string) =>
+  s
+    .split(" ")
+    .map((w) =>
+      /[A-Za-zÀ-ÿ]/.test(w)
+        ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+        : w
+    )
+    .join(" ");
+const detectFestivalFromText = (text: string | null): string | null => {
+  if (!text) return null;
+  const head = text.slice(0, 900).replace(/\s+/g, " ").trim();
+  for (const pattern of FESTIVAL_PATTERNS) {
+    const m = head.match(pattern);
+    if (!m) continue;
+    const s = m[1]
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(
+        /\s*\b(elenco|completo|registi|list|of directors|programma|program|edizione|edition)\b.*$/i,
+        ""
+      )
+      .trim();
+    if (s.length >= 6 && s.length <= 70 && /festival/i.test(s)) {
+      return titleCaseFestival(s);
+    }
+  }
+  return null;
+};
+
 export function OutreachImportClient() {
   const router = useRouter();
   const [files, setFiles] = useState<FileBlock[]>([]);
@@ -135,6 +188,12 @@ export function OutreachImportClient() {
         raw_text: report.raw_text ?? null,
       }));
       setFiles((prev) => [...prev, ...newBlocks]);
+      // Riconosce il festival dall'intestazione del pdf e riempie il campo (se
+      // non l'hai già scritto a mano). Flessibile, best-effort.
+      const detected = newBlocks
+        .map((b) => detectFestivalFromText(b.raw_text))
+        .find(Boolean);
+      if (detected) setFestival((cur) => (cur.trim() ? cur : detected));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Errore inatteso."
