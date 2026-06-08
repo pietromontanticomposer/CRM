@@ -9,6 +9,11 @@ Queste regole valgono SEMPRE su questo progetto, su Mac e su Windows.
 4. **Non rimuovere funzionalità esistenti** se non esplicitamente richiesto.
 5. Spiega **solo i passi operativi** necessari. Niente papiri, italiano semplice
    (Pietro non è uno sviluppatore). Mai usare l'emoji 👁️.
+6. **Collabora con Codex per ogni modifica/decisione importante**: trovate
+   INSIEME la soluzione migliore. Flusso: proponi un approccio → fallo
+   criticare/proporre alternative a Codex (`codex exec`, prompt via stdin) →
+   sintetizza il meglio → implementa → fai **verificare a Codex** il risultato.
+   Riporta a Pietro la conclusione condivisa, non il botta-e-risposta.
 
 ## Vincoli del progetto (hard — non violare)
 - **Outreach:** niente Groq da nessuna parte. Niente API a consumo per
