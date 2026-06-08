@@ -151,6 +151,13 @@ export async function POST(_request: Request, context: RouteContext) {
     });
     if (!insertResponse.ok) {
       const text = await insertResponse.text();
+      // Vincolo unico DB (owner + email): doppione rifiutato a prova di bomba.
+      if (insertResponse.status === 409 || /23505/.test(text)) {
+        return NextResponse.json(
+          { error: "Esiste già un contatto con questa email." },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { error: text || insertResponse.statusText },
         { status: insertResponse.status }

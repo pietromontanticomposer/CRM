@@ -1078,7 +1078,7 @@ const ONCE = process.argv.includes("--once");
 // DELETE prima di uscire. Salta lo svuotamento solo se e' un takeover
 // (handover) o in modalita' --once (usata dai test). Guard anti doppio-exit.
 let shuttingDown = false;
-const gracefulShutdown = async (signal: string) => {
+const gracefulShutdown = async (signal: string, exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
   try {
@@ -1093,7 +1093,7 @@ const gracefulShutdown = async (signal: string) => {
     }
   } finally {
     releaseLock();
-    process.exit(0);
+    process.exit(exitCode);
   }
 };
 process.on("SIGINT", () => void gracefulShutdown("SIGINT"));
@@ -1118,9 +1118,10 @@ const bootstrap = async () => {
 
 bootstrap().catch(async (error) => {
   console.error("[worker] fatal error", error);
-  // Anche su crash: svuota i draft non approvati (a meno di takeover/--once).
+  // Anche su crash: svuota i draft non approvati (a meno di takeover/--once),
+  // poi esci con codice 1 (errore).
   try {
-    await gracefulShutdown("fatal");
+    await gracefulShutdown("fatal", 1);
   } catch {
     process.exitCode = 1;
   }
