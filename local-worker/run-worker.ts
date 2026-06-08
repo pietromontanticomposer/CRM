@@ -10,7 +10,11 @@ import { runClaudeCheck } from "./agents/claudeCheck";
 import { runCodexCheck } from "./agents/codexCheck";
 import type { AgentRunResult, ValidationPacket } from "./agents/shared";
 import { noteCliCongestion, getCliCap } from "./agents/shared";
-import { runWriterDraft, type WriterDraftResult } from "./agents/writerDraft";
+import {
+  runWriterDraft,
+  sanitizeMailBody,
+  type WriterDraftResult,
+} from "./agents/writerDraft";
 import { runContactTriage } from "./agents/triageContact";
 import {
   findPublicEmail,
@@ -193,6 +197,12 @@ const wipeAllDrafts = async (reason: string): Promise<number> => {
         },
       }
     );
+    if (!res.ok) {
+      console.warn(
+        `[worker] PULIZIA (${reason}) FALLITA: HTTP ${res.status}. I draft non approvati potrebbero essere RIMASTI.`
+      );
+      return 0;
+    }
     const body = (await res.json().catch(() => [])) as unknown[];
     const n = Array.isArray(body) ? body.length : 0;
     console.warn(
@@ -228,6 +238,12 @@ const wipeStaleDrafts = async (
         },
       }
     );
+    if (!res.ok) {
+      console.warn(
+        `[worker] PULIZIA avvio (${reason}) FALLITA: HTTP ${res.status}.`
+      );
+      return 0;
+    }
     const body = (await res.json().catch(() => [])) as unknown[];
     const n = Array.isArray(body) ? body.length : 0;
     if (n > 0) {
@@ -493,7 +509,7 @@ const persistDraft = async (
     .from("outreach_drafts")
     .update({
       ai_email_subject: draft.subject,
-      ai_email_body: draft.body,
+      ai_email_body: sanitizeMailBody(draft.body),
       ai_template_used: draft.template_used,
       ai_risk_score: numericToRiskLabel(draft.risk_score),
       ai_risk_score_numeric: draft.risk_score,
@@ -512,7 +528,7 @@ const persistDraft = async (
   }
 
   contact.ai_email_subject = draft.subject;
-  contact.ai_email_body = draft.body;
+  contact.ai_email_body = sanitizeMailBody(draft.body);
   contact.ai_template_used = draft.template_used;
   contact.ai_link_visione = draft.link_visione;
   contact.ai_risk_score_numeric = draft.risk_score;
@@ -1100,7 +1116,12 @@ const bootstrap = async () => {
   await main();
 };
 
-bootstrap().catch((error) => {
+bootstrap().catch(async (error) => {
   console.error("[worker] fatal error", error);
-  process.exitCode = 1;
+  // Anche su crash: svuota i draft non approvati (a meno di takeover/--once).
+  try {
+    await gracefulShutdown("fatal");
+  } catch {
+    process.exitCode = 1;
+  }
 });

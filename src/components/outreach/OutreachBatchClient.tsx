@@ -388,6 +388,21 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   };
 
   const handleApprove = async (id: string) => {
+    const target = contacts.find((c) => c.id === id);
+    if (
+      target &&
+      (target.ai_status === "blocked" || target.ai_status === "error")
+    ) {
+      window.alert("Questa bozza è scartata: non si può approvare.");
+      return;
+    }
+    if (
+      target &&
+      (!target.ai_email_subject?.trim() || !target.ai_email_body?.trim())
+    ) {
+      window.alert("Bozza senza oggetto o testo: non si può approvare.");
+      return;
+    }
     const ok = await promoteDraft(id);
     if (ok) await loadBatch({ silent: true });
   };
@@ -404,6 +419,14 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   };
 
   const handleSaveEdit = async (contact: BatchContact) => {
+    if (contact.ai_status === "blocked" || contact.ai_status === "error") {
+      window.alert("Questa bozza è scartata: non si può approvare.");
+      return;
+    }
+    if (!editSubject.trim() || !editBody.trim()) {
+      window.alert("Oggetto e testo non possono essere vuoti.");
+      return;
+    }
     // Salva le modifiche al subject/body sulla draft, poi promuovi.
     const patched = await patchContact(contact.id, {
       ai_email_subject: editSubject.trim(),

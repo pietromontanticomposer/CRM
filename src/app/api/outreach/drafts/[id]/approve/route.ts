@@ -60,6 +60,51 @@ export async function POST(_request: Request, context: RouteContext) {
       );
     }
 
+    // Sicurezza: una bozza SCARTATA o in ERRORE non è approvabile.
+    if (draft.ai_status === "blocked" || draft.ai_status === "error") {
+      return NextResponse.json(
+        { error: "Bozza scartata o in errore: non approvabile." },
+        { status: 409 }
+      );
+    }
+    // E nemmeno una bozza senza oggetto o senza testo.
+    const draftSubject =
+      typeof draft.ai_email_subject === "string"
+        ? draft.ai_email_subject.trim()
+        : "";
+    const draftBody =
+      typeof draft.ai_email_body === "string"
+        ? draft.ai_email_body.trim()
+        : "";
+    if (!draftSubject || !draftBody) {
+      return NextResponse.json(
+        { error: "Bozza senza oggetto o testo: non approvabile." },
+        { status: 409 }
+      );
+    }
+
+    // Anti-doppioni: niente nuovo contatto se ne esiste già uno (stesso owner)
+    // con la stessa email.
+    const draftEmail =
+      typeof draft.email === "string" ? draft.email.trim().toLowerCase() : "";
+    if (draftEmail) {
+      const dupRes = await fetch(
+        `${cfg.url}/rest/v1/contacts?owner_id=eq.${user.id}&email=ilike.${encodeURIComponent(
+          draftEmail
+        )}&select=id&limit=1`,
+        { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` } }
+      ).catch(() => null);
+      if (dupRes && dupRes.ok) {
+        const existing = (await dupRes.json().catch(() => [])) as unknown[];
+        if (Array.isArray(existing) && existing.length > 0) {
+          return NextResponse.json(
+            { error: "Esiste già un contatto con questa email." },
+            { status: 409 }
+          );
+        }
+      }
+    }
+
     // 2. INSERT nel contacts. Mappa i campi della draft sulle colonne contacts.
     const contactPayload = {
       owner_id: user.id,
@@ -117,8 +162,10 @@ export async function POST(_request: Request, context: RouteContext) {
     >[];
     const contact = insertedContacts[0] ?? null;
 
-    // 3. DELETE della draft (dopo che l'insert ha avuto successo)
-    await fetch(
+    // 3. DELETE della draft (dopo che l'insert ha avuto successo). Verifica
+    //    l'esito: se la cancellazione fallisce, la bozza resta riapprovabile
+    //    (rischio doppione) -> almeno lo logghiamo.
+    const deleteResponse = await fetch(
       `${cfg.url}/rest/v1/outreach_drafts?id=eq.${id}&owner_id=eq.${user.id}`,
       {
         method: "DELETE",
@@ -127,12 +174,14 @@ export async function POST(_request: Request, context: RouteContext) {
           Authorization: `Bearer ${cfg.key}`,
         },
       }
-    ).catch((deleteError) => {
+    ).catch(() => null);
+    if (!deleteResponse || !deleteResponse.ok) {
       console.warn(
-        "POST /api/outreach/drafts/[id]/approve: contact inserted but draft delete failed",
-        deleteError
+        "POST /api/outreach/drafts/[id]/approve: contact inserito ma DELETE draft fallita",
+        id,
+        deleteResponse?.status
       );
-    });
+    }
 
     return NextResponse.json({ contact });
   } catch (error) {

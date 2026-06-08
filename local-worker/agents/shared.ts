@@ -318,9 +318,10 @@ export const parseAgentOutput = (
   const contactOk = parsed.contact_ok as boolean;
   const emailOk = parsed.email_ok as boolean;
   const draftOk = parsed.draft_ok as boolean;
-  // send_allowed: l'agente lo dichiara, ma forziamo a false se email_ok=false.
+  // send_allowed: l'agente lo dichiara, ma lo forziamo a false se uno qualsiasi
+  // dei flag di contenuto e' false (persona/email/bozza). Invariante anti-cazzate.
   const sendAllowedRaw = parsed.send_allowed as boolean;
-  const sendAllowed = sendAllowedRaw && emailOk;
+  const sendAllowed = sendAllowedRaw && emailOk && contactOk && draftOk;
   const declaredApproved = parsed.approved as boolean;
   // approved: vale solo se TUTTI e 4 i flag sono true e l'agente stesso ha dichiarato approved.
   const approved =

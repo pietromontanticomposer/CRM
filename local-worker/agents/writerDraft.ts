@@ -156,13 +156,40 @@ const normalizeSources = (value: unknown): string[] => {
     .slice(0, 20);
 };
 
-// Rete di sicurezza: anche se lo scrittore disobbedisce e mette una riga
-// "Link visione: ..." nel corpo, la togliamo qui. Il corpo che parte deve
-// essere SOLO la mail (Pietro 2026-06-05).
-const stripInternalLinesFromBody = (raw: string): string =>
+// HOST ammessi nel corpo (firma di Pietro). Controllo sull'HOST vero, non
+// sottostringa: cosi' "evil.com/pietromontanti.com" NON passa.
+const ALLOWED_BODY_HOSTS = new Set([
+  "pietromontanti.com",
+  "instagram.com",
+  "soundcloud.com",
+]);
+const hostOf = (url: string): string =>
+  url
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split(/[/?#\s]/)[0]
+    .toLowerCase();
+// trova URL con http(s), con www., o domini "nudi" tipo otroscines.com/...
+const URL_IN_TEXT =
+  /(?:https?:\/\/|www\.)\S+|[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9-]+)*\.(?:com|org|net|it|io|tv|co|info|me|eu|uk|fr|es|de)\b\S*/gi;
+
+// Rete di sicurezza DETERMINISTICA (Pietro 2026): anche se lo scrittore
+// disobbedisce, dal corpo che parte togliamo: la riga "Link visione:", qualunque
+// riga "Fonti/Sources/Source:", e qualunque riga con un URL il cui HOST non e'
+// della firma di Pietro (una fonte sfuggita). Cosi' le fonti non finiscono mai
+// nella mail inviata.
+export const sanitizeMailBody = (raw: string): string =>
   raw
     .split(/\r?\n/)
-    .filter((line) => !/^\s*link\s*visione\s*:/i.test(line))
+    .filter((line) => {
+      const l = line.trim();
+      if (/^\s*(link\s*visione|fonti|sources?|source)\s*[:：]/i.test(l)) {
+        return false;
+      }
+      const urls = l.match(URL_IN_TEXT) || [];
+      if (urls.some((u) => !ALLOWED_BODY_HOSTS.has(hostOf(u)))) return false;
+      return true;
+    })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -192,7 +219,7 @@ const parseDraftOutput = (
   ) {
     return { error: "Writer JSON con shape non valida.", raw_output: rawOutput };
   }
-  const cleanedBody = stripInternalLinesFromBody(body);
+  const cleanedBody = sanitizeMailBody(body);
   if (!subject.trim() || !cleanedBody) {
     return {
       error: "Writer ha dichiarato dati insufficienti per generare la bozza.",

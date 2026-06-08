@@ -45,9 +45,9 @@ export const aggregateResults = (
 
   // ai_send_allowed globale: TUTTI gli agenti devono dichiarare send_allowed=true.
   // Basta un false (o un agente failed) per bloccare.
-  const ai_send_allowed = results.every(
-    (result) => result.send_allowed && !result.failed
-  );
+  const ai_send_allowed =
+    results.length > 0 &&
+    results.every((result) => result.send_allowed && !result.failed);
 
   const nonFailed = results.filter((result) => !result.failed);
 
