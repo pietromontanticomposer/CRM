@@ -424,7 +424,7 @@ export function AiOutreachImport({
             onDraftChange({
               ...draft,
               promptMasterRules:
-                "Sono i registi del [SCRIVI QUI IL FESTIVAL, es: 74° Trento Film Festival 2026]. Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. Aggiungi a ogni mail, nel punto naturale: “ho visto il tuo lavoro al festival e ho provato ad avvicinarti ma non ti ho trovato”.",
+                "Sono i registi del [SCRIVI QUI IL FESTIVAL, es: 74° Trento Film Festival 2026]. Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. APERTURA: NON dire “navigando online”; di’ invece che hai visto il loro film AL festival e che hai provato ad avvicinarti di persona ma non ci sei riuscito (al posto della frase online, non in aggiunta).",
             })
           }
           className="mb-2 rounded-full border border-[var(--accent)]/50 bg-[var(--accent)]/10 px-3 py-1 text-[11px] font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/20"

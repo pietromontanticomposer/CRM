@@ -228,6 +228,10 @@ L'apertura DEVE essere nella STESSA lingua del resto della mail:
 
 Mai: Ciao, Buongiorno, Gentile, Dear, To whom it may concern.
 
+RIGA "COME TI HO TROVATO" (quella subito dopo "Mi chiamo Pietro Montanti…"):
+* Default: `Mi sono imbattuto nel suo lavoro "(titolo)" navigando online`.
+* MA se `prompt_master_rules` dice che sono registi di un FESTIVAL: NON usare "navigando online". Di' invece che hai visto il loro lavoro AL festival e che hai provato ad avvicinarti di persona ma non ci sei riuscito — AL POSTO della frase online, non in aggiunta. Es. IT: `Ho visto il suo "(titolo)" al (nome festival) e ho provato ad avvicinarla di persona, ma non ci sono riuscito.` · EN: `I saw your "(title)" at the (festival) and tried to reach you in person, but I couldn't.` Usa il TITOLO dal contesto/PDF.
+
 ═══════════════════════════════════════════
 SPAZIATURA OBBLIGATORIA
 ═══════════════════════════════════════════
