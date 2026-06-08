@@ -1,0 +1,30 @@
+# CRM-next — Regole di lavoro (Claude)
+
+Queste regole valgono SEMPRE su questo progetto, su Mac e su Windows.
+
+## Modo di lavorare (Pietro, 2026-06-07)
+1. Lavora sempre in **Ultracode** quando disponibile.
+2. **Prima di modificare un file, ispeziona la struttura attuale.**
+3. Preferisci **file completi aggiornati** ai frammenti parziali.
+4. **Non rimuovere funzionalità esistenti** se non esplicitamente richiesto.
+5. Spiega **solo i passi operativi** necessari. Niente papiri, italiano semplice
+   (Pietro non è uno sviluppatore). Mai usare l'emoji 👁️.
+
+## Vincoli del progetto (hard — non violare)
+- **Outreach:** niente Groq da nessuna parte. Niente API a consumo per
+  Writer/Validator/Research — SOLO le CLI locali `claude` + `codex`.
+  Writer = `codex`. Doppio controllo = `claude` + `codex` (Gemini rimosso).
+- **Nessuna email parte in automatico.** Nessun contenuto inventato: solo da
+  fonti aperte e verificate.
+- **FILE DA NON TOCCARE:** `src/app/api/gmail/send/route.ts`,
+  `src/app/api/reminders/run/route.ts`,
+  `src/app/api/scheduled-emails/send/route.ts`,
+  `src/app/api/gmail/sync/route.ts`, `src/app/api/postmark/inbound/route.ts`,
+  `src/lib/followUp.ts`.
+- **Deploy** del sito Next: `vercel deploy --prod --yes`
+  (produzione: alias `crm-smoky-eight.vercel.app`).
+- **Commit/push** solo quando richiesto; chiudi i commit con
+  `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- **Worker** locale: `local-worker/` (tsx). La concorrenza rete è auto-adattiva
+  (semaforo CLI AIMD in `local-worker/agents/shared.ts`).
+- **Canale Mac ↔ Windows:** `CLAUDE-SYNC.md` (segui le regole in cima al file).
