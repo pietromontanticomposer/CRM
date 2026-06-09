@@ -38,6 +38,22 @@ errori, 23 test unit ok. DB pulito (0 bozze).
 Le email pubbliche dei registi spesso non esistono → confidence 0.4 → "da
 rivedere", da confermare a mano. Non si inventano.
 
+## Lezioni / NON rifare (2026-06-10)
+- **Consumo = limiti d'ABBONAMENTO, non token.** claude e codex girano sul login
+  dell'abbonamento (nessuna chiave API). Sui batch grossi (123) si esauriscono
+  ENTRAMBI (codex visto esaurito "fino a Jun 11 22:36"). Non è un bug.
+  Soluzioni reali: batch piccoli, oppure ChatGPT Pro / piano Claude più alto.
+  Spostare carico tra le due NON aiuta: sono limitate entrambe.
+- **TUTTI gli AI devono avere il WEB e verificare info aggiornate** (regola
+  Pietro). Stato: claude (`--allowedTools WebSearch WebFetch`) e codex
+  (`tools.web_search=true`) ce l'hanno. Ricerca email, scrittore, validatori: ok.
+- **GEMINI scartato (testato 2026-06-10, NON riprovare):** la CLI `gemini -p`
+  di default è SENZA web → boccia tutto ("nessuna fonte"). Con web (`--approval-mode
+  yolo`) = **6 min per chiamata** + non capisce il template festival (boccia per
+  "link visione mancante" quando per i festival il link NON c'è). Inusabile come
+  validatore/ricerca. Buono SOLO come triage (13s) ma senza web viola la regola
+  e non alleggerisce codex → non vale. **Pipeline = solo claude+codex.**
+
 ## Invio mail — APPROVA = SALVA + INVIA (2026-06-09)
 Nella schermata di revisione il tasto **"Approva e invia"** salva il contatto in
 `contacts` E invia subito la mail (con firma `firma_pietro.png` + CV allegato).
@@ -96,6 +112,15 @@ buoni (la chiusura cancella le bozze non approvate).
 > click — non automatico); bulk = solo i confermati. Alla
 > CHIUSURA VOLUTA del worker le bozze non approvate si cancellano; un CRASH invece
 > NON le cancella più.
+>
+> **CONSUMO / AI / WEB:** claude e codex girano sul TUO abbonamento (NESSUNA chiave
+> API a token). Sui batch grossi (123) si esauriscono ENTRAMBI (codex visto
+> esaurito). NON è un bug: o batch piccoli o ChatGPT Pro / piano Claude più alto.
+> Spostare carico tra i due non aiuta (limitati entrambi). TUTTI gli AI DEVONO
+> avere il web e verificare info aggiornate: claude (`--allowedTools WebSearch
+> WebFetch`) e codex (`tools.web_search=true`) ce l'hanno. GEMINI: TESTATO e
+> SCARTATO (2026-06-10) — di default senza web boccia tutto, con web 6 min/chiamata
+> e non capisce il template festival; NON ririntrodurlo. Pipeline = solo claude+codex.
 >
 > **VINCOLI HARD (non violare):** Outreach SOLO con CLI locali `claude`+`codex`
 > (Writer=codex; doppio check claude+codex). NIENTE Groq, NIENTE API a pagamento
