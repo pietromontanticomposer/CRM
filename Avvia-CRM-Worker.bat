@@ -17,7 +17,7 @@ if not exist "package.json" (
 REM --- 1. AGGIORNAMENTO AUTOMATICO da GitHub ---
 echo [1/3] Cerco aggiornamenti su GitHub...
 for /f %%H in ('git rev-parse HEAD 2^>nul') do set "HEAD_BEFORE=%%H"
-git pull
+git pull --ff-only
 for /f %%H in ('git rev-parse HEAD 2^>nul') do set "HEAD_AFTER=%%H"
 
 set "NEED_INSTALL="
