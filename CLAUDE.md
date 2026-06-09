@@ -40,3 +40,19 @@ Queste regole valgono SEMPRE su questo progetto, su Mac e su Windows.
 - **Worker** locale: `local-worker/` (tsx). La concorrenza rete è auto-adattiva
   (semaforo CLI AIMD in `local-worker/agents/shared.ts`).
 - **Canale Mac ↔ Windows:** `CLAUDE-SYNC.md` (segui le regole in cima al file).
+
+## Anti-errore (guardrail — NON aggirare)
+Pietro: "fai in modo di non poter più sbagliare". Quindi:
+1. **Stato vero iniettato in automatico:** a ogni messaggio un hook ti carica
+   `CONTINUA.md`. È la VERITÀ. Non affermare nulla che lo contraddica e non
+   ripartire da supposizioni.
+2. **Mai affermare senza prova:** non dire che un file/comportamento è in un
+   certo modo se non l'hai appena LETTO o ESEGUITO in questa sessione.
+3. **Prima di dire "fatto/funziona":** lancia `npm run selfcheck` (verifica i
+   fatti: file presenti, launcher con git pull, file vietati intatti, niente
+   `_tmp_`, approva=invia). Per modifiche al codice lancia anche `npm run verify`
+   (lint+build). Riporta solo ciò che PASSA.
+4. **Dopo ogni cambiamento importante:** aggiorna `CONTINUA.md` (incluso il
+   PROMPT DA INCOLLARE e la riga "STATO"), poi rilancia `npm run selfcheck`.
+5. **Chiudi OGNI messaggio** con il `📋 PROMPT DA INCOLLARE` allineato a
+   `CONTINUA.md`.

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "verify": "npm run lint && npm run build",
     "outreach:worker": "tsx local-worker/run-worker.ts",
-    "outreach:test": "tsx local-worker/tests/runTests.ts"
+    "outreach:test": "tsx local-worker/tests/runTests.ts",
+    "selfcheck": "node scripts/selfcheck.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.94.0",
