@@ -55,6 +55,7 @@ type DraftQueueRow = {
   email_confidence: number | null;
   email_enrichment_status: string | null;
   email_enrichment_reason: string | null;
+  ai_attempts: number | null;
 };
 
 const getRequiredEnv = (key: string) => {
@@ -69,6 +70,11 @@ const WORKER_LIMIT = Math.max(
   1,
   Number.parseInt(process.env.OUTREACH_WORKER_BATCH_SIZE ?? "30", 10) || 30
 );
+
+// Un timeout dello scrittore (Codex lento sotto carico) NON deve diventare un
+// errore permanente: la bozza verrebbe abbandonata e mai ripresa. La rimettiamo
+// in coda fino a MAX_WRITER_RETRIES volte; solo dopo diventa "error".
+const MAX_WRITER_RETRIES = 2;
 const WORKER_POLL_MS = Math.max(
   5000,
   Number.parseInt(process.env.OUTREACH_WORKER_POLL_MS ?? "15000", 10) || 15000
@@ -378,7 +384,7 @@ const fetchQueue = async (supabase: ReturnType<typeof getSupabase>) => {
   const { data, error } = await supabase
     .from("outreach_drafts")
     .select(
-      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, ai_template_used, ai_link_visione, ai_risk_score_numeric, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason"
+      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, ai_template_used, ai_link_visione, ai_risk_score_numeric, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason, ai_attempts"
     )
     .in("ai_status", ["imported", "draft_ready", "processing"])
     .order("updated_at", { ascending: true })
@@ -757,6 +763,22 @@ const processContact = async (
     );
 
     if ("error" in writerOutcome) {
+      // Timeout = singhiozzo sotto carico, non un difetto della bozza: la
+      // rimettiamo in coda (max MAX_WRITER_RETRIES) invece di abbandonarla.
+      const isTimeout = /timeout/i.test(writerOutcome.error);
+      const attempts = Number(contact.ai_attempts ?? 0);
+      if (isTimeout && attempts < MAX_WRITER_RETRIES) {
+        // "draft_ready" (non "imported"): al re-fetch salta triage+enrichment
+        // (l'email c'e' gia') e torna dritto allo scrittore. Niente lavoro doppio.
+        await supabase
+          .from("outreach_drafts")
+          .update({ ai_status: "draft_ready", ai_attempts: attempts + 1 })
+          .eq("id", contact.id);
+        console.warn(
+          `${logPrefix(contact)} writer timeout - rimesso in coda (tentativo ${attempts + 1}/${MAX_WRITER_RETRIES + 1})`
+        );
+        return;
+      }
       await setContactError(
         supabase,
         contact,

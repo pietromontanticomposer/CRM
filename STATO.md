@@ -4,6 +4,12 @@ Registro permanente per NON ripartire da zero. Aggiornare qui ogni volta che si
 verifica/rompe qualcosa. Ultima revisione: 2026-06-07.
 
 ## ✅ FUNZIONA (verificato dal vivo)
+- **[2026-06-09] Timeout scrittore = non più piantato**: se Codex (scrittore) va
+  in timeout sotto carico, la bozza NON finisce più in "errore" abbandonata. Si
+  rimette in coda (stato `draft_ready`, salta triage/ricerca email) e riprova,
+  fino a 3 tentativi totali; solo dopo diventa "errore". Colonna DB `ai_attempts`.
+  (Prima: 1 timeout → "errore" → mai più ripresa. Trovati 2 casi nel batch
+  Trento — Antonio La Camera, Ambroise Abondance — sbloccati a mano + fix.)
 - **[2026-06-07 sera] Apertura festival**: con il campo "Festival" all'import,
   ogni mail apre con "Ho visto il suo (film) al 74° Trento Film Festival 2026 e
   ho provato ad avvicinarla…" — nome ESATTO (riconosciuto dal PDF), SOSTITUISCE
