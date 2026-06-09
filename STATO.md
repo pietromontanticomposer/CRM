@@ -1,7 +1,23 @@
 # STATO del progetto CRM-next — cosa va e cosa no
 
 Registro permanente per NON ripartire da zero. Aggiornare qui ogni volta che si
-verifica/rompe qualcosa. Ultima revisione: 2026-06-07.
+verifica/rompe qualcosa. Ultima revisione: 2026-06-09.
+
+## 🏁 VERSIONE DEFINITIVA — verificata end-to-end (2026-06-09)
+Provata DAL VIVO girando il worker vero (`--once`) su 3 registi reali estratti dal
+PDF Trento (stesso parser dell'import). Tutti e 3 puliti e coerenti, worker uscito
+0 (nessun crash):
+- Apertura festival giusta dal PDF (IT per Elettra Gallone, EN per Iván Vescovo e
+  Laurence Olivier), NON "navigando online", nessuna doppia apertura.
+- ZERO fonti/URL nel corpo; 6-8 fonti nella sezione separata (NON inviata).
+- Stato corretto: email indovinata gmail (0.4) → needs_review, non inviabile.
+- "Zhang" (solo cognome, da "Zhang & Knight") scartato dall'anti-spazzatura: giusto.
+Robustezza (tutte committate): retry automatico sui timeout scrittore (no più
+piantato); carico CLI ridotto (4 invece di 6) per non intasare; un CRASH non
+cancella più il lavoro (solo la chiusura VOLUTA svuota, come da regola). tsc 0
+errori, 23 test unit passati.
+Resta il limite DATI (non un bug): le email pubbliche dei registi spesso non
+esistono → confidence 0.4 → vanno confermate a mano prima di inviare.
 
 ## ✅ FUNZIONA (verificato dal vivo)
 - **[2026-06-09] Carico CLI ridotto per non intasare**: troppe CLI in parallelo

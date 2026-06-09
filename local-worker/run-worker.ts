@@ -1138,13 +1138,13 @@ const bootstrap = async () => {
   await main();
 };
 
-bootstrap().catch(async (error) => {
+bootstrap().catch((error) => {
   console.error("[worker] fatal error", error);
-  // Anche su crash: svuota i draft non approvati (a meno di takeover/--once),
-  // poi esci con codice 1 (errore).
-  try {
-    await gracefulShutdown("fatal", 1);
-  } catch {
-    process.exitCode = 1;
-  }
+  // Un CRASH non e' una chiusura VOLUTA: NON cancelliamo i draft. Cosi' un crash
+  // a meta' batch non distrugge ore di lavoro gia' fatto. I draft restano in DB;
+  // al riavvio il backstop (STALE_DRAFT_HOURS) toglie solo i veri abbandonati, e
+  // una chiusura voluta (SIGINT/SIGTERM/SIGHUP) li svuota come da regola Pietro.
+  shuttingDown = true; // blocca un eventuale wipe da signal handler concorrente
+  releaseLock();
+  process.exit(1);
 });
