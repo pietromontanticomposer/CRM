@@ -10,12 +10,21 @@ registi sul sito → un "worker" locale (Mac/Windows) per ognuno cerca l'email,
 scrive una mail personalizzata e la fa controllare → Pietro rivede e approva.
 Pietro NON è sviluppatore: gli si consegna roba funzionante e già provata.
 
-## Come si avvia (entrambi si auto-aggiornano da GitHub all'avvio)
-- **Windows:** doppio click su `Avvia-CRM-Worker.bat` (fa `git pull` + `npm install` se serve + avvia).
-- **Mac:** doppio click su `Avvia CRM` (sul Desktop) — fa `git pull` + avvia.
-  (Il vecchio servizio automatico Mac `com.pietro.crm-worker` è DISATTIVATO:
-  era rotto, macOS blocca i background dalla cartella Desktop — EPERM.)
-- **Sito:** già online su `crm-smoky-eight.vercel.app`. Deploy: `vercel deploy --prod --yes`.
+## Come si avvia (PARITÀ Mac/Windows — verificata 2026-06-09)
+Due launcher GEMELLI nel repo (quindi anche la logica di avvio si auto-aggiorna).
+Stessi 3 passi: 1) `git pull --ff-only` 2) `npm install` solo se serve (tsx
+mancante o package-lock cambiato) 3) `npm run outreach:worker`.
+- **Windows:** doppio click su `Avvia-CRM-Worker.bat`.
+- **Mac:** doppio click su `Avvia CRM` (Desktop) — è una scorciatoia che chiama
+  `Avvia-CRM-Worker.command` nel repo. Se la scorciatoia si perde, ricreala con:
+  `cd "<repo>" && exec bash "./Avvia-CRM-Worker.command"`.
+- Mac verificato dal vivo (pull→dipendenze→worker in polling); parità confermata
+  con Codex. Windows NON eseguibile da qui: la logica è identica al Mac, ma la
+  conferma 100% va fatta sul PC Windows (vedi CLAUDE-SYNC: aperto il caso Claude
+  CLI exit 1 su Windows, separato dal launcher).
+- Il vecchio servizio automatico Mac `com.pietro.crm-worker` è DISATTIVATO
+  (`.plist.disabled`): era rotto, macOS blocca i background dal Desktop (EPERM).
+- **Sito:** online su `crm-smoky-eight.vercel.app`. Deploy: `vercel deploy --prod --yes`.
 
 ## Stato (2026-06-09) — VERSIONE DEFINITIVA verificata end-to-end
 Provata dal vivo su 3 registi reali del PDF Trento: apertura festival giusta dal
