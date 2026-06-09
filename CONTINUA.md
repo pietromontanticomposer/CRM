@@ -111,11 +111,13 @@ buoni (la chiusura cancella le bozze non approvate).
 > avvicinarla ma non ci sono riuscito" al posto di "navigando online". Le fonti
 > vanno in sezione SEPARATA, mai nel corpo della mail.
 >
-> **STATO ATTUALE:** versione definitiva provata end-to-end su 3 registi reali del
-> PDF Trento (apertura festival giusta, zero fonti nel corpo, lingua giusta,
-> "da rivedere" per email indovinate a bassa confidenza, nessun crash). LIMITE
-> REALE (non bug): le email pubbliche spesso non esistono → confidence ~0.4 → "da
-> rivedere", da confermare a mano; non si inventano.
+> **STATO ATTUALE:** pipeline provata su 3 registi reali (apertura festival
+> giusta, zero fonti nel corpo, lingua giusta, nessun crash). APPROVA = INVIA
+> live e VERIFICATO: test invio a se stessi ok, la mail arriva con firma
+> (foto `firma_pietro.png`) + CV allegato, via Gmail SMTP. Launcher Mac/Windows
+> allineati (auto git pull). LIMITE REALE (non bug): le email pubbliche spesso
+> non esistono → confidence ~0.4 → "da rivedere", da confermare a mano; non si
+> inventano. Prossimo: far girare un batch vero dal sito.
 >
 > **COSA FARE:** dimmi dov'eravamo e il prossimo passo, poi PROCEDI e verifica tu
 > prima di consegnarmi. AGGIORNA tu `CONTINUA.md` (e questo prompt) ogni volta che
