@@ -44,14 +44,58 @@ Far girare un batch vero dal sito (Pietro carica il PDF, lascia il worker
 acceso, approva le buone). Audit completo dell'app in corso per blindare questo
 file (workflow `audit-stato-crm`).
 
-## PROMPT DA INCOLLARE (se Claude perde il filo)
-> Progetto `crm-next` in `/Users/pietromontanti/Desktop/Progetti Vari/crm-next`.
-> Leggi PRIMA `CONTINUA.md`, `STATO.md`, `CLAUDE.md` e NON ripartire da
-> supposizioni. Sono Pietro, non sviluppatore: dammi cose funzionanti e già
-> provate da te, niente compiti tecnici a me. Vincoli: solo CLI locali
-> claude+codex (no Groq/API a consumo), nessun invio automatico, non toccare i
-> file gmail/scheduled-send. Worker: Mac = "Avvia CRM", Windows =
-> Avvia-CRM-Worker.bat (entrambi git pull all'avvio). Dimmi dove eravamo e il
-> prossimo passo, poi procedi e verifica tu prima di consegnarmi. E AGGIORNA tu
-> questo file `CONTINUA.md` (e questo prompt) ogni volta che cambia qualcosa,
-> così resta sempre vero.
+## PROMPT DA INCOLLARE (se Claude perde il filo) — versione DETTAGLIATA
+> **CHI SONO:** Pietro Montanti, compositore di colonne sonore a Verona, NON
+> sviluppatore. Voglio cose funzionanti e GIÀ PROVATE da te, in italiano
+> semplice, senza compiti tecnici a me e senza chiedermi cose che puoi decidere
+> tu. Non dirmi "hai ragione" a vuoto: sii diretto, verifica prima di consegnare.
+>
+> **PROGETTO:** `crm-next` in `/Users/pietromontanti/Desktop/Progetti Vari/crm-next`.
+> CRM per cold-email a registi di festival. Io carico un PDF di registi sul sito →
+> un "worker" locale, per ogni regista, cerca l'email pubblica, scrive una mail
+> personalizzata e la fa controllare da 2 validatori → io rivedo e approvo. GitHub
+> PUBBLICO `github.com/pietromontanticomposer/CRM.git`. Supabase (ref
+> `byrwtovxttvuhqsmwzpx`). Sito su Vercel: `crm-smoky-eight.vercel.app`
+> (deploy `vercel deploy --prod --yes`).
+>
+> **PRIMA DI TUTTO:** leggi `CONTINUA.md`, `STATO.md`, `CLAUDE.md`, `CLAUDE-SYNC.md`
+> nel repo. NON ripartire da supposizioni: lì c'è la verità.
+>
+> **COME PARTE IL WORKER (si auto-aggiornano da GitHub):** Mac = doppio click su
+> "Avvia CRM" (sul Desktop, fa git pull + avvia); Windows = doppio click su
+> `Avvia-CRM-Worker.bat` (git pull + npm install se serve + avvia). Il vecchio
+> servizio automatico Mac (launchd `com.pietro.crm-worker`) è DISATTIVATO perché
+> rotto (macOS blocca i background dal Desktop, EPERM).
+>
+> **PIPELINE worker** (`local-worker/`, tsx): triage (claude) → ricerca email
+> (claude+codex) → scrittore (codex) → 2 validatori (claude+codex) → aggregate.
+> Concorrenza auto-adattiva (semaforo AIMD in `agents/shared.ts`, max 4). Timeout
+> scrittore 7 min con RETRY automatico (colonna `ai_attempts`). Bozze non
+> approvate vivono in `outreach_drafts`; approvando passano a `contacts`. Alla
+> CHIUSURA VOLUTA del worker le bozze non approvate si cancellano; un CRASH invece
+> NON le cancella più.
+>
+> **VINCOLI HARD (non violare):** Outreach SOLO con CLI locali `claude`+`codex`
+> (Writer=codex; doppio check claude+codex). NIENTE Groq, NIENTE API a pagamento
+> per Writer/Validator/Research. Nessuna email parte in automatico. Niente
+> contenuti inventati: solo da fonti aperte e verificate. FILE DA NON TOCCARE:
+> `src/app/api/gmail/send/route.ts`, `src/app/api/reminders/run/route.ts`,
+> `src/app/api/scheduled-emails/send/route.ts`, `src/app/api/gmail/sync/route.ts`,
+> `src/app/api/postmark/inbound/route.ts`, `src/lib/followUp.ts`. Commit chiusi
+> con `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+>
+> **BATCH FESTIVAL:** all'import, nel campo "Festival" (si riempie da solo dal PDF)
+> ogni mail apre con "ho visto il suo (film) al (festival) e ho provato ad
+> avvicinarla ma non ci sono riuscito" al posto di "navigando online". Le fonti
+> vanno in sezione SEPARATA, mai nel corpo della mail.
+>
+> **STATO ATTUALE:** versione definitiva provata end-to-end su 3 registi reali del
+> PDF Trento (apertura festival giusta, zero fonti nel corpo, lingua giusta,
+> "da rivedere" per email indovinate a bassa confidenza, nessun crash). LIMITE
+> REALE (non bug): le email pubbliche spesso non esistono → confidence ~0.4 → "da
+> rivedere", da confermare a mano; non si inventano.
+>
+> **COSA FARE:** dimmi dov'eravamo e il prossimo passo, poi PROCEDI e verifica tu
+> prima di consegnarmi. AGGIORNA tu `CONTINUA.md` (e questo prompt) ogni volta che
+> cambia qualcosa, così resta sempre vero. E chiudi OGNI tuo messaggio con questo
+> prompt aggiornato.
