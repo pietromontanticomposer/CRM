@@ -20,6 +20,11 @@ Resta il limite DATI (non un bug): le email pubbliche dei registi spesso non
 esistono → confidence 0.4 → vanno confermate a mano prima di inviare.
 
 ## ✅ FUNZIONA (verificato dal vivo)
+- **[2026-06-09] APPROVA = SALVA + INVIA**: "Approva e invia" salva il contatto
+  in `contacts` e invia la mail con firma (foto `firma_pietro.png`) + CV
+  allegato. Testato dal vivo: mail di prova arrivata a Pietro, firma e CV ok
+  (Pietro: "la mail test è giusta"). Bulk invia SOLO i confermati (approved);
+  i needs_review uno a uno. Invio via Gmail SMTP, /api/gmail/send non toccato.
 - **[2026-06-09] Carico CLI ridotto per non intasare**: troppe CLI in parallelo
   facevano timeout/errore. Ora: CLI massime 6→4, partenza 3→2, timeout scrittore
   5→7 min. Più lento ma molto meno errori sotto carico. (recall > velocità). Il

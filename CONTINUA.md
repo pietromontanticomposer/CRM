@@ -59,11 +59,10 @@ Ogni mail allega anche il CV PDF (comportamento attuale di gmail/send).
 - Commit chiusi con `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## Prossimo passo
-TEST INVIO: c'è una bozza finta (batch "TEST INVIO A TE STESSO", email =
-pietromontanticomposer@gmail.com). Pietro la apre nella revisione e clicca
-"Approva e invia": la mail deve arrivare nella SUA casella con firma + CV.
-Confermato questo, usare su registi veri. Poi far girare un batch vero (worker
-acceso, NON chiudere finché non hai approvato i buoni — la chiusura cancella).
+INVIO VERIFICATO (test a se stessi ok: firma + CV arrivati). Ora: far girare un
+batch vero — avvia il worker ("Avvia CRM"/.bat), carica il PDF sul sito, e man
+mano approva+invia i buoni. NON chiudere il worker finché non hai approvato i
+buoni (la chiusura cancella le bozze non approvate).
 
 ## PROMPT DA INCOLLARE (se Claude perde il filo) — versione DETTAGLIATA
 > **CHI SONO:** Pietro Montanti, compositore di colonne sonore a Verona, NON
