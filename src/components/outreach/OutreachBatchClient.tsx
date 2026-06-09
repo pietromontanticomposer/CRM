@@ -366,7 +366,9 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   };
 
   // Promuove la draft a contact reale nella tabella contacts (e cancella la
-  // draft). Solo dopo questo passaggio il contatto compare in /crm.
+  // draft) E POI INVIA la mail (stessa chiamata che la UI usa per gli invii
+  // singoli: /api/gmail/send aggiunge firma + CV, aggiorna il contatto e
+  // programma il follow-up). Approvare = salvare il contatto + inviare.
   const promoteDraft = async (id: string) => {
     setActionPendingId(id);
     try {
@@ -380,6 +382,30 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
           : "Server non raggiungibile.";
         setError(message);
         return false;
+      }
+      // Contatto creato: ora invio la mail.
+      const payload = (await response.json().catch(() => null)) as
+        | { contact?: { id?: string; email?: string | null; ai_email_subject?: string | null; ai_email_body?: string | null } }
+        | null;
+      const c = payload?.contact;
+      const to = c?.email?.trim();
+      const subject = c?.ai_email_subject?.trim();
+      const body = c?.ai_email_body?.trim();
+      if (c?.id && to && subject && body) {
+        const sendRes = await fetch("/api/gmail/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contactId: c.id, to, subject, text: body }),
+        }).catch(() => null);
+        if (!sendRes || !sendRes.ok) {
+          setError(
+            "Contatto salvato. L'invio risulta non riuscito: controlla PRIMA in Posta inviata, e solo se la mail non c'è rimandala a mano dal contatto in /crm."
+          );
+        }
+      } else if (c?.id && !to) {
+        setError(
+          "Contatto salvato, ma senza email non ho potuto inviare la mail."
+        );
       }
       return true;
     } finally {
@@ -441,12 +467,12 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   };
 
   const bulkApprove = async () => {
+    // SICUREZZA: il bulk invia SOLO i confermati (status "approved" = email
+    // sicura, validazione passata). I "needs_review" (email indovinata) NON
+    // entrano nel bulk: vanno approvati/inviati uno a uno dopo averli guardati,
+    // così non si fa un invio di massa a indirizzi incerti.
     const readyIds = contacts
-      .filter(
-        (contact) =>
-          contact.ai_status === "needs_review" ||
-          contact.ai_status === "approved"
-      )
+      .filter((contact) => contact.ai_status === "approved")
       .filter(
         (contact) =>
           contact.ai_email_subject?.trim() && contact.ai_email_body?.trim()
@@ -624,14 +650,15 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             )}
             <button
               type="button"
-              disabled={!!bulkPending || counts.needsReview === 0}
+              disabled={!!bulkPending || counts.approved === 0}
               onClick={bulkApprove}
+              title="Invia solo i contatti CONFERMATI (email sicura). Quelli 'da rivedere' restano da approvare a mano."
               className="rounded-full bg-emerald-500/90 px-3 py-1 font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {bulkPending === "approve"
-                ? "Approvo…"
-                : `Approva tutti i pronti${
-                    counts.needsReview ? ` · ${counts.needsReview}` : ""
+                ? "Invio…"
+                : `Approva e invia i sicuri${
+                    counts.approved ? ` · ${counts.approved}` : ""
                   }`}
             </button>
             <button
@@ -1189,8 +1216,9 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                           disabled={pending || !contact.ai_email_subject}
                           onClick={() => void handleApprove(contact.id)}
                           className="rounded-full bg-emerald-500/90 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          title="Salva il contatto e INVIA subito la mail (con firma e CV)"
                         >
-                          Approva
+                          Approva e invia
                         </button>
                         <button
                           type="button"
@@ -1218,7 +1246,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                           onClick={() => void handleSaveEdit(contact)}
                           className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Salva e approva
+                          Salva, approva e invia
                         </button>
                         <button
                           type="button"
