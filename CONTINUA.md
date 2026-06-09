@@ -52,4 +52,6 @@ file (workflow `audit-stato-crm`).
 > claude+codex (no Groq/API a consumo), nessun invio automatico, non toccare i
 > file gmail/scheduled-send. Worker: Mac = "Avvia CRM", Windows =
 > Avvia-CRM-Worker.bat (entrambi git pull all'avvio). Dimmi dove eravamo e il
-> prossimo passo, poi procedi e verifica tu prima di consegnarmi.
+> prossimo passo, poi procedi e verifica tu prima di consegnarmi. E AGGIORNA tu
+> questo file `CONTINUA.md` (e questo prompt) ogni volta che cambia qualcosa,
+> così resta sempre vero.
