@@ -38,6 +38,16 @@ errori, 23 test unit ok. DB pulito (0 bozze).
 Le email pubbliche dei registi spesso non esistono → confidence 0.4 → "da
 rivedere", da confermare a mano. Non si inventano.
 
+## Invio mail — APPROVA = SALVA + INVIA (2026-06-09)
+Nella schermata di revisione il tasto **"Approva e invia"** salva il contatto in
+`contacts` E invia subito la mail (con firma `firma_pietro.png` + CV allegato).
+Tecnica: `promoteDraft` in OutreachBatchClient chiama `/approve` poi
+`/api/gmail/send` (NON toccato; aggiunge firma+CV e programma il follow-up).
+NON è invio automatico: parte SOLO quando Pietro clicca. Il bulk
+"Approva e invia i sicuri" manda SOLO i confermati (status `approved`, email
+sicura); i `needs_review` (email indovinata) si approvano/inviano uno a uno.
+Ogni mail allega anche il CV PDF (comportamento attuale di gmail/send).
+
 ## Vincoli HARD (non violare)
 - Outreach: SOLO CLI locali `claude` + `codex`. Niente Groq, niente API a
   consumo (Writer/Validator/Research). Writer = codex.
@@ -49,9 +59,11 @@ rivedere", da confermare a mano. Non si inventano.
 - Commit chiusi con `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## Prossimo passo
-Far girare un batch vero dal sito (Pietro carica il PDF, lascia il worker
-acceso, approva le buone). Audit completo dell'app in corso per blindare questo
-file (workflow `audit-stato-crm`).
+TEST INVIO: c'è una bozza finta (batch "TEST INVIO A TE STESSO", email =
+pietromontanticomposer@gmail.com). Pietro la apre nella revisione e clicca
+"Approva e invia": la mail deve arrivare nella SUA casella con firma + CV.
+Confermato questo, usare su registi veri. Poi far girare un batch vero (worker
+acceso, NON chiudere finché non hai approvato i buoni — la chiusura cancella).
 
 ## PROMPT DA INCOLLARE (se Claude perde il filo) — versione DETTAGLIATA
 > **CHI SONO:** Pietro Montanti, compositore di colonne sonore a Verona, NON
@@ -80,7 +92,9 @@ file (workflow `audit-stato-crm`).
 > (claude+codex) → scrittore (codex) → 2 validatori (claude+codex) → aggregate.
 > Concorrenza auto-adattiva (semaforo AIMD in `agents/shared.ts`, max 4). Timeout
 > scrittore 7 min con RETRY automatico (colonna `ai_attempts`). Bozze non
-> approvate vivono in `outreach_drafts`; approvando passano a `contacts`. Alla
+> approvate vivono in `outreach_drafts`. Il tasto "Approva e invia" salva il
+> contatto in `contacts` E INVIA la mail (firma+CV, via /api/gmail/send, solo al
+> click — non automatico); bulk = solo i confermati. Alla
 > CHIUSURA VOLUTA del worker le bozze non approvate si cancellano; un CRASH invece
 > NON le cancella più.
 >
