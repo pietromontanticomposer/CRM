@@ -14,6 +14,13 @@ Queste regole valgono SEMPRE su questo progetto, su Mac e su Windows.
    criticare/proporre alternative a Codex (`codex exec`, prompt via stdin) →
    sintetizza il meglio → implementa → fai **verificare a Codex** il risultato.
    Riporta a Pietro la conclusione condivisa, non il botta-e-risposta.
+7. **Alla fine di OGNI messaggio** a Pietro, includi SEMPRE un blocco
+   `📋 PROMPT DA INCOLLARE` con: stato attuale in 1 riga + prossimo passo +
+   il puntatore ai file da leggere (`STATO.md`, `CONTINUA.md`, `CLAUDE.md`).
+   Serve a NON perdere il filo tra una sessione e l'altra: se Claude riparte da
+   zero, Pietro incolla quel prompt e si riprende esattamente da li'.
+8. **All'inizio di ogni sessione su questo progetto, leggi PRIMA** `CONTINUA.md`
+   e `STATO.md`: sono la fonte di verita'. Non ripartire da supposizioni.
 
 ## Vincoli del progetto (hard — non violare)
 - **Outreach:** niente Groq da nessuna parte. Niente API a consumo per
