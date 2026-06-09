@@ -72,8 +72,9 @@ const CLAUDE_TIMEOUT_MS = 120_000;
 const GEMINI_TIMEOUT_MS = 90_000;
 // Pietro 2026-06-05: "preferisco piu' lento ma piu' preciso". Lo scrittore deve
 // avere tempo di scavare per un dettaglio specifico DOCUMENTATO (sinossi, scheda
-// festival, recensioni, interviste). 5 min: la precisione conta piu' della velocita'.
-const CODEX_TIMEOUT_MS = 300_000;
+// festival, recensioni, interviste). 7 min: con la concorrenza piu' bassa lo
+// scrittore non scade piu' sotto carico (la precisione conta piu' della velocita').
+const CODEX_TIMEOUT_MS = 420_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);

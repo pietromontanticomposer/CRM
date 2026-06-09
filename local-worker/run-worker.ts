@@ -94,7 +94,7 @@ void CPU_COUNT;
 // veloce quando puo' e non intasa mai, su qualunque macchina. La concorrenza
 // reale e' quella del semaforo, non questo numero: qui teniamo solo abbastanza
 // contatti pronti da alimentare il pool. Override: OUTREACH_WORKER_CONCURRENCY.
-const CLI_MAX = Math.max(2, Number(process.env.MAX_CONCURRENT_CLI) || 6);
+const CLI_MAX = Math.max(2, Number(process.env.MAX_CONCURRENT_CLI) || 4);
 const DEFAULT_CONCURRENCY = CLI_MAX;
 const WORKER_CONCURRENCY = Math.max(
   1,

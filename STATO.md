@@ -4,6 +4,10 @@ Registro permanente per NON ripartire da zero. Aggiornare qui ogni volta che si
 verifica/rompe qualcosa. Ultima revisione: 2026-06-07.
 
 ## ✅ FUNZIONA (verificato dal vivo)
+- **[2026-06-09] Carico CLI ridotto per non intasare**: troppe CLI in parallelo
+  facevano timeout/errore. Ora: CLI massime 6→4, partenza 3→2, timeout scrittore
+  5→7 min. Più lento ma molto meno errori sotto carico. (recall > velocità). Il
+  semaforo AIMD continua a dimezzare a ogni intasamento. Rivisto con Codex.
 - **[2026-06-09] Timeout scrittore = non più piantato**: se Codex (scrittore) va
   in timeout sotto carico, la bozza NON finisce più in "errore" abbandonata. Si
   rimette in coda (stato `draft_ready`, salta triage/ricerca email) e riprova,

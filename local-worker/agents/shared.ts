@@ -114,10 +114,10 @@ export const getInlineSchema = () => JSON.stringify(RESULT_SCHEMA);
 // tetto. Range [CLI_MIN, CLI_MAX]. Niente piu' numero fisso: su rete lenta scende,
 // su rete buona sale, senza intasare mai. Override START/MAX via env.
 const CLI_MIN = 1;
-const CLI_MAX = Math.max(2, Number(process.env.MAX_CONCURRENT_CLI) || 6);
+const CLI_MAX = Math.max(2, Number(process.env.MAX_CONCURRENT_CLI) || 4);
 const CLI_START = Math.min(
   CLI_MAX,
-  Math.max(CLI_MIN, Number(process.env.START_CONCURRENT_CLI) || 3)
+  Math.max(CLI_MIN, Number(process.env.START_CONCURRENT_CLI) || 2)
 );
 const RAMP_OK = 4;
 let cliCap = CLI_START;
