@@ -45,7 +45,7 @@ type BatchContact = {
   ai_agent_checks_json: Record<string, AgentSnapshot> | null;
 };
 
-type Filter = "all" | "needs_review" | "approved" | "blocked";
+type Filter = "all" | "mail_mancante" | "approved" | "blocked";
 
 const summarizeStatus = (status: string | null) => {
   switch (status) {
@@ -69,7 +69,10 @@ const summarizeStatus = (status: string | null) => {
 };
 
 const isReady = (status: string | null) =>
-  status === "approved" || status === "needs_review" || status === "blocked";
+  status === "approved" ||
+  status === "needs_review" ||
+  status === "mail_mancante" ||
+  status === "blocked";
 
 const priorityOf = (status: string | null) => {
   if (status === "needs_review") return 0;
@@ -271,6 +274,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   const counts = useMemo(() => {
     let processed = 0;
     let needsReview = 0;
+    let mailMancante = 0;
     let approved = 0;
     let blocked = 0;
     let sendAllowed = 0;
@@ -280,6 +284,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     contacts.forEach((contact) => {
       if (isReady(contact.ai_status)) processed += 1;
       if (contact.ai_status === "needs_review") needsReview += 1;
+      if (contact.ai_status === "mail_mancante") mailMancante += 1;
       if (contact.ai_status === "approved") approved += 1;
       if (contact.ai_status === "blocked") blocked += 1;
       if (contact.ai_send_allowed) sendAllowed += 1;
@@ -293,6 +298,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       processed,
       total: contacts.length,
       needsReview,
+      mailMancante,
       approved,
       blocked,
       sendAllowed,
@@ -633,19 +639,19 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             <span className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 font-semibold text-[var(--muted)]">
               {counts.processed}/{counts.total} processati
             </span>
-            {counts.needsReview > 0 && (
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 font-semibold text-amber-200">
-                {counts.needsReview} da rivedere
-              </span>
-            )}
             {counts.approved > 0 && (
               <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 font-semibold text-emerald-200">
-                {counts.approved} approvati
+                ✅ {counts.approved} pronte
+              </span>
+            )}
+            {counts.mailMancante > 0 && (
+              <span className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 font-semibold text-[var(--muted)]">
+                📭 {counts.mailMancante} mail mancante
               </span>
             )}
             {counts.blocked > 0 && (
-              <span className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 font-semibold text-red-200">
-                {counts.blocked} scartati
+              <span className="rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1 font-semibold text-[var(--muted)]">
+                🚫 {counts.blocked} scartate
               </span>
             )}
             <button
@@ -747,24 +753,24 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
           </button>
           <button
             type="button"
-            className={filterPillClass(filter === "needs_review")}
-            onClick={() => setFilter("needs_review")}
-          >
-            Da rivedere · {counts.needsReview}
-          </button>
-          <button
-            type="button"
             className={filterPillClass(filter === "approved")}
             onClick={() => setFilter("approved")}
           >
-            Approvati · {counts.approved}
+            ✅ Pronte · {counts.approved}
+          </button>
+          <button
+            type="button"
+            className={filterPillClass(filter === "mail_mancante")}
+            onClick={() => setFilter("mail_mancante")}
+          >
+            📭 Mail mancante · {counts.mailMancante}
           </button>
           <button
             type="button"
             className={filterPillClass(filter === "blocked")}
             onClick={() => setFilter("blocked")}
           >
-            Bloccati · {counts.blocked}
+            🚫 Scartate · {counts.blocked}
           </button>
         </div>
       </header>
@@ -896,43 +902,6 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                       <div className="text-[11px] text-[var(--muted)]">
                         {contact.email || "email ancora da cercare"}
                       </div>
-                      {(() => {
-                        const t = contact.ai_director_tier || "sconosciuto";
-                        const map: Record<
-                          string,
-                          { l: string; c: string }
-                        > = {
-                          sconosciuto: {
-                            l: "Sconosciuto",
-                            c: "border-[var(--line)] bg-[var(--panel-strong)] text-[var(--muted)]",
-                          },
-                          emergente: {
-                            l: "Emergente",
-                            c: "border-sky-500/40 bg-sky-500/10 text-sky-200",
-                          },
-                          affermato: {
-                            l: "Affermato",
-                            c: "border-violet-500/40 bg-violet-500/10 text-violet-200",
-                          },
-                          star: {
-                            l: "★ Star — troppo famoso",
-                            c: "border-amber-400/60 bg-amber-400/15 text-amber-200",
-                          },
-                          big: {
-                            l: "★ Star — troppo famoso",
-                            c: "border-amber-400/60 bg-amber-400/15 text-amber-200",
-                          },
-                        };
-                        const ui = map[t] ?? map.sconosciuto;
-                        return (
-                          <span
-                            title={contact.ai_director_tier_reason ?? ""}
-                            className={`mt-1 mr-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${ui.c}`}
-                          >
-                            Tier: {ui.l}
-                          </span>
-                        );
-                      })()}
                       <div
                         className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                           contact.ai_status === "approved"
@@ -989,7 +958,14 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                     sourceLabel ||
                     contact.ai_template_used ||
                     validationDone;
-                  if (!hasAnything) return null;
+                  void hasAnything;
+                  const terminal = [
+                    "approved",
+                    "mail_mancante",
+                    "blocked",
+                    "error",
+                  ].includes(contact.ai_status ?? "");
+                  if (!terminal) return null;
 
                   // VERDETTO IN CHIARO (Pietro 2026-06-07): basta gergo. Un solo
                   // stato in italiano + cosa fare + checklist; il tecnico sotto
@@ -1028,119 +1004,49 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                     )
                     .filter(Boolean);
 
-                  let vTitle = "Da rivedere";
-                  let vAction = "Dai un'occhiata e approva.";
-                  let vTone = "border-amber-500/50 bg-amber-500/10 text-amber-100";
-                  if (contact.ai_status === "blocked") {
-                    vTitle = "Scartata";
-                    vAction = "Persona o contenuto non validi — non usarla.";
-                    vTone = "border-red-500/50 bg-red-500/10 text-red-100";
+                  void personaDoubt;
+                  void emailWeak;
+                  void contentDoubt;
+                  void contentIssues;
+                  void conf;
+                  void agentBadges;
+                  void enrichmentLabel;
+                  void enrichmentTone;
+                  void sourceLabel;
+                  void validationDone;
+
+                  let vTitle = "In lavorazione";
+                  let vAction = "";
+                  if (contact.ai_status === "approved") {
+                    vTitle = "✅ Pronta da inviare";
+                    vAction = "Dai un'ultima letta e invia.";
+                  } else if (contact.ai_status === "mail_mancante") {
+                    vTitle = "📭 Manca l'email";
+                    vAction =
+                      "Regista buono, ma l'email non è sicura: cercala a mano o scarta.";
+                  } else if (contact.ai_status === "blocked") {
+                    vTitle = "🚫 Scartata";
+                    vAction = "I controlli hanno un dubbio reale — non usarla.";
                   } else if (contact.ai_status === "error") {
                     vTitle = "Errore nel controllo";
-                    vAction = "Riprova: la verifica non è andata a buon fine.";
-                    vTone = "border-red-500/50 bg-red-500/10 text-red-100";
-                  } else if (
-                    contact.ai_status === "approved" &&
-                    contact.ai_send_allowed
-                  ) {
-                    vTitle = "Pronta da inviare";
-                    vAction = "Dai un'ultima letta e invia.";
-                    vTone =
-                      "border-emerald-500/50 bg-emerald-500/10 text-emerald-100";
-                  } else if (emailWeak && contentDoubt) {
-                    vAction =
-                      "Trova/conferma l'email (ora è indovinata) e controlla i dettagli segnalati nel testo.";
-                  } else if (emailWeak) {
-                    vAction = `Trova o conferma l'email: ora è solo indovinata${
-                      conf !== null ? ` (${conf}%)` : ""
-                    }.`;
-                  } else if (contentDoubt) {
-                    vAction =
-                      "Controlla i dettagli segnalati nel testo prima di inviare.";
+                    vAction = "Riprova.";
                   }
 
-                  const chk = (ok: boolean, label: string) => (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${
-                        ok
-                          ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-200"
-                          : "border-amber-500/40 bg-amber-500/10 text-amber-100"
-                      }`}
-                    >
-                      <span aria-hidden>{ok ? "✓" : "!"}</span>
-                      {label}
-                    </span>
-                  );
-
                   return (
-                    <div className="mt-3 grid gap-2">
-                      <div className={`rounded-xl border px-3 py-2 ${vTone}`}>
-                        <div className="text-sm font-semibold">{vTitle}</div>
-                        <div className="mt-0.5 text-[12px] opacity-90">
+                    <div className="mt-3 rounded-xl border border-[var(--line)] px-3 py-2">
+                      <div className="text-sm font-semibold text-[var(--ink)]">
+                        {vTitle}
+                      </div>
+                      {vAction && (
+                        <div className="mt-0.5 text-[12px] text-[var(--muted)]">
                           {vAction}
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {chk(!personaDoubt, "Persona giusta")}
-                        {chk(
-                          !emailWeak,
-                          emailWeak
-                            ? `Email da confermare${
-                                conf !== null ? ` (${conf}%)` : ""
-                              }`
-                            : "Email ok"
-                        )}
-                        {chk(
-                          !contentDoubt,
-                          contentDoubt ? "Testo da rivedere" : "Testo ok"
-                        )}
-                      </div>
-                      {contentIssues.length > 0 && (
-                        <ul className="list-disc pl-5 text-[11px] text-amber-100/90">
-                          {contentIssues.slice(0, 3).map((msg, idx) => (
-                            <li key={idx}>{msg}</li>
-                          ))}
-                        </ul>
                       )}
-                      <details className="text-[10px] text-[var(--muted)]">
-                        <summary className="cursor-pointer select-none">
-                          Dettagli tecnici
-                        </summary>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {enrichmentLabel && (
-                            <span
-                              className={`rounded-full border px-2 py-0.5 font-medium ${enrichmentTone}`}
-                            >
-                              {enrichmentLabel}
-                              {typeof contact.email_confidence === "number" &&
-                                ` · ${Math.round(
-                                  contact.email_confidence * 100
-                                )}%`}
-                            </span>
-                          )}
-                          {sourceLabel && contact.email_source_url && (
-                            <a
-                              href={contact.email_source_url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)] hover:text-[var(--ink)]"
-                            >
-                              via {sourceLabel}
-                            </a>
-                          )}
-                          {agentBadges}
-                          {contact.ai_template_used && (
-                            <span className="rounded-full border border-[var(--line)] bg-[var(--panel-strong)] px-2 py-0.5 text-[var(--muted)]">
-                              Template {contact.ai_template_used}
-                            </span>
-                          )}
-                        </div>
-                      </details>
                     </div>
                   );
                 })()}
 
-                {ready && !isEditing && (
+                {ready && !isEditing && contact.ai_email_body && (
                   <div className="mt-4 grid gap-3 md:grid-cols-[1fr,2fr]">
                     <div className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-3">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
@@ -1149,28 +1055,6 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                       <div className="mt-1 text-sm text-[var(--ink)]">
                         {contact.ai_email_subject || "—"}
                       </div>
-                      {(contact.ai_link_visione ||
-                        (contact.ai_sources &&
-                          contact.ai_sources.length > 0)) && (
-                        <div className="mt-3 rounded-lg border border-dashed border-[var(--line)] bg-[var(--panel)] p-2">
-                          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-600">
-                            Verifica / Fonti — solo per te, NON viene inviata
-                          </div>
-                          {contact.ai_link_visione && (
-                            <div className="mt-1 text-[11px] text-[var(--muted)] break-all">
-                              Link visione: {contact.ai_link_visione}
-                            </div>
-                          )}
-                          {contact.ai_sources &&
-                            contact.ai_sources.length > 0 && (
-                              <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-[var(--muted)] break-all">
-                                {contact.ai_sources.map((src, idx) => (
-                                  <li key={idx}>{src}</li>
-                                ))}
-                              </ul>
-                            )}
-                        </div>
-                      )}
                     </div>
                     <div className="rounded-xl border border-[var(--line)] bg-[var(--panel-strong)] p-3">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">
@@ -1201,11 +1085,6 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
                   </div>
                 )}
 
-                {contact.ai_validation_summary && !isEditing && (
-                  <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-200">
-                    {contact.ai_validation_summary}
-                  </div>
-                )}
 
                 {ready && (
                   <div className="mt-4 flex flex-wrap gap-2">
