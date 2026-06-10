@@ -63,7 +63,9 @@ rivedere", da confermare a mano. Non si inventano.
 - **Scartata** (`blocked`) = i validatori hanno un dubbio reale sul contenuto.
 - Validatore giù (tetto esaurito/rete) → `draft_ready` = RIPROVA (non scarta).
 - Spazzatura del triage (non persona) → cancellata (non mostrata).
-Backend fatto+testato (23 unit ok). MANCA: UI "formato idiota" con le 3 colonne.
+Backend+UI FATTI (2026-06-10): schermata revisione "formato idiota" — verdetto in
+una riga (Pronta/Mail mancante/Scartata), filtri/conteggi a 3, via colori/gergo/
+checklist/dettagli-tecnici/fonti/tier. Deployato. 23 unit ok, build ok.
 
 ## Invio mail — APPROVA = SALVA + INVIA (2026-06-09)
 Nella schermata di revisione il tasto **"Approva e invia"** salva il contatto in
@@ -150,7 +152,7 @@ buoni (la chiusura cancella le bozze non approvate).
 > **3 STATI (niente "da rivedere", 2026-06-10):** Pronta (`approved`, email
 > certa conf≥0.7 + validatori ok) / Mail mancante (`mail_mancante`, regista buono
 > ma email non certa, non scritta) / Scartata (`blocked`, dubbio reale). Validatore
-> giù→`draft_ready` (riprova). Backend fatto+testato; UI "formato idiota" da fare.
+> giù→`draft_ready` (riprova). Backend + UI "formato idiota" FATTI e deployati.
 >
 > **STATO ATTUALE:** pipeline provata su 3 registi reali (apertura festival
 > giusta, zero fonti nel corpo, lingua giusta, nessun crash). APPROVA = INVIA
