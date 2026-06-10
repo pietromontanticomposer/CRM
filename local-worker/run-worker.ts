@@ -431,18 +431,25 @@ const markDiscarded = async (
   await deleteDraftRow(contact.id);
 };
 
-// MOSSA INTELLIGENTE (Pietro 2026-06-01): l'email e' stata cercata a fondo
-// dall'enrichment (2 AI, ricerche multiple) ma NON e' stata trovata. Senza
-// email il contatto non e' mandabile: inutile sprecare ~5 min in writer + 3
-// validatori. Lo saltiamo qui. Riusiamo lo stato "blocked" (niente migration).
-const markSkippedNoEmail = async (
-  _supabase: ReturnType<typeof getSupabase>,
-  contact: DraftQueueRow,
-  _weak = false
+// MAIL MANCANTE (Pietro 2026-06-10): il regista è valido (triage ok) ma l'email
+// NON è stata trovata/confermata. Non scrivo la mail (inutile senza indirizzo) e
+// NON cancello: lo metto in "mail_mancante" — info buone, manca solo il contatto.
+// Pietro decide se cercare l'email a mano o lasciarlo. Niente "da rivedere".
+const markMailMancante = async (
+  supabase: ReturnType<typeof getSupabase>,
+  contact: DraftQueueRow
 ) => {
-  // Niente email (o troppo debole) = non mandabile = non approvabile.
-  // CANCELLO la riga invece di lasciare un "blocked" nel DB.
-  await deleteDraftRow(contact.id);
+  await supabase
+    .from("outreach_drafts")
+    .update({
+      ai_status: "mail_mancante",
+      ai_validation_status: "not_checked",
+      ai_send_allowed: false,
+      ai_validation_summary:
+        "Regista valido ma email non trovata/non certa: serve l'indirizzo.",
+      ai_agent_checks_json: {},
+    })
+    .eq("id", contact.id);
 };
 
 const persistAgentAudit = async (
@@ -725,11 +732,16 @@ const processContact = async (
     );
     return;
   }
-  const emailInutilizzabile = !isNonEmptyString(contact.email);
-  if (emailInutilizzabile && !draftAlreadyExists) {
-    await markSkippedNoEmail(supabase, contact);
+  // REGOLA PIETRO (2026-06-10): 10 perfetti > 30 di merda. Scrivo SOLO se l'email
+  // è CERTA (zero margine di dubbio): presente + confidence >= 0.7 (le email
+  // indovinate "nome.cognome@gmail" valgono 0.4 → NON certe). Tutto il resto va
+  // in "mail_mancante", non viene scritto. Niente più bozze su email indovinate.
+  const emailCertain =
+    isNonEmptyString(contact.email) && (contact.email_confidence ?? 0) >= 0.7;
+  if (!emailCertain && !draftAlreadyExists) {
+    await markMailMancante(supabase, contact);
     console.log(
-      `${logPrefix(contact)} SALTATO -> nessuna email trovata dopo ricerca esaustiva`
+      `${logPrefix(contact)} MAIL MANCANTE -> email non certa (conf ${contact.email_confidence ?? 0})`
     );
     return;
   }

@@ -6,6 +6,7 @@ export const AI_WORKFLOW_STATUSES = [
   "processing",
   "approved",
   "needs_review",
+  "mail_mancante",
   "blocked",
   "error",
 ] as const;
@@ -81,6 +82,8 @@ export const getAiWorkflowStatusLabel = (status?: string | null) => {
       return "Approved";
     case "needs_review":
       return "Needs review";
+    case "mail_mancante":
+      return "Mail mancante";
     case "blocked":
       return "Blocked";
     case "error":

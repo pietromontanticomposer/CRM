@@ -75,13 +75,15 @@ export const aggregateResults = (
   let summary: string;
 
   if (nonFailed.length === 0) {
-    // TUTTI i validatori falliti (rete/timeout): NON e' una bocciatura. Stato
-    // needs_review cosi' il worker NON cancella e si riprova al giro dopo.
-    ai_status = "needs_review";
-    ai_validation_status = "needs_review";
+    // TUTTI i validatori falliti (rete / tetto abbonamento esaurito): NON e' un
+    // verdetto. La bozza e' gia' scritta -> "draft_ready" cosi' il worker la
+    // RIPRENDE e ri-valida al prossimo giro (o quando il tetto torna). Niente
+    // stato "da rivedere".
+    ai_status = "draft_ready";
+    ai_validation_status = "not_checked";
     summary = `Validatori non disponibili (${failedAgents.join(
       ", "
-    )}): nessuno ha potuto controllare, serve riprovare.`;
+    )}): riprovo al prossimo giro.`;
   } else if (contentRejectCount > contentOk.length) {
     // ANTI-CAZZATE: la MAGGIORANZA dei validatori che hanno girato ha respinto
     // il CONTENUTO (claim falso/non documentato, persona sbagliata, riferimento
@@ -101,15 +103,24 @@ export const aggregateResults = (
     ai_status = "approved";
     ai_validation_status = "passed";
     summary = "Validazione completata: tutti i validatori approvano.";
+  } else if (failedAgents.length > 0) {
+    // Un validatore non ha potuto controllare (transitorio / tetto esaurito):
+    // NON e' un verdetto e NON scarta. Ri-valido al prossimo giro (bozza gia'
+    // scritta -> "draft_ready"). Cosi' un tetto esaurito non butta un buon lavoro.
+    ai_status = "draft_ready";
+    ai_validation_status = "not_checked";
+    summary = `Validazione incompleta (${failedAgents.join(
+      ", "
+    )} non disponibili): riprovo.`;
   } else {
-    // Contenuto per lo piu' ok, ma serve l'occhio di Pietro: email da
-    // confermare (confidence bassa) oppure una MINORANZA ha sollevato dubbi.
-    // Revisione manuale: il lead resta nella lista "da approvare".
-    ai_status = "needs_review";
-    ai_validation_status = "needs_review";
+    // REGOLA PIETRO (2026-06-10): tutti i validatori hanno girato ma NON tutti
+    // approvano -> dubbio REALE -> SCARTATA. Niente "da rivedere": 10 perfetti
+    // meglio di 30 incerti.
+    ai_status = "blocked";
+    ai_validation_status = "blocked";
     summary = rejected.length
-      ? `Serve revisione manuale: dubbi sollevati da ${rejected.join(", ")}.`
-      : "Serve revisione manuale: email da confermare a mano.";
+      ? `Scartata: dubbi sul contenuto da ${rejected.join(", ")}.`
+      : "Scartata: contenuto non certo al 100%.";
   }
 
   return {
