@@ -54,6 +54,17 @@ rivedere", da confermare a mano. Non si inventano.
   validatore/ricerca. Buono SOLO come triage (13s) ma senza web viola la regola
   e non alleggerisce codex → non vale. **Pipeline = solo claude+codex.**
 
+## 3 STATI — niente "da rivedere" (2026-06-10, regola Pietro)
+"10 perfetti > 30 di merda". Sia info che email devono essere CERTE, zero dubbio.
+- **Pronta** (`approved`) = email certa (presente + confidence ≥ 0.7) + tutti i
+  validatori approvano → mail scritta, pronta da inviare.
+- **Mail mancante** (`mail_mancante`) = regista valido ma email non trovata/non
+  certa (0.4 indovinata) → NON scritta, NON cancellata; manca solo il contatto.
+- **Scartata** (`blocked`) = i validatori hanno un dubbio reale sul contenuto.
+- Validatore giù (tetto esaurito/rete) → `draft_ready` = RIPROVA (non scarta).
+- Spazzatura del triage (non persona) → cancellata (non mostrata).
+Backend fatto+testato (23 unit ok). MANCA: UI "formato idiota" con le 3 colonne.
+
 ## Invio mail — APPROVA = SALVA + INVIA (2026-06-09)
 Nella schermata di revisione il tasto **"Approva e invia"** salva il contatto in
 `contacts` E invia subito la mail (con firma `firma_pietro.png` + CV allegato).
@@ -135,6 +146,11 @@ buoni (la chiusura cancella le bozze non approvate).
 > ogni mail apre con "ho visto il suo (film) al (festival) e ho provato ad
 > avvicinarla ma non ci sono riuscito" al posto di "navigando online". Le fonti
 > vanno in sezione SEPARATA, mai nel corpo della mail.
+>
+> **3 STATI (niente "da rivedere", 2026-06-10):** Pronta (`approved`, email
+> certa conf≥0.7 + validatori ok) / Mail mancante (`mail_mancante`, regista buono
+> ma email non certa, non scritta) / Scartata (`blocked`, dubbio reale). Validatore
+> giù→`draft_ready` (riprova). Backend fatto+testato; UI "formato idiota" da fare.
 >
 > **STATO ATTUALE:** pipeline provata su 3 registi reali (apertura festival
 > giusta, zero fonti nel corpo, lingua giusta, nessun crash). APPROVA = INVIA
