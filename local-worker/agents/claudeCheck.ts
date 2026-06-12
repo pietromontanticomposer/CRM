@@ -47,12 +47,15 @@ export const runClaudeCheck = async (
         "text",
         "--no-session-persistence",
       ];
+      // Validatore = controllo incrociato anti-cazzate: deve essere il modello
+      // PIÙ FORTE (scelta Pietro 2026-06-11), non quello economico. Default
+      // Opus 4.8 (override via env). Nota: consuma molto più di Haiku/Sonnet,
+      // ma gira solo sulle bozze con email CERTA (poche), quindi è sostenibile.
       const model =
         process.env.CLAUDE_VALIDATOR_MODEL?.trim() ||
-        process.env.CLAUDE_MODEL?.trim();
-      if (model) {
-        args.push("--model", model);
-      }
+        process.env.CLAUDE_MODEL?.trim() ||
+        "claude-opus-4-8";
+      args.push("--model", model);
       const result = await runCommand({
         command: "claude",
         args,
