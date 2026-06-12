@@ -124,6 +124,10 @@ buoni (la chiusura cancella le bozze non approvate).
 >
 > **PIPELINE worker** (`local-worker/`, tsx): triage (claude) → ricerca email
 > (claude+codex) → scrittore (codex) → 2 validatori (claude+codex) → aggregate.
+> **MODELLI claude (2026-06-11):** validatore = **Opus 4.8** (`claude-opus-4-8`,
+> il più forte — scelta Pietro, default nel codice + env `CLAUDE_VALIDATOR_MODEL`);
+> triage + ricerca email = default account (più economico). Opus consuma molto
+> di più ma gira solo sulle bozze con email certa (poche col gate conf≥0.7).
 > Concorrenza auto-adattiva (semaforo AIMD in `agents/shared.ts`, max 4). Timeout
 > scrittore 7 min con RETRY automatico (colonna `ai_attempts`). Bozze non
 > approvate vivono in `outreach_drafts`. Il tasto "Approva e invia" salva il
