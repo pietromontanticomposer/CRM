@@ -10,10 +10,14 @@ registi sul sito → un "worker" locale (Mac/Windows) per ognuno cerca l'email,
 scrive una mail personalizzata e la fa controllare → Pietro rivede e approva.
 Pietro NON è sviluppatore: gli si consegna roba funzionante e già provata.
 
-## Come si avvia (PARITÀ Mac/Windows — verificata 2026-06-09)
-Due launcher GEMELLI nel repo (quindi anche la logica di avvio si auto-aggiorna).
-Stessi 3 passi: 1) `git pull --ff-only` 2) `npm install` solo se serve (tsx
-mancante o package-lock cambiato) 3) `npm run outreach:worker`.
+## Come si avvia (PARITÀ Mac/Windows — blindata 2026-06-11)
+Due launcher GEMELLI nel repo, SOTTILI e stabili: fanno solo banner + `git pull
+--ff-only`, poi passano la mano agli script interni SEMPRE freschi dopo il pull
+(`scripts/mac-worker.sh` / `scripts/win-worker.cmd`: npm install se serve +
+`npm run outreach:worker`). Motivo: prima il pull riscriveva il launcher MENTRE
+girava (rischio file corrotto a metà esecuzione, soprattutto su Windows).
+NOTA Windows: il PRIMO avvio dopo questo update può dare un errore strano (il
+.bat vecchio si sostituisce mentre gira) → chiudere e riaprire UNA volta.
 - **Windows:** doppio click su `Avvia-CRM-Worker.bat`.
 - **Mac:** doppio click su `Avvia CRM` (Desktop) — è una scorciatoia che chiama
   `Avvia-CRM-Worker.command` nel repo. Se la scorciatoia si perde, ricreala con:
@@ -110,11 +114,13 @@ buoni (la chiusura cancella le bozze non approvate).
 > **PRIMA DI TUTTO:** leggi `CONTINUA.md`, `STATO.md`, `CLAUDE.md`, `CLAUDE-SYNC.md`
 > nel repo. NON ripartire da supposizioni: lì c'è la verità.
 >
-> **COME PARTE IL WORKER (si auto-aggiornano da GitHub):** Mac = doppio click su
-> "Avvia CRM" (sul Desktop, fa git pull + avvia); Windows = doppio click su
-> `Avvia-CRM-Worker.bat` (git pull + npm install se serve + avvia). Il vecchio
-> servizio automatico Mac (launchd `com.pietro.crm-worker`) è DISATTIVATO perché
-> rotto (macOS blocca i background dal Desktop, EPERM).
+> **COME PARTE IL WORKER (si auto-aggiornano da GitHub, struttura blindata
+> 2026-06-11):** Mac = doppio click "Avvia CRM" (Desktop) → `Avvia-CRM-Worker.command`
+> → git pull → exec `scripts/mac-worker.sh` (deps se servono + worker). Windows =
+> `Avvia-CRM-Worker.bat` → git pull → `scripts/win-worker.cmd`. I launcher sono
+> sottili così il pull non li corrompe mentre girano. Primo avvio Windows dopo
+> l'update: se dà errore strano, chiudere e riaprire UNA volta (transizione dal
+> .bat vecchio). Launchd Mac disattivato (EPERM dal Desktop).
 >
 > **PIPELINE worker** (`local-worker/`, tsx): triage (claude) → ricerca email
 > (claude+codex) → scrittore (codex) → 2 validatori (claude+codex) → aggregate.
