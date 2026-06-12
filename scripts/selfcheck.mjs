@@ -39,7 +39,8 @@ for (const f of [
   exists(f) ? ok(f) : bad("MANCA " + f);
 }
 
-// 2) Launcher: si auto-aggiornano da GitHub e avviano il worker (parità Mac/Win)
+// 2) Launcher: si auto-aggiornano da GitHub e passano la mano agli script
+// interni (sempre freschi dopo il pull) che avviano il worker. Parità Mac/Win.
 console.log("[launcher auto-update]");
 has("Avvia-CRM-Worker.bat", "git pull")
   ? ok("Windows .bat fa git pull")
@@ -47,12 +48,18 @@ has("Avvia-CRM-Worker.bat", "git pull")
 has("Avvia-CRM-Worker.command", "git pull")
   ? ok("Mac .command fa git pull")
   : bad("Mac .command SENZA git pull");
-has("Avvia-CRM-Worker.command", "npm run outreach:worker")
-  ? ok("Mac .command avvia il worker")
-  : bad("Mac .command non avvia il worker");
-has("Avvia-CRM-Worker.bat", "npm run outreach:worker")
-  ? ok("Windows .bat avvia il worker")
-  : bad("Windows .bat non avvia il worker");
+has("Avvia-CRM-Worker.command", "scripts/mac-worker.sh")
+  ? ok("Mac .command passa a scripts/mac-worker.sh")
+  : bad("Mac .command non chiama scripts/mac-worker.sh");
+has("Avvia-CRM-Worker.bat", "win-worker.cmd")
+  ? ok("Windows .bat passa a scripts/win-worker.cmd")
+  : bad("Windows .bat non chiama scripts/win-worker.cmd");
+has("scripts/mac-worker.sh", "npm run outreach:worker")
+  ? ok("scripts/mac-worker.sh avvia il worker")
+  : bad("scripts/mac-worker.sh non avvia il worker");
+has("scripts/win-worker.cmd", "npm run outreach:worker")
+  ? ok("scripts/win-worker.cmd avvia il worker")
+  : bad("scripts/win-worker.cmd non avvia il worker");
 
 // 3) File DA NON TOCCARE: devono esistere (non cancellati/rinominati per sbaglio)
 console.log("[file vietati intatti]");

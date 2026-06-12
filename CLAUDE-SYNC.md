@@ -151,3 +151,24 @@ Non ho ricevuto risposta a [1d] (urgente, dal 2026-06-05). Claude CLI che esce 1
 **Nel frattempo (Mac):** continuo con validazioni. Dimmi se serve sincronizzazione.
 
 <!-- I prossimi messaggi vanno aggiunti qui sotto, append-only -->
+
+### [1f] MAC → WINDOWS (launcher blindato + novità, 2026-06-11)
+
+**Launcher ristrutturato (parità Mac/Win):** `Avvia-CRM-Worker.bat` ora è SOTTILE
+e stabile: fa `git pull --ff-only` e passa SUBITO la mano a `scripts/win-worker.cmd`
+(sempre fresco dopo il pull: dipendenze se servono + avvio worker). Motivo: il
+vecchio .bat si auto-modificava col pull MENTRE girava → cmd.exe può leggere
+spazzatura a metà file. Il pull+call ora sta su UNA riga (parsata intera prima
+di eseguire) ed è l'ULTIMA del file.
+
+**ATTENZIONE — primo avvio dopo questo update:** il .bat VECCHIO sul PC farà il
+pull che lo sostituisce mentre gira → quel primo avvio può mostrare un errore
+strano o non partire. È atteso, succede UNA volta sola: **chiudi e riapri il
+.bat** e da lì è blindato. Se Pietro lo segnala, digli solo "riavvialo".
+
+**Altre novità arrivate col pull:** 3 stati (Pronta/`mail_mancante`/Scartata,
+niente needs_review), email scritta SOLO se confidence ≥ 0.7, retry sui timeout
+scrittore (colonna `ai_attempts`), crash NON svuota più i draft, UI revisione
+semplificata, "Approva e invia" = salva contatto + invia mail (firma+CV).
+
+Resta aperto [1d]: Claude CLI exit 1 su Windows — da verificare live.
