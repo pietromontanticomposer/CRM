@@ -439,9 +439,34 @@ const summarizeProposals = (proposals: AgentEmailProposal[]) => {
   return parts.join(" · ");
 };
 
-const consensusFromProposals = (
+// Verifica anti-allucinazione: apre la pagina-fonte e controlla che l'email ci
+// sia DAVVERO. Cosi' un'email trovata da UN SOLO agente ma PUBBLICATA su una
+// pagina pubblica vera vale come certa (non ci si fida della parola dell'AI:
+// si guarda la pagina). Niente fetch JS: legge l'HTML grezzo, conservativo.
+const verifyEmailOnPage = async (
+  email: string | null,
+  url: string | null
+): Promise<boolean> => {
+  if (!email || !url || !/^https?:\/\//i.test(url)) return false;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CRMbot/1.0)" },
+      redirect: "follow",
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return false;
+    const text = (await res.text()).toLowerCase();
+    return text.includes(email.toLowerCase());
+  } catch {
+    return false;
+  }
+};
+
+const consensusFromProposals = async (
   proposals: AgentEmailProposal[]
-): EnrichmentResult => {
+): Promise<EnrichmentResult> => {
   const votes = new Map<string, AgentEmailProposal[]>();
   proposals.forEach((p) => {
     const key = normalizeEmailKey(p.email);
@@ -505,15 +530,30 @@ const consensusFromProposals = (
     };
   }
 
-  // Disagreement: each agent proposes a different email. Mark needs_review and
-  // keep the first one as a starting point for manual review.
+  // Un solo agente ha trovato un'email (o gli agenti sono in disaccordo). PRIMA
+  // di declassarla: se ha una FONTE (URL), apriamo la pagina e verifichiamo che
+  // l'email ci sia DAVVERO. Se c'è → è CERTA (pubblicata su pagina pubblica),
+  // anche con un solo agente: cosi' non si perdono email vere viste da un agente
+  // solo (es. sul sito di una film commission). Se non si verifica → needs_review.
+  const verified = await verifyEmailOnPage(sample.email, sample.source_url);
+  if (verified) {
+    return {
+      email: sample.email,
+      source_url: sample.source_url,
+      source_type: sample.source_type ?? "single_agent_verified",
+      confidence: 0.85,
+      status: "found_public",
+      reason: `Trovata da 1 agente MA verificata aprendo la pagina (${sample.source_url}). ${debug}`,
+      found_at: now,
+    };
+  }
   return {
     email: sample.email,
     source_url: sample.source_url,
     source_type: sample.source_type ?? "single_agent",
     confidence: 0.4,
     status: "needs_review",
-    reason: `Disaccordo tra agenti, nessuna email ha 2+ voti. ${debug}`,
+    reason: `1 agente, nessun consenso e NON verificata sulla pagina. ${debug}`,
     found_at: now,
   };
 };
@@ -544,7 +584,7 @@ export const findPublicEmail = async (
       searchByClaude(input, workingDirectory),
       searchByCodex(input, workingDirectory),
     ]);
-    return consensusFromProposals(proposals);
+    return await consensusFromProposals(proposals);
   } catch (error) {
     return {
       email: null,
