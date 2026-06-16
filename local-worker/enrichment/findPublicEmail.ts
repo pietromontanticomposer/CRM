@@ -450,6 +450,10 @@ const FAKE_EMAIL_TLD =
 const GENERIC_EMAIL_PREFIX =
   /^(info|contatti?|contact|redazione|press|ufficio|amministrazione|segreteria|segretaria|booking|distribuzione|comunicazione|stampa|filmcommission|commission|noreply|no-reply|hello|posta|mail|newsletter|privacy|support|help)\b/i;
 const EMAIL_IN_TEXT = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+// Local-part di esempio/placeholder (NON sono email vere): vanno scartati.
+const PLACEHOLDER_LOCAL =
+  /^(jean\.?dupont|john\.?doe|jane\.?doe|mario\.?rossi|nome\.?cognome|name|firstname|lastname|your\.?name|your\.?email|email|e-?mail|user|username|test|demo|sample|example|esempio|foo|bar|abc|xyz|nomecognome)$/i;
+const PLACEHOLDER_DOMAIN = /^(example|test|domain|yoursite|yourdomain|email)\./i;
 
 const fetchPageText = async (url: string): Promise<string> => {
   try {
@@ -540,13 +544,22 @@ const searchByWeb = async (
         ...new Set((text.match(EMAIL_IN_TEXT) ?? []).map((e) => e.toLowerCase())),
       ];
       for (const email of emails) {
-        if (FAKE_EMAIL_TLD.test(email)) continue; // scarta filename di immagini
-        const local = email.split("@")[0];
-        let score = 0;
-        if (tokens.some((t) => local.includes(t))) score += 3; // email col nome
-        if (tokens.some((t) => urlSlug.includes(t))) score += 2; // pagina del regista
-        if (GENERIC_EMAIL_PREFIX.test(local)) score -= 5; // info@, press@...
-        if (score <= 0) continue;
+        if (FAKE_EMAIL_TLD.test(email)) continue; // filename immagini
+        const [local, domain] = email.split("@");
+        if (!domain) continue;
+        if (PLACEHOLDER_LOCAL.test(local) || PLACEHOLDER_DOMAIN.test(domain)) continue;
+        if (GENERIC_EMAIL_PREFIX.test(local)) continue; // info@, press@...
+        // PRECISIONE (Pietro: meglio mancare che sbagliare): accetto SOLO se il
+        // local-part contiene il NOME del regista (>=4 lettere). È il segnale
+        // affidabile che l'email è SUA. Niente email a caso prese da una pagina
+        // o dal dominio di un sito qualsiasi (placeholder, email del sito, ecc.).
+        const localClean = local.replace(/[^a-z]/g, "");
+        const nameInLocal = tokens.some(
+          (t) => t.length >= 4 && localClean.includes(t)
+        );
+        if (!nameInLocal) continue;
+        let score = 3;
+        if (tokens.some((t) => t.length >= 4 && urlSlug.includes(t))) score += 1;
         if (!best || score > best.score) best = { email, url, score };
       }
     }
