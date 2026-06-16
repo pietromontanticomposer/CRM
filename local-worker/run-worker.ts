@@ -855,29 +855,11 @@ const processContact = async (
       .join(" ")}`
   );
 
-  // Pietro: i BLOCCATI non restano nel DB. Sopravvivono SOLO i contatti che
-  // devi approvare tu (needs_review / passed). Niente audit per i bloccati:
-  // cancello la riga e via (cosi' niente record orfani).
-  if (aggregated.ai_status === "blocked") {
-    // MAI cancellare per un FALLIMENTO di rete (Pietro 2026-06-05). Se i
-    // validatori non hanno funzionato (timeout/fetch failed), NON e' una
-    // bocciatura vera: lascio il contatto com'e' (resta draft_ready) e si
-    // riprova al giro dopo. Cancello SOLO se i validatori hanno DAVVERO
-    // girato e respinto (failed=false).
-    const failedCount = results.filter((result) => result.failed).length;
-    if (failedCount >= 2) {
-      console.log(
-        `${logPrefix(contact)} blocco da FALLIMENTI rete (${failedCount}/3 falliti) -> NON cancello, riprovo al prossimo giro`
-      );
-      return;
-    }
-    await deleteDraftRow(contact.id);
-    console.log(
-      `${logPrefix(contact)} bloccato dai controlli -> CANCELLATO (non approvato)`
-    );
-    return;
-  }
-
+  // Pietro 2026-06-10: i BLOCCATI (Scartata) NON si cancellano più. Restano
+  // visibili nella colonna "Scartate" con la mail scritta e il motivo del
+  // rifiuto, così vedi cosa è stato scartato e perché. (I validatori giù /
+  // transitori NON arrivano qui: l'aggregator li manda a "draft_ready" per
+  // riprovare, non a "blocked".)
   await persistAgentAudit(supabase, contact, results);
 
   const issueSummary = results.map((result) =>
