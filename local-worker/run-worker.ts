@@ -18,6 +18,7 @@ import {
 import { runContactTriage } from "./agents/triageContact";
 import {
   findPublicEmail,
+  fetchFilmContext,
   type EnrichmentResult,
 } from "./enrichment/findPublicEmail";
 
@@ -751,6 +752,45 @@ const processContact = async (
     !isNonEmptyString(contact.ai_email_body)
   ) {
     console.log(`${logPrefix(contact)} draft mancante, invoco Writer`);
+    // SINOSSI REALE per il complimento (Pietro 2026-06-11): prendiamo NOI il
+    // testo del film dalla pagina del festival/sinossi e lo passiamo allo
+    // scrittore + validatori. Cosi' il complimento e' su materiale VERO (con
+    // fonte), non inventato. Se non si trova (rete/motore giu'), lo scrittore
+    // ripiega sul tema del titolo (niente specifici inventati). Graceful.
+    {
+      const facts: Record<string, unknown> =
+        contact.verified_facts_json &&
+        typeof contact.verified_facts_json === "object" &&
+        !Array.isArray(contact.verified_facts_json)
+          ? { ...(contact.verified_facts_json as Record<string, unknown>) }
+          : {};
+      const filmTitle = typeof facts.film === "string" ? facts.film : null;
+      if (filmTitle && !facts.film_synopsis) {
+        const festivalHint =
+          (typeof facts.festival === "string" ? facts.festival : "") ||
+          contact.prompt_master_rules ||
+          "";
+        const ctx = await fetchFilmContext(
+          filmTitle,
+          festivalHint,
+          contact.name
+        ).catch(() => null);
+        if (ctx) {
+          facts.film_synopsis = ctx.text;
+          facts.film_synopsis_url = ctx.url;
+          contact.verified_facts_json = facts;
+          await supabase
+            .from("outreach_drafts")
+            .update({ verified_facts_json: facts })
+            .eq("id", contact.id);
+          console.log(`${logPrefix(contact)} sinossi film trovata -> ${ctx.url}`);
+        } else {
+          console.log(
+            `${logPrefix(contact)} sinossi film NON trovata (scrittore usa solo il titolo)`
+          );
+        }
+      }
+    }
     // BUGFIX 2026-05-28: il writer riceveva solo 5 campi e NON il PDF full
     // text. Senza pdf_full_text il writer non aveva contesto per cercare i
     // lavori del regista -> finiva sempre in NOT_READY anche se l'enrichment

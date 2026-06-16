@@ -593,6 +593,77 @@ const searchByWeb = async (
   }
 };
 
+// ============================================================================
+// SINOSSI FILM DETERMINISTICA (Pietro 2026-06-11): lo scrittore inventava i
+// dettagli del film -> bocciato dai validatori. Soluzione: PRIMA dello scrittore
+// apriamo NOI la pagina del film (festival/sinossi) e prendiamo il testo REALE.
+// Lo passiamo a scrittore E validatori: cosi' il complimento si basa su testo
+// vero (con fonte), niente invenzioni, e i controllori lo verificano contro la
+// stessa pagina -> passa. E' la chiave per avere un complimento specifico ma
+// affidabile su "il film visto al festival".
+// ============================================================================
+const htmlToPlain = (html: string) =>
+  html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const filmUrlScore = (url: string, film: string) => {
+  const u = url.toLowerCase();
+  let s = 0;
+  if (
+    /festival|programma|program|cinema|trentofestival|mymovies|cinematografo|comingsoon|imdb|cineuropa|filmtv|sentieriselvaggi/.test(
+      u
+    )
+  )
+    s += 2;
+  const slug = film.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 18);
+  if (slug.length >= 6 && u.includes(slug)) s += 3;
+  if (/facebook|instagram|twitter|x\.com|pinterest|tiktok/.test(u)) s -= 3;
+  return s;
+};
+
+export const fetchFilmContext = async (
+  film: string | null,
+  festival: string | null,
+  name: string | null
+): Promise<{ text: string; url: string } | null> => {
+  const f = (film ?? "").trim();
+  if (!f || f.length < 3) return null;
+  try {
+    const queries = [
+      `"${f}" ${(festival ?? "").trim()}`.trim(),
+      `"${f}" sinossi`,
+      `"${f}" ${(name ?? "").trim()} regista`.trim(),
+    ];
+    const lists = await Promise.all(queries.map((q) => ddgResultUrls(q)));
+    let urls = [...new Set(lists.flat())];
+    urls.sort((a, b) => filmUrlScore(b, f) - filmUrlScore(a, f));
+    urls = urls.slice(0, 5);
+    let best: { text: string; url: string; score: number } | null = null;
+    for (const url of urls) {
+      const html = await fetchPageText(url);
+      if (!html) continue;
+      const text = htmlToPlain(html);
+      const idx = text.toLowerCase().indexOf(f.toLowerCase());
+      if (idx < 0) continue;
+      const chunk = text.slice(Math.max(0, idx - 150), idx + 1100).trim();
+      if (chunk.length < 180) continue;
+      const score = filmUrlScore(url, f);
+      if (!best || score > best.score) best = { text: chunk, url, score };
+      if (score >= 4) break;
+    }
+    return best ? { text: best.text, url: best.url } : null;
+  } catch {
+    return null;
+  }
+};
+
 // Verifica anti-allucinazione: apre la pagina-fonte e controlla che l'email ci
 // sia DAVVERO. Cosi' un'email trovata da UN SOLO agente ma PUBBLICATA su una
 // pagina pubblica vera vale come certa (non ci si fida della parola dell'AI:
