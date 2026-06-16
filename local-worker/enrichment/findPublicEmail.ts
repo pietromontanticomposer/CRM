@@ -35,7 +35,7 @@ export type EnrichmentResult = {
 };
 
 type AgentEmailProposal = {
-  agent: "gemini" | "claude" | "codex";
+  agent: "gemini" | "claude" | "codex" | "web";
   found: boolean;
   // true = l'AI NON ha potuto cercare (timeout/rete/CLI fallita); diverso da
   // "ha cercato e non ha trovato". Serve a non cancellare per un errore di rete.
@@ -439,6 +439,147 @@ const summarizeProposals = (proposals: AgentEmailProposal[]) => {
   return parts.join(" · ");
 };
 
+// ============================================================================
+// CERCATORE DETERMINISTICO (Pietro 2026-06-11): "se l'email esiste deve trovarla".
+// Non dipende dai capricci dell'AI: cerca lui su DuckDuckGo (gratis, no API),
+// apre i primi risultati e legge le email DALLA pagina. Gira INSIEME a
+// claude+codex come 3° cercatore -> becca le pagine che gli altri saltano.
+// ============================================================================
+const FAKE_EMAIL_TLD =
+  /\.(jpg|jpeg|png|gif|webp|svg|css|js|bmp|ico|pdf|mp4|woff2?|ttf)$/i;
+const GENERIC_EMAIL_PREFIX =
+  /^(info|contatti?|contact|redazione|press|ufficio|amministrazione|segreteria|segretaria|booking|distribuzione|comunicazione|stampa|filmcommission|commission|noreply|no-reply|hello|posta|mail|newsletter|privacy|support|help)\b/i;
+const EMAIL_IN_TEXT = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
+
+const fetchPageText = async (url: string): Promise<string> => {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CRMbot/1.0)" },
+      redirect: "follow",
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return "";
+    return await res.text();
+  } catch {
+    return "";
+  }
+};
+
+const ddgResultUrls = async (query: string): Promise<string[]> => {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 12000);
+    const res = await fetch(
+      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+      {
+        signal: ctrl.signal,
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        redirect: "follow",
+      }
+    ).finally(() => clearTimeout(timer));
+    if (!res.ok) return [];
+    const html = await res.text();
+    const out: string[] = [];
+    const re = /uddg=([^"&]+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+      try {
+        const u = decodeURIComponent(m[1]);
+        if (/^https?:\/\//i.test(u) && !/duckduckgo\.com/i.test(u)) out.push(u);
+      } catch {
+        /* ignore */
+      }
+    }
+    return [...new Set(out)];
+  } catch {
+    return [];
+  }
+};
+
+const tokensOfName = (name: string) =>
+  name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/[\s'’.-]+/)
+    .filter((t) => t.length >= 3);
+
+const searchByWeb = async (
+  input: EnrichmentInput,
+  _cwd: string
+): Promise<AgentEmailProposal> => {
+  const name = (input.name ?? "").trim();
+  if (!name) return failedProposal("web", "Nome mancante.");
+  const tokens = tokensOfName(name);
+  try {
+    // 1) Ricerca + raccolta URL (2 query per coprire meglio).
+    const queries = [`"${name}" email contatti`, `${name} regista email`];
+    const urlLists = await Promise.all(queries.map((q) => ddgResultUrls(q)));
+    const urls = [...new Set(urlLists.flat())].slice(0, 7);
+    if (urls.length === 0) {
+      return {
+        agent: "web",
+        found: false,
+        failed: false,
+        email: null,
+        source_url: null,
+        source_type: null,
+        reason: "Ricerca web: nessun risultato (motore non raggiungibile?).",
+        raw_output: "",
+      };
+    }
+    // 2) Apri le pagine, estrai le email, dai un punteggio.
+    let best: { email: string; url: string; score: number } | null = null;
+    for (const url of urls) {
+      const text = await fetchPageText(url);
+      if (!text) continue;
+      const urlSlug = url.toLowerCase();
+      const emails = [
+        ...new Set((text.match(EMAIL_IN_TEXT) ?? []).map((e) => e.toLowerCase())),
+      ];
+      for (const email of emails) {
+        if (FAKE_EMAIL_TLD.test(email)) continue; // scarta filename di immagini
+        const local = email.split("@")[0];
+        let score = 0;
+        if (tokens.some((t) => local.includes(t))) score += 3; // email col nome
+        if (tokens.some((t) => urlSlug.includes(t))) score += 2; // pagina del regista
+        if (GENERIC_EMAIL_PREFIX.test(local)) score -= 5; // info@, press@...
+        if (score <= 0) continue;
+        if (!best || score > best.score) best = { email, url, score };
+      }
+    }
+    if (!best) {
+      return {
+        agent: "web",
+        found: false,
+        failed: false,
+        email: null,
+        source_url: null,
+        source_type: null,
+        reason: `Ricerca web: aperte ${urls.length} pagine, nessuna email personale chiara.`,
+        raw_output: "",
+      };
+    }
+    return {
+      agent: "web",
+      found: true,
+      failed: false,
+      email: best.email,
+      source_url: best.url,
+      source_type: "web_scan",
+      reason: `Ricerca web deterministica: email letta sulla pagina ${best.url} (punteggio ${best.score}).`,
+      raw_output: "",
+    };
+  } catch (error) {
+    return failedProposal(
+      "web",
+      error instanceof Error ? error.message : "Errore ricerca web."
+    );
+  }
+};
+
 // Verifica anti-allucinazione: apre la pagina-fonte e controlla che l'email ci
 // sia DAVVERO. Cosi' un'email trovata da UN SOLO agente ma PUBBLICATA su una
 // pagina pubblica vera vale come certa (non ci si fida della parola dell'AI:
@@ -583,6 +724,7 @@ export const findPublicEmail = async (
     const proposals = await Promise.all([
       searchByClaude(input, workingDirectory),
       searchByCodex(input, workingDirectory),
+      searchByWeb(input, workingDirectory),
     ]);
     return await consensusFromProposals(proposals);
   } catch (error) {
