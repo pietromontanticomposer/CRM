@@ -109,13 +109,23 @@ const assignColumn = (x: number, a: ColAnchors): ColKey => {
   return best;
 };
 
-// Spezza una cella REGISTA/I in registi singoli: "A, B, C" -> 3; "Zhang &
-// Knight" -> 2. NON spezza i nomi con trattino ("Jean-Gabriel Leynaud").
+// Spezza una cella REGISTA/I in registi singoli: "A, B, C" -> 3. NON spezza
+// sull'"&": un duo come "Zhang & Knight" resta UN UNICO contatto (spezzarlo
+// produceva due righe inutili "Zhang" e "Knight", impossibili da cercare).
+// NON spezza i nomi con trattino ("Jean-Gabriel Leynaud").
 const splitDirectors = (raw: string): string[] =>
   raw
-    .split(/\s*,\s*|\s+&\s+/)
+    .split(/\s*,\s*/)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter((s) => s.length > 1 && !/^n\/?d$/i.test(s));
+
+// Sezioni di OMAGGIO/retrospettiva: classici e registi celebri (spesso deceduti)
+// a cui il festival rende omaggio. NON sono contatti per cold outreach (es.
+// Sydney Pollack, Robert Redford con film del 1979/1998): si scartano all'import
+// cosi' non sporcano il batch ne' bruciano quota AI. Lista conservativa: solo
+// "omaggio/tributo/retrospettiva", NON "classici/restauro" (potrebbero essere
+// opere restaurate di registi vivi e contattabili).
+const HOMAGE_SECTION = /omaggio|retrospettiv|tributo|in\s*memoria|tribute|homage/i;
 
 export const parseDirectorsPdf = async (
   data: Uint8Array
@@ -215,11 +225,14 @@ export const parseDirectorsPdf = async (
             .replace(/\s+/g, " ")
             .trim();
         const title = colJoin("title");
+        const section = colJoin("section");
+        // Salta gli OMAGGIO/retrospettive: non sono registi da contattare.
+        if (HOMAGE_SECTION.test(section)) continue;
         const director = colJoin("director");
         const names = splitDirectors(director);
         if (names.length === 0) continue;
         const context =
-          [title, colJoin("section"), colJoin("country"), colJoin("year")]
+          [title, section, colJoin("country"), colJoin("year")]
             .map((v) => v.trim())
             .filter(Boolean)
             .join(" · ") || null;
