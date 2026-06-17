@@ -508,7 +508,7 @@ GIRO 5 — coerenza subject ↔ body:
 * Pick ONE lavoro e stai su quello. NON mischiare due lavori diversi.
 
 GIRO 6 — vincoli formali:
-* lunghezza body: OBIETTIVO ≤ 240 parole, MASSIMO ASSOLUTO 250 (saluto+firma inclusi). CONTA le parole. I controllori bocciano a 261: stai LARGO, non a filo. Se superi 240: NON tagliare il complimento (è la parte che conta) — invece, al posto dei 3 titoli musicali citati scrivi la frase corta `un sound originale tarato sul tono del progetto` (in inglese: `an original sound shaped around the tone of the film`): risparmi ~15-20 parole di colpo. Se ancora lungo, accorcia le frasi del blocco base.
+* lunghezza body: OBIETTIVO ≤ 270 parole (saluto+firma inclusi). La lunghezza NON fa più bocciare la mail, quindi non sacrificare i contenuti che contano per stare corto. I 3 ESEMPI MUSICALI (`Titolo (Compositore)`) vanno SEMPRE messi quando riesci a verificarli: NON toglierli per accorciare. Se la mail è troppo lunga, accorcia il COMPLIMENTO o le frasi del BLOCCO BASE, MAI i 3 esempi. Usa la frase generica `un sound originale tarato sul tono del progetto` SOLO quando non riesci a verificare 3 film+compositore (non per questioni di lunghezza).
 * il `body` è SOLO la mail e finisce con la CHIUSURA NELLA STESSA LINGUA DEL CORPO: mail in ITALIANO → `Un saluto,` poi `Pietro`; mail in INGLESE → `Best,` poi `Pietro`. **MAI** `Un saluto,` su una mail in inglese (è un ERRORE che fa bocciare la mail): se il corpo è in inglese, la chiusura DEVE essere `Best,`. **NON mettere nel body nessuna riga "Link visione" né elenchi di fonti/URL**: sono campi separati (`link_visione`, `sources`) che NON vengono spediti. Il body deve essere esattamente il testo che parte al destinatario, niente di più.
 
 GIRO 7 — niente METADATI inventati:
