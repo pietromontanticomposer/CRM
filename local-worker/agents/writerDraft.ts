@@ -195,6 +195,79 @@ export const sanitizeMailBody = (raw: string): string =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+// Lingua del corpo, dedotta dall'apertura (templata): "Hi ..."=EN, "Salve..."=IT.
+const detectBodyLang = (body: string): "en" | "it" => {
+  const first =
+    body.split(/\r?\n/).map((s) => s.trim()).find(Boolean) || "";
+  if (/^hi\b/i.test(first)) return "en";
+  if (/^(salve|gentile|buongiorno|ciao)\b/i.test(first)) return "it";
+  return "it";
+};
+
+const MAX_BODY_WORDS = 250;
+const countWords = (s: string): number =>
+  s.trim().split(/\s+/).filter(Boolean).length;
+
+// AUTO-FIX DETERMINISTICO (Pietro 2026-06-11) — "i controlli meccanici li fa il
+// codice, non un'AI lenta che va in timeout". Sistemiamo qui, in modo certo:
+//  1) FIRMA nella lingua del corpo: una mail in inglese che chiude con
+//     "Un saluto," diventa "Best," (e viceversa). Niente piu' Scartata per firma.
+//  2) LUNGHEZZA: se il corpo supera il massimo, sostituiamo la frase con i 3
+//     titoli musicali citati con la versione generica corta (recupera ~15-20
+//     parole di colpo). I riferimenti musicali sono opzionali: meglio una mail
+//     che parte che una bloccata per troppe parole.
+// Cosi' lunghezza e lingua-firma NON fanno piu' scartare una mail.
+export const lintAndFixMailBody = (rawBody: string): string => {
+  let body = sanitizeMailBody(rawBody);
+  const lang = detectBodyLang(body);
+
+  if (lang === "en") {
+    body = body.replace(/^[ \t]*Un saluto,[ \t]*$/im, "Best,");
+  } else {
+    body = body.replace(/^[ \t]*Best,[ \t]*$/im, "Un saluto,");
+  }
+
+  if (countWords(body) > MAX_BODY_WORDS) {
+    body =
+      lang === "en"
+        ? body.replace(
+            /(I could imagine)\s+a sound inspired by[^.]*\./i,
+            "$1 an original sound shaped around the tone of the film."
+          )
+        : body.replace(
+            /(potrei immaginare un sound)\s+ispirato a[^.]*\./i,
+            "$1 originale tarato sul tono del progetto."
+          );
+  }
+
+  return body.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+// RILEVATORE PAROLE VIETATE DETERMINISTICO (Pietro 2026-06-11) — l'AI sbagliava
+// il match (es. codex bloccava "proposta" italiana dentro "proposal" inglese:
+// parole DIVERSE). Qui: confronto a CONFINI DI PAROLA per le parole singole
+// (cosi' "proposta" NON matcha "proposal"), substring per le FRASI (es. "I hope
+// this email finds you well"), case- e accento-insensibile. Affidabile al 100%.
+const normalizeForMatch = (s: string): string =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+export const findForbiddenInBody = (
+  body: string,
+  list: string[]
+): string[] => {
+  const b = normalizeForMatch(body);
+  const hits: string[] = [];
+  for (const raw of list) {
+    const w = normalizeForMatch((raw || "").trim());
+    if (!w) continue;
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const hit = /\s/.test(w)
+      ? b.includes(w) // frase: substring
+      : new RegExp(`\\b${esc}\\b`).test(b); // parola singola: confini di parola
+    if (hit) hits.push(raw);
+  }
+  return hits;
+};
+
 const parseDraftOutput = (
   rawOutput: string
 ): WriterDraftResult | WriterDraftError => {
@@ -220,7 +293,7 @@ const parseDraftOutput = (
   ) {
     return { error: "Writer JSON con shape non valida.", raw_output: rawOutput };
   }
-  const cleanedBody = sanitizeMailBody(body);
+  const cleanedBody = lintAndFixMailBody(body);
   if (!subject.trim() || !cleanedBody) {
     return {
       error: "Writer ha dichiarato dati insufficienti per generare la bozza.",

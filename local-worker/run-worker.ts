@@ -13,12 +13,14 @@ import { noteCliCongestion, getCliCap } from "./agents/shared";
 import {
   runWriterDraft,
   sanitizeMailBody,
+  findForbiddenInBody,
   type WriterDraftResult,
 } from "./agents/writerDraft";
 import { runContactTriage } from "./agents/triageContact";
 import {
   findPublicEmail,
   fetchFilmContext,
+  fetchFilmSynopsisViaClaude,
   type EnrichmentResult,
 } from "./enrichment/findPublicEmail";
 
@@ -770,11 +772,28 @@ const processContact = async (
           (typeof facts.festival === "string" ? facts.festival : "") ||
           contact.prompt_master_rules ||
           "";
-        const ctx = await fetchFilmContext(
+        // 1) Prima il metodo gratuito (scraping DuckDuckGo). 2) Se fallisce
+        // (motore bloccato), fallback col web VERO del CLI claude: cosi' la
+        // sinossi si trova in modo affidabile e scrittore+validatori partono
+        // dalla STESSA fonte (codex smette di scartare complimenti veri).
+        let ctx = await fetchFilmContext(
           filmTitle,
           festivalHint,
           contact.name
         ).catch(() => null);
+        if (!ctx) {
+          ctx = await fetchFilmSynopsisViaClaude(
+            filmTitle,
+            festivalHint,
+            contact.name,
+            PROJECT_ROOT
+          ).catch(() => null);
+          if (ctx) {
+            console.log(
+              `${logPrefix(contact)} sinossi via claude (fallback web)`
+            );
+          }
+        }
         if (ctx) {
           facts.film_synopsis = ctx.text;
           facts.film_synopsis_url = ctx.url;
@@ -840,6 +859,31 @@ const processContact = async (
         `${logPrefix(contact)} writer fallito - ${writerOutcome.error}`
       );
       return;
+    }
+
+    // PAROLE VIETATE (controllo meccanico DETERMINISTICO, non affidato all'AI):
+    // se il writer ha usato una parola/frase della blacklist di Pietro, rigenero
+    // (fino a MAX_WRITER_RETRIES). Match a confini di parola: "proposta" italiana
+    // NON scatta su "proposal" inglese. Dopo i tentativi, si tiene comunque la
+    // bozza (caso raro: la rivede Pietro). Cosi' niente piu' falsi blocchi AI.
+    {
+      const forbiddenHits = findForbiddenInBody(
+        writerOutcome.body,
+        FORBIDDEN_WORDS
+      );
+      const fbAttempts = Number(contact.ai_attempts ?? 0);
+      if (forbiddenHits.length > 0 && fbAttempts < MAX_WRITER_RETRIES) {
+        await supabase
+          .from("outreach_drafts")
+          .update({ ai_status: "draft_ready", ai_attempts: fbAttempts + 1 })
+          .eq("id", contact.id);
+        console.warn(
+          `${logPrefix(contact)} writer ha usato parole vietate [${forbiddenHits.join(
+            ", "
+          )}] - rigenero (tentativo ${fbAttempts + 1}/${MAX_WRITER_RETRIES + 1})`
+        );
+        return;
+      }
     }
 
     await persistDraft(supabase, contact, writerOutcome);

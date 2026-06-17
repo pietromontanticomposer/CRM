@@ -389,6 +389,7 @@ Pietro
 ```
 
 (Per team: sostituire suoi→vostri, suo→vostro, le va→vi va.)
+(CHIUSURA = lingua del corpo: se la mail è in INGLESE, l'ultima riga NON è `Un saluto,` ma `Best,` seguito da `Pietro`. Tutto il blocco base va tradotto in inglese quando il corpo è in inglese.)
 
 ═══════════════════════════════════════════
 TEMPLATE A — film effettivamente visto
@@ -507,8 +508,8 @@ GIRO 5 — coerenza subject ↔ body:
 * Pick ONE lavoro e stai su quello. NON mischiare due lavori diversi.
 
 GIRO 6 — vincoli formali:
-* lunghezza body MAX 260 parole (saluto+firma inclusi). Conta. Se >260: accorcia.
-* il `body` è SOLO la mail: finisce con `Un saluto, Pietro`. **NON mettere nel body nessuna riga "Link visione" né elenchi di fonti/URL**: sono campi separati (`link_visione`, `sources`) che NON vengono spediti. Il body deve essere esattamente il testo che parte al destinatario, niente di più.
+* lunghezza body: OBIETTIVO ≤ 240 parole, MASSIMO ASSOLUTO 250 (saluto+firma inclusi). CONTA le parole. I controllori bocciano a 261: stai LARGO, non a filo. Se superi 240: NON tagliare il complimento (è la parte che conta) — invece, al posto dei 3 titoli musicali citati scrivi la frase corta `un sound originale tarato sul tono del progetto` (in inglese: `an original sound shaped around the tone of the film`): risparmi ~15-20 parole di colpo. Se ancora lungo, accorcia le frasi del blocco base.
+* il `body` è SOLO la mail e finisce con la CHIUSURA NELLA STESSA LINGUA DEL CORPO: mail in ITALIANO → `Un saluto,` poi `Pietro`; mail in INGLESE → `Best,` poi `Pietro`. **MAI** `Un saluto,` su una mail in inglese (è un ERRORE che fa bocciare la mail): se il corpo è in inglese, la chiusura DEVE essere `Best,`. **NON mettere nel body nessuna riga "Link visione" né elenchi di fonti/URL**: sono campi separati (`link_visione`, `sources`) che NON vengono spediti. Il body deve essere esattamente il testo che parte al destinatario, niente di più.
 
 GIRO 7 — niente METADATI inventati:
 * NON inventare durata di un film (es. "un corto di dieci minuti"), anno, festival, premio, casa di produzione se non li hai LETTI LETTERALMENTE da una fonte aperta in questa sessione.

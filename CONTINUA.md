@@ -2,7 +2,7 @@
 
 Questo file è la FOTO dello stato attuale. Claude lo legge SEMPRE a inizio
 sessione. Pietro lo incolla se Claude riparte da zero. Aggiornarlo a ogni cambio
-importante. Ultimo aggiornamento: 2026-06-09.
+importante. Ultimo aggiornamento: 2026-06-11.
 
 ## Cos'è
 crm-next: CRM per cold-email a registi di festival. Pietro carica un PDF di
@@ -30,13 +30,40 @@ NOTA Windows: il PRIMO avvio dopo questo update può dare un errore strano (il
   (`.plist.disabled`): era rotto, macOS blocca i background dal Desktop (EPERM).
 - **Sito:** online su `crm-smoky-eight.vercel.app`. Deploy: `vercel deploy --prod --yes`.
 
-## Stato (2026-06-09) — VERSIONE DEFINITIVA verificata end-to-end
-Provata dal vivo su 3 registi reali del PDF Trento: apertura festival giusta dal
-PDF, zero fonti nel corpo (fonti in sezione separata NON inviata), lingua giusta
-IT/EN, stato corretto (email indovinata 0.4 → "da rivedere", non parte), nessun
-crash. Robustezza: retry sui timeout scrittore; carico CLI ridotto (4 non 6);
-un CRASH non cancella più il lavoro (solo la chiusura VOLUTA svuota). tsc 0
-errori, 23 test unit ok. DB pulito (0 bozze).
+## Stato (2026-06-11) — REDESIGN DEFINITIVO: 5/5 registi TFF → Pronta
+PRINCIPIO NUOVO: i controlli MECCANICI li fa il CODICE (istantaneo, sicuro),
+le 2 AI (claude+codex) giudicano SOLO la veridicità del complimento. Niente più
+AI lente che vanno in timeout o sbagliano conteggi. Le 7 cose risolte:
+1. **Sinossi condivisa** scrittore+validatori (`film_synopsis` in verified_facts):
+   il complimento è specifico e ancorato a una trama VERA, non si inventa.
+2. **Recupero sinossi affidabile**: DDG (gratis) → se spazzatura, fallback
+   `fetchFilmSynopsisViaClaude` (sonnet, web vero). `looksLikeNavChrome` scarta i
+   MENU dei siti JS (festival/filmtv) che passavano per sinossi (navHits≥6 o >5%).
+3. **Validatore = CONTENIMENTO, non ri-ricerca web**: verifica il complimento
+   SOLO contro la sinossi fornita (non ri-cerca online) → veloce, niente timeout,
+   niente falsi "non documentato". Web solo (facoltativo) per i 3 riferimenti
+   musicali. (Cambio chiave: prima ri-cercava tutto online → lento + falsi blocchi.)
+4. **Lunghezza**: gestita dal codice (`lintAndFixMailBody`): se >250 parole toglie
+   i 3 titoli musicali → frase generica. NON è più motivo di blocco.
+5. **Firma nella lingua del corpo**: auto-fix codice (mail EN che chiude "Un
+   saluto," → "Best,"). NON è più motivo di blocco.
+6. **Parole vietate**: rilevatore deterministico `findForbiddenInBody` (confini di
+   parola: "proposta" IT non matcha "proposal" EN). Se il writer ne usa una vera →
+   rigenera. Il validatore NON le controlla più (basta falsi match fuzzy).
+7. **Coppia regista↔film = dato dell'import** (STEP 0-ter): il validatore NON
+   boccia "nessuna fonte associa X al film Y" se Y è in `verified_facts.film`.
+PROVATO: Federico Scienza + 5 registi reali TFF 2026 (Vescovo/Kossakovsky/Peedom/
+Mizuno/Azzetti) → **5/5 Pronte**, complimenti specifici e veri, claude+codex ok,
+ZERO timeout. selfcheck OK, transpile OK.
+INFO VERIFICATE CORRETTE 5/5 (2026-06-11): ogni complimento controllato contro
+fonti autorevoli indipendenti (Hollywood Reporter, Variety, IMDb, Cineuropa,
+Visions du Réel, otroscines, cinemaitaliano, siti festival). Tutte le info trovate
+sono CORRETTE. Il meccanismo produce complimenti fattualmente accurati.
+CAVEAT ONESTI (non ancora blindati): (a) il sistema è STOCASTICO, non ho misurato
+la stabilità su molte ripetizioni (prima dei fix Iván/Sayaka oscillavano); (b) se
+un film non ha NESSUNA trama trovabile online, il complimento resta sul titolo o
+va Scartato (onesto: non si inventa); (c) `looksLikeNavChrome` è euristico, non
+perfetto; (d) test con email FINTE e senza PDF (l'uso reale col PDF è più facile).
 
 ## Limite reale (non bug)
 Le email pubbliche dei registi spesso non esistono → confidence 0.4 → "da
@@ -92,10 +119,13 @@ Ogni mail allega anche il CV PDF (comportamento attuale di gmail/send).
 - Commit chiusi con `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## Prossimo passo
-INVIO VERIFICATO (test a se stessi ok: firma + CV arrivati). Ora: far girare un
-batch vero — avvia il worker ("Avvia CRM"/.bat), carica il PDF sul sito, e man
-mano approva+invia i buoni. NON chiudere il worker finché non hai approvato i
-buoni (la chiusura cancella le bozze non approvate).
+Complimento specifico+verificato RISOLTO e provato (Federico → Pronta). Da
+committare+pushare così i worker Mac e Windows lo prendono al prossimo avvio
+(git pull). Poi: batch vero — avvia il worker ("Avvia CRM"/.bat), carica il PDF
+sul sito, approva+invia i buoni. NON chiudere il worker finché non hai approvato
+i buoni (la chiusura cancella le bozze non approvate). Da tenere d'occhio: la
+sinossi via claude consuma un po' di quota in più (modello sonnet, economico) e
+gira solo sulle bozze con email certa — sostenibile su batch piccoli.
 
 ## PROMPT DA INCOLLARE (se Claude perde il filo) — versione DETTAGLIATA
 > **CHI SONO:** Pietro Montanti, compositore di colonne sonore a Verona, NON
@@ -123,7 +153,16 @@ buoni (la chiusura cancella le bozze non approvate).
 > .bat vecchio). Launchd Mac disattivato (EPERM dal Desktop).
 >
 > **PIPELINE worker** (`local-worker/`, tsx): triage (claude) → ricerca email
-> (claude+codex) → scrittore (codex) → 2 validatori (claude+codex) → aggregate.
+> (claude+codex+web) → **recupero SINOSSI reale del film** (DuckDuckGo; se giù
+> fallback col web di claude `fetchFilmSynopsisViaClaude`, modello sonnet) →
+> scrittore (codex) → controlli MECCANICI nel CODICE (lunghezza, firma-lingua,
+> parole-vietate: auto-fix/rigenera) → 2 validatori (claude+codex) → aggregate.
+> REDESIGN DEFINITIVO 2026-06-11: i controlli meccanici li fa il codice; le AI
+> giudicano SOLO la veridicità del complimento, controllandolo CONTRO la sinossi
+> fornita (NON ri-cercano sul web → veloci, niente timeout). Sinossi: DDG → se
+> spazzatura (menu siti JS, `looksLikeNavChrome`) fallback claude. Validatore:
+> sinossi=FONTE (STEP 0-bis), coppia regista↔film=dato import (STEP 0-ter).
+> PROVATO: Federico + 5 registi TFF 2026 → 5/5 Pronte, zero timeout.
 > **MODELLI claude (2026-06-11):** validatore = **Opus 4.8** (`claude-opus-4-8`,
 > il più forte — scelta Pietro, default nel codice + env `CLAUDE_VALIDATOR_MODEL`);
 > triage + ricerca email = default account (più economico). Opus consuma molto

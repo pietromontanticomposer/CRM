@@ -613,6 +613,30 @@ const htmlToPlain = (html: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// ANTI-SPAZZATURA (Pietro 2026-06-11): le pagine dei festival sono spesso in
+// JavaScript -> il fetch dell'HTML grezzo prende il MENU di navigazione (Menu,
+// Programme, Tickets, Sponsors...) invece della trama del film. Quel "menu"
+// contiene il titolo, quindi passava per sinossi valida. Risultato: o lo
+// scrittore usava spazzatura, o (se scriveva cose vere prese da fuori) i
+// validatori lo bocciavano perche' "non nella sinossi". Qui riconosciamo il
+// chrome di navigazione e lo scartiamo: una VERA sinossi e' prosa con frasi,
+// non un elenco di voci di menu in maiuscolo.
+const NAV_CHROME_WORDS =
+  /\b(menu|programme|program|tickets?|sponsors?|accreditation|homepage|archive|newsletter|podcast|guests|press|sections?|subtitles|screenings|montagnalibri|edizione|edition|partners?|patrons?|staff|conditions of admission|film guide|accessibility|cookie|privacy|login|logout|sign in|registrati|accedi|streaming|trailer|recensioni|playlist|profilo|messaggi|community|articoli|al cinema|stasera in tv|in tv|cataloghi|espandi|vedi cast|cast completo|serie tv)\b/gi;
+export const looksLikeNavChrome = (text: string): boolean => {
+  const t = (text || "").trim();
+  if (t.length < 60) return true;
+  const navHits = (t.match(NAV_CHROME_WORDS) || []).length;
+  const words = t.split(/\s+/).filter(Boolean).length;
+  const navRatio = navHits / Math.max(1, words);
+  // Una VERA trama ha pochissime "parole-menu" (forse 0-2). Il menu di un sito
+  // ne ha a decine. Segnale primario = DENSITA' di parole-menu, robusto e
+  // indipendente dal conteggio frasi (inaffidabile sui frammenti tipo date).
+  if (navHits >= 6) return true; // es. il menu festival JS: navHits ~38
+  if (navRatio > 0.05) return true; // >5% di parole-menu = chrome di navigazione
+  return false;
+};
+
 const filmUrlScore = (url: string, film: string) => {
   const u = url.toLowerCase();
   let s = 0;
@@ -654,11 +678,113 @@ export const fetchFilmContext = async (
       if (idx < 0) continue;
       const chunk = text.slice(Math.max(0, idx - 150), idx + 1100).trim();
       if (chunk.length < 180) continue;
+      // scarta il menu/chrome di navigazione (pagine JS): non e' una trama
+      if (looksLikeNavChrome(chunk)) continue;
       const score = filmUrlScore(url, f);
       if (!best || score > best.score) best = { text: chunk, url, score };
       if (score >= 4) break;
     }
     return best ? { text: best.text, url: best.url } : null;
+  } catch {
+    return null;
+  }
+};
+
+// ============================================================================
+// FALLBACK SINOSSI via CLI `claude` (Pietro 2026-06-11)
+// ----------------------------------------------------------------------------
+// fetchFilmContext usa lo scraping di DuckDuckGo, che sotto carico viene
+// bloccato (HTTP 202, 0 risultati) -> "sinossi NON trovata" -> scrittore e
+// validatore cercano ognuno per conto suo, non condividono la fonte, e codex
+// scarta complimenti VERI perche' non li ri-trova. Questo fallback usa il web
+// VERO del CLI claude (lo stesso meccanismo dell'enrichment email): cerca la
+// sinossi del film, la legge da una pagina reale e ne restituisce testo + URL.
+// Modello economico (sonnet) per non consumare Opus. Grounding leggero: se la
+// pagina e' fetchabile e NON contiene NESSUNA parola della sinossi -> scartata
+// (probabile allucinazione). Se la pagina e' JS e non leggibile, si fida della
+// lettura fatta da claude (ha aperto lui la pagina). Tutto opzionale e graceful:
+// se fallisce, lo scrittore ripiega sul tema del titolo. Nessuna invenzione.
+// ============================================================================
+export const fetchFilmSynopsisViaClaude = async (
+  film: string | null,
+  festival: string | null,
+  name: string | null,
+  cwd: string
+): Promise<{ text: string; url: string } | null> => {
+  const f = (film ?? "").trim();
+  if (!f || f.length < 3) return null;
+  const fest = (festival ?? "").trim();
+  const dir = (name ?? "").trim();
+  const prompt = `Sei un ricercatore. Devi trovare la SINOSSI REALE di un film usando il web (USA gli strumenti WebSearch e WebFetch: apri DAVVERO le pagine, non andare a memoria).
+
+FILM: "${f}"${fest ? `\nFESTIVAL: ${fest}` : ""}${dir ? `\nREGISTA: ${dir}` : ""}
+
+Cerca la scheda ufficiale del festival, la pagina del film, una recensione o un articolo che descriva di cosa parla QUESTO film (lo stesso regista, lo stesso festival se indicato). APRI la pagina e LEGGI la descrizione/sinossi.
+
+Restituisci SOLO questo JSON (niente altro testo, niente markdown):
+{
+  "found": <true solo se hai APERTO una pagina reale che descrive QUESTO film>,
+  "synopsis": "<la descrizione REALE di cosa parla il film, 2-5 frasi, copiata/riassunta da quello che hai letto sulla pagina. NON inventare nulla. Se non sei sicuro che sia lo stesso film, found=false>",
+  "url": "<l'URL ESATTO della pagina da cui hai preso la sinossi>"
+}
+
+REGOLE FERREE: niente invenzioni. Se non trovi una pagina reale su QUESTO film, o non sei sicuro che sia lo stesso (omonimi), metti found=false e synopsis vuota. Meglio "found=false" che una sinossi sbagliata.`;
+
+  const model =
+    process.env.CLAUDE_SYNOPSIS_MODEL?.trim() || "claude-sonnet-4-6";
+  const args = [
+    "-p",
+    "--allowedTools",
+    "WebSearch",
+    "WebFetch",
+    "--permission-mode",
+    "acceptEdits",
+    "--output-format",
+    "text",
+    "--no-session-persistence",
+    "--model",
+    model,
+  ];
+
+  const TIMEOUT_MS = 120_000;
+  try {
+    const run = runCommand({ command: "claude", args, cwd, stdin: prompt });
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), TIMEOUT_MS)
+    );
+    const result = await Promise.race([run, timeout]);
+    if (!result || result.code !== 0) return null;
+    const parsed = extractJsonObject(result.stdout || result.stderr || "");
+    if (!parsed || parsed.found !== true) return null;
+    const synopsis =
+      typeof parsed.synopsis === "string" ? parsed.synopsis.trim() : "";
+    const url = typeof parsed.url === "string" ? parsed.url.trim() : "";
+    if (synopsis.length < 80 || !/^https?:\/\//i.test(url)) return null;
+    // anche claude a volte restituisce il chrome del sito: scartalo
+    if (looksLikeNavChrome(synopsis)) return null;
+
+    // Grounding leggero anti-allucinazione: se riusciamo a leggere la pagina e
+    // NON contiene nessuna parola lunga della sinossi -> scartiamo (probabile
+    // invenzione o pagina sbagliata). Se la pagina non e' leggibile (JS), ci
+    // fidiamo della lettura di claude (ha aperto lui la pagina).
+    const pageHtml = await fetchPageText(url).catch(() => null);
+    if (pageHtml && pageHtml.length > 200) {
+      const pageText = htmlToPlain(pageHtml).toLowerCase();
+      const words = [
+        ...new Set(
+          synopsis
+            .toLowerCase()
+            .replace(/[^a-zàèéìòù\s]/g, " ")
+            .split(/\s+/)
+            .filter((w) => w.length >= 6)
+        ),
+      ];
+      const overlap = words.filter((w) => pageText.includes(w)).length;
+      // pagina leggibile ma zero parole in comune = quasi certo sbagliata
+      if (words.length >= 4 && overlap === 0) return null;
+    }
+
+    return { text: synopsis.slice(0, 1100), url };
   } catch {
     return null;
   }
