@@ -59,6 +59,20 @@ INFO VERIFICATE CORRETTE 5/5 (2026-06-11): ogni complimento controllato contro
 fonti autorevoli indipendenti (Hollywood Reporter, Variety, IMDb, Cineuropa,
 Visions du Réel, otroscines, cinemaitaliano, siti festival). Tutte le info trovate
 sono CORRETTE. Il meccanismo produce complimenti fattualmente accurati.
+
+FIX IMPORT + FINDER (2026-06-11, commit b59d48d, PUSHATO + DEPLOYATO) — scoperti
+sul 1° batch reale (123 registi, PDF Trento FF 2026):
+- Import NON spezza più i duo: "Zhang & Knight" resta UN contatto (prima → due
+  righe inutili). `splitDirectors` splitta solo su virgola (`parseDirectorsPdf.ts`).
+- Import SALTA la sezione OMAGGIO/retrospettiva (Pollack/Redford/Edwards, film
+  1963-1998: non sono target, bruciavano quota). `HOMAGE_SECTION` in `parseDirectorsPdf.ts`.
+- Finder cerca anche su Instagram bio / Linktree (fonte email per registi indie).
+- IMPORTANTE: i fix import/OMAGGIO valgono per i PROSSIMI import; il finder-IG
+  vale al PROSSIMO avvio worker (il batch in corso usa il codice vecchio).
+OSSERVAZIONE 1° BATCH REALE: il collo di bottiglia NON è il contenuto (che è
+risolto) ma l'EMAIL: molti registi non hanno email pubblica (verificato: Iván
+Vescovo → solo produzione/Instagram). Tante "mail mancante" sono fisiologiche,
+non un bug. Pronte = solo chi ha email pubblica trovabile.
 CAVEAT ONESTI (non ancora blindati): (a) il sistema è STOCASTICO, non ho misurato
 la stabilità su molte ripetizioni (prima dei fix Iván/Sayaka oscillavano); (b) se
 un film non ha NESSUNA trama trovabile online, il complimento resta sul titolo o
