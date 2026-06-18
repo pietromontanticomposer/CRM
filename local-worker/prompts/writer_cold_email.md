@@ -472,7 +472,7 @@ GIRO 1 — fatti:
 * film reale?
 * piattaforma reale?
 * complimento presente e onesto: una RIFLESSIONE sulla premessa/scelta VERIFICATA (NON una scena inventata, NON lodi generiche tipo "regge la tensione")? Se hai una premessa verificata → il complimento CI VA. Se non hai nemmeno la premessa → niente complimento, Template C.
-* riferimenti musicali corretti?
+* placeholder `{{MUSICAL_REFS}}` presente nel BLOCCO BASE (e NESSUN nome di film/compositore scritto da te)?
 * se stai per usare Template C: hai DAVVERO eseguito il protocollo di ricerca esaustiva (più passaggi, tutti gli indizi dell'input, secondo giro sul titolo trovato)? Se ti sei arreso al primo tentativo → torna a cercare prima di declassare.
 
 GIRO 2 — forma:

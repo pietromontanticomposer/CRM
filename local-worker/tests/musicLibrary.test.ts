@@ -70,6 +70,11 @@ const body2 = "potrei immaginare un sound ispirato a Tizio (Caio), Sempronio (Me
 const injected2 = injectMusicReferences(body2, "natura, oceano");
 check("fallback: sostituisce la lista dopo 'ispirato a'", !/Tizio \(Caio\)/.test(injected2) && /ispirato a .+\(/.test(injected2));
 
+// 6) fallback SENZA punto finale (es. la frase finisce a fine riga)
+const body3 = "un sound ispirato a Tizio (Caio), X (Y)";
+const injected3 = injectMusicReferences(body3, "montagna, scalata");
+check("fallback senza punto finale: sostituisce comunque", !/Tizio \(Caio\)/.test(injected3) && /ispirato a .+\(/.test(injected3));
+
 console.log(
   failures === 0 ? "\nTUTTI I TEST LIBRERIA MUSICALE PASSATI." : `\n${failures} TEST FALLITI.`
 );

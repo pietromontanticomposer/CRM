@@ -170,10 +170,11 @@ export const injectMusicReferences = (
   if (/\{\{\s*MUSICAL_REFS\s*\}\}/.test(body)) {
     return body.replace(PLACEHOLDER, refs);
   }
-  // 2) Niente placeholder: sostituisco la lista dopo "ispirato a"/"inspired by".
-  let out = body.replace(/(ispirato a\s+)([^.]*?)(\s*\.)/i, `$1${refs}$3`);
+  // 2) Niente placeholder: sostituisco ciò che segue "ispirato a"/"inspired by"
+  //    fino al punto o a fine riga (robusto anche senza punto finale).
+  let out = body.replace(/(ispirato a\s+)[^.\n]*/i, `$1${refs}`);
   if (out === body)
-    out = body.replace(/(inspired by\s+)([^.]*?)(\s*\.)/i, `$1${refs}$3`);
+    out = body.replace(/(inspired by\s+)[^.\n]*/i, `$1${refs}`);
   // 3) GARANZIA: nessun placeholder deve mai restare nella mail spedita.
   out = out.replace(PLACEHOLDER, refs);
   return out;
