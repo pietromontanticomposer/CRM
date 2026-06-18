@@ -12,7 +12,8 @@ const CLAUDE_VALIDATOR_TIMEOUT_MS = 300_000;
 
 export const runClaudeCheck = async (
   packet: ValidationPacket,
-  workingDirectory: string
+  workingDirectory: string,
+  promptFileName: string = VALIDATOR_PROMPT_FILENAME
 ): Promise<AgentRunResult> => {
   let timer: NodeJS.Timeout | null = null;
   const timeoutPromise = new Promise<AgentRunResult>((resolve) => {
@@ -29,10 +30,7 @@ export const runClaudeCheck = async (
   });
   const work = (async (): Promise<AgentRunResult> => {
     try {
-      const prompt = await buildValidationPrompt(
-        VALIDATOR_PROMPT_FILENAME,
-        packet
-      );
+      const prompt = await buildValidationPrompt(promptFileName, packet);
       // Prompt via STDIN (non come argomento): su Windows la shell spezza un
       // argomento lungo/multi-riga e Claude riceve spazzatura. stdin e' sicuro
       // su Mac e Windows.

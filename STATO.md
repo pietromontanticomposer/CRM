@@ -20,6 +20,12 @@ Resta il limite DATI (non un bug): le email pubbliche dei registi spesso non
 esistono → confidence 0.4 → vanno confermate a mano prima di inviare.
 
 ## ✅ FUNZIONA (verificato dal vivo)
+- **[2026-06-18] WEDDING PLANNER (sezione Live)**: bottone "Trova 20 wedding
+  planner (≤2h da Verona)" in Live → segnale → il worker locale cerca i planner
+  sul web (`claude`), trova email pubblica, scrive mail "musica dal vivo per
+  matrimoni" (scrittore+validatore dedicati, gated su section), doppio check,
+  bozze da approvare. PROVATO dal vivo su 2 planner reali → 2/2 "Pronta", ZERO
+  invii. Flusso CINEMA invariato (23/23 test). Dettagli in CONTINUA.md.
 - **[2026-06-09] APPROVA = SALVA + INVIA**: "Approva e invia" salva il contatto
   in `contacts` e invia la mail con firma (foto `firma_pietro.png`) + CV
   allegato. Testato dal vivo: mail di prova arrivata a Pietro, firma e CV ok

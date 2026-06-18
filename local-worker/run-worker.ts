@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,7 +10,12 @@ import { aggregateResults } from "./aggregateResults";
 import { runClaudeCheck } from "./agents/claudeCheck";
 import { runCodexCheck } from "./agents/codexCheck";
 import type { AgentRunResult, ValidationPacket } from "./agents/shared";
-import { noteCliCongestion, getCliCap } from "./agents/shared";
+import {
+  noteCliCongestion,
+  getCliCap,
+  VALIDATOR_PROMPT_FILENAME,
+  WEDDING_VALIDATOR_PROMPT_FILENAME,
+} from "./agents/shared";
 import {
   runWriterDraft,
   sanitizeMailBody,
@@ -17,6 +23,12 @@ import {
   unsupportedClaims,
   type WriterDraftResult,
 } from "./agents/writerDraft";
+import { runWeddingWriterDraft } from "./agents/writerWeddingDraft";
+import {
+  findWeddingPlanners,
+  seedWeddingPlannerDrafts,
+  loadExistingNames,
+} from "./discovery/findWeddingPlanners";
 import {
   shortlistMusicReferences,
   resolveRefsByIds,
@@ -470,10 +482,11 @@ const persistAgentAudit = async (
 // bloccare (sicurezza solida, vista su Hans Zimmer). In serie per non far
 // competere i CLI sulla rete.
 const runAllAgents = async (
-  packet: ValidationPacket
+  packet: ValidationPacket,
+  validatorPromptFile: string = VALIDATOR_PROMPT_FILENAME
 ): Promise<AgentRunResult[]> => {
-  const claude = await runClaudeCheck(packet, PROJECT_ROOT);
-  const codex = await runCodexCheck(packet, PROJECT_ROOT);
+  const claude = await runClaudeCheck(packet, PROJECT_ROOT, validatorPromptFile);
+  const codex = await runCodexCheck(packet, PROJECT_ROOT, validatorPromptFile);
   return [claude, codex];
 };
 
@@ -558,11 +571,78 @@ const persistEnrichment = async (
   }
 };
 
+// RICHIESTA DI RICERCA (bottone "Trova wedding planner"): la riga NON e' un
+// contatto, e' un SEGNALE. Cerco sul web N planner NUOVI entro ~2h da Verona,
+// semino le bozze nello stesso batch (il worker poi le scrive), e cancello il
+// segnale. Solo CLI locali, nessun invio automatico.
+const processDiscoveryRequest = async (
+  contact: DraftQueueRow,
+  facts: Record<string, unknown>
+) => {
+  const ownerId = contact.owner_id;
+  if (!ownerId) {
+    console.warn(`${logPrefix(contact)} ricerca senza owner_id, ignoro`);
+    await deleteDraftRow(contact.id);
+    return;
+  }
+  const target = Math.max(1, Math.min(50, Number(facts.target) || 20));
+  console.log(`${logPrefix(contact)} RICHIESTA RICERCA wedding planner (target ${target})`);
+  try {
+    const existingNames = await loadExistingNames({ ownerId });
+    const candidates = await findWeddingPlanners({
+      target,
+      existingNames,
+      cwd: PROJECT_ROOT,
+    });
+    if (candidates.length === 0) {
+      console.warn(`${logPrefix(contact)} ricerca: nessun planner nuovo trovato`);
+    } else {
+      const batchId = contact.batch_id ?? randomUUID();
+      const batchName = contact.batch_name ?? "Wedding planners";
+      const seed = await seedWeddingPlannerDrafts({
+        ownerId,
+        batchId,
+        batchName,
+        candidates,
+      });
+      console.log(
+        `${logPrefix(contact)} ricerca: trovati ${candidates.length}, inseriti ${seed.inserted}, doppioni ${seed.skipped}`
+      );
+    }
+  } catch (error) {
+    console.error(`${logPrefix(contact)} ricerca fallita:`, error);
+  } finally {
+    // Il segnale ha fatto il suo lavoro: lo rimuovo (non e' un contatto).
+    await deleteDraftRow(contact.id);
+  }
+};
+
 const processContact = async (
   supabase: ReturnType<typeof getSupabase>,
   contact: DraftQueueRow
 ) => {
   console.log(`${logPrefix(contact)} processing`);
+
+  // SEGNALE DI RICERCA (sezione Live): se questa riga e' una richiesta di
+  // "trova wedding planner", la gestisco e basta (niente triage/writer/validatori).
+  const factsRoot =
+    contact.verified_facts_json &&
+    typeof contact.verified_facts_json === "object" &&
+    !Array.isArray(contact.verified_facts_json)
+      ? (contact.verified_facts_json as Record<string, unknown>)
+      : {};
+  if (
+    factsRoot.discovery_request === true &&
+    contact.section === "live_music"
+  ) {
+    await processDiscoveryRequest(contact, factsRoot);
+    return;
+  }
+
+  // live_music = wedding planner: scrittore + validatore dedicati al matrimonio,
+  // niente triage/sinossi/riferimenti-musicali (roba da registi). Tutto il flusso
+  // cinema resta INVARIATO (isLive=false).
+  const isLive = contact.section === "live_music";
 
   // Segna SUBITO lo stato "processing" cosi' la pagina mostra il regista
   // "in lavorazione" in tempo reale (prima restava "in coda" per 3-4 min,
@@ -599,7 +679,7 @@ const processContact = async (
   // intestazioni, testo "titolo+nome" attaccato). Se non lo e', lo scartiamo
   // PRIMA di sprecare enrichment + writer + 3 validatori. Se il nome e'
   // sporco, lo ripuliamo. Cosi' Pietro non deve pulire niente a mano.
-  if (wasImported) {
+  if (wasImported && !isLive) {
     const triage = await runContactTriage(
       {
         name: contact.name,
@@ -744,7 +824,7 @@ const processContact = async (
           ? { ...(contact.verified_facts_json as Record<string, unknown>) }
           : {};
       const filmTitle = typeof facts.film === "string" ? facts.film : null;
-      if (filmTitle && !facts.film_synopsis) {
+      if (!isLive && filmTitle && !facts.film_synopsis) {
         const festivalHint =
           (typeof facts.festival === "string" ? facts.festival : "") ||
           contact.prompt_master_rules ||
@@ -816,25 +896,27 @@ const processContact = async (
       tags: m.tags,
     }));
 
-    const writerOutcome = await runWriterDraft(
-      {
-        name: contact.name,
-        email: contact.email,
-        company: contact.company,
-        source_link: contact.source_link,
-        notes: contact.notes,
-        language: contact.language,
-        role: contact.role,
-        section: contact.section,
-        verified_facts_json: contact.verified_facts_json,
-        email_source_url: contact.email_source_url,
-        email_confidence: contact.email_confidence,
-        email_enrichment_status: contact.email_enrichment_status,
-        prompt_master_rules: contact.prompt_master_rules,
-        music_shortlist: musicShortlist,
-      },
-      PROJECT_ROOT
-    );
+    const writerInput = {
+      name: contact.name,
+      email: contact.email,
+      company: contact.company,
+      source_link: contact.source_link,
+      notes: contact.notes,
+      language: contact.language,
+      role: contact.role,
+      section: contact.section,
+      verified_facts_json: contact.verified_facts_json,
+      email_source_url: contact.email_source_url,
+      email_confidence: contact.email_confidence,
+      email_enrichment_status: contact.email_enrichment_status,
+      prompt_master_rules: contact.prompt_master_rules,
+      music_shortlist: musicShortlist,
+    };
+    // live_music -> scrittore "matrimonio" (codex, prompt dedicato). Cinema ->
+    // scrittore registi INVARIATO.
+    const writerOutcome = isLive
+      ? await runWeddingWriterDraft(writerInput, PROJECT_ROOT)
+      : await runWriterDraft(writerInput, PROJECT_ROOT);
 
     if ("error" in writerOutcome) {
       // Timeout = singhiozzo sotto carico, non un difetto della bozza: la
@@ -869,7 +951,8 @@ const processContact = async (
     // codice VALIDA che siano davvero nella libreria (mai un compositore
     // sbagliato, mai cliché) e li inietta. Se la scelta dello scrittore non e'
     // valida (fuori lista / non 3), si usa la scelta deterministica del codice.
-    {
+    // Solo cinema: la mail matrimonio non ha riferimenti musicali da film.
+    if (!isLive) {
       const fromWriter = resolveRefsByIds(
         writerOutcome.music_ref_ids,
         shortlistRefs
@@ -919,7 +1002,9 @@ const processContact = async (
     // allo scrittore di NON includerlo. Cosi' le mail non vengono piu' scartate
     // perche' lo scrittore ha aggiunto una parola di troppo: o e' documentata, o
     // sparisce prima ancora di arrivare ai validatori.
-    {
+    // Solo cinema: il complimento matrimonio si verifica col validatore dedicato,
+    // non contro una sinossi di film.
+    if (!isLive) {
       const cf =
         contact.verified_facts_json &&
         typeof contact.verified_facts_json === "object" &&
@@ -995,7 +1080,10 @@ const processContact = async (
   if (typeof contact.ai_risk_score_numeric === "number") {
     packet.draft_risk_score = contact.ai_risk_score_numeric;
   }
-  const results = await runAllAgents(packet);
+  const results = await runAllAgents(
+    packet,
+    isLive ? WEDDING_VALIDATOR_PROMPT_FILENAME : VALIDATOR_PROMPT_FILENAME
+  );
   const aggregated = aggregateResults(results);
 
   // Log conciso dei verdetti dei validatori (utile per capire perche' un

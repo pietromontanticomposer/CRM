@@ -20,7 +20,8 @@ const CODEX_VALIDATOR_TIMEOUT_MS = 210_000;
 
 export const runCodexCheck = async (
   packet: ValidationPacket,
-  workingDirectory: string
+  workingDirectory: string,
+  promptFileName: string = VALIDATOR_PROMPT_FILENAME
 ): Promise<AgentRunResult> => {
   let timer: NodeJS.Timeout | null = null;
   const timeoutPromise = new Promise<AgentRunResult>((resolve) => {
@@ -38,10 +39,7 @@ export const runCodexCheck = async (
   const work = (async (): Promise<AgentRunResult> => {
     let tempDirectory: string | null = null;
     try {
-      const prompt = await buildValidationPrompt(
-        VALIDATOR_PROMPT_FILENAME,
-        packet
-      );
+      const prompt = await buildValidationPrompt(promptFileName, packet);
       const tempFiles = await createSchemaTempFile();
       tempDirectory = tempFiles.directory;
       const outputFile = path.join(tempFiles.directory, "last-message.json");

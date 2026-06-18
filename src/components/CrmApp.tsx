@@ -35,6 +35,7 @@ import {
   type AiAgentName,
 } from "@/lib/aiOutreach";
 import { OutreachQuickSearchInput } from "@/components/outreach/OutreachQuickSearchInput";
+import { FindWeddingPlannersButton } from "@/components/outreach/FindWeddingPlannersButton";
 
 const STATUS_OPTIONS = [
   "Attiva auto follow-up",
@@ -3782,6 +3783,7 @@ export default function CrmApp({
 
       <div className="mx-auto w-full max-w-7xl px-0 pt-4 sm:px-2">
         <OutreachQuickSearchInput />
+        {section === "live_music" && <FindWeddingPlannersButton target={20} />}
         <Link
           href="/crm/outreach/import"
           className="group mb-4 flex items-center justify-between gap-4 rounded-xl border-2 border-dashed border-[var(--line)] bg-[var(--panel)] px-5 py-5 transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"

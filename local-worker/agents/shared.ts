@@ -68,6 +68,10 @@ const AGENTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = path.resolve(AGENTS_DIR, "../prompts");
 
 export const VALIDATOR_PROMPT_FILENAME = "validator_full_check.md";
+// Validatore dedicato alla sezione live_music (wedding planner): stessi controlli
+// meccanici/schema, ma tarato su una mail "musica dal vivo per matrimoni" invece
+// che "colonna sonora per registi". Lo usano i validatori quando section=live_music.
+export const WEDDING_VALIDATOR_PROMPT_FILENAME = "validator_wedding_check.md";
 
 // Tutti e 3 gli agenti devono fare ESATTAMENTE gli stessi controlli sullo
 // stesso prompt unico. Nessuna specializzazione: massima ridondanza.

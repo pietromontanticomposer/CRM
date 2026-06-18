@@ -10,6 +10,48 @@ registi sul sito → un "worker" locale (Mac/Windows) per ognuno cerca l'email,
 scrive una mail personalizzata e la fa controllare → Pietro rivede e approva.
 Pietro NON è sviluppatore: gli si consegna roba funzionante e già provata.
 
+## WEDDING PLANNER — sezione "Live" (2026-06-18, NUOVO, provato dal vivo)
+Seconda "fonte" oltre al PDF registi: un bottone nella sezione Live (section=
+live_music) che TROVA wedding planner sul web e prepara le mail, come per i
+registi ma per i matrimoni. Tutto gated su `section`: il flusso CINEMA è
+INVARIATO (23/23 test worker ok, tsc 0, build ok, selfcheck ok).
+- BOTTONE "Trova 20 wedding planner (≤2h da Verona)" — visibile SOLO in Live
+  (`src/components/outreach/FindWeddingPlannersButton.tsx`, montato in CrmApp.tsx
+  con `{section==="live_music"}`). Al click → POST `/api/outreach/discover`.
+- COME FUNZIONA (chiave): il sito su Vercel NON ha le AI. Il bottone NON cerca:
+  inserisce un SEGNALE (riga sentinella in outreach_drafts: name="Ricerca wedding
+  planner", `verified_facts_json.discovery_request=true`, target). Il WORKER
+  locale (Mac, "Avvia CRM") raccoglie il segnale, cerca, semina le bozze nello
+  stesso batch, cancella la sentinella. Quindi il worker DEVE essere ACCESO.
+  UNIQUE(owner,nome) blocca 2 ricerche insieme (409 → "già in corso").
+- RICERCA: `local-worker/discovery/findWeddingPlanners.ts` — `claude` col web
+  trova N planner NUOVI entro ~2h da Verona (Veneto + Brescia/Mantova + Trentino
+  + ovest Emilia), ESCLUDE i nomi già in outreach_drafts+contacts (dedup "20
+  nuovi ogni volta"), in più giri, e raccoglie nome/città/sito/IG/email pubblica/
+  dettaglio-vero-per-il-complimento.
+- SCRITTORE matrimonio: `local-worker/agents/writerWeddingDraft.ts` (codex) +
+  `prompts/writer_wedding_email.md`. Offerta = musica dal vivo per matrimoni (sax,
+  sax+DJ, ensemble cerimonia, trio jazz). Niente film/sinossi/riferimenti musicali.
+- CONTROLLORE matrimonio: `prompts/validator_wedding_check.md` (stesso schema dei
+  registi, accetta email aziendali info@/hello@). claude+codex usano questo prompt
+  quando section=live_music (`runAllAgents` parametrizzato + `runClaudeCheck`/
+  `runCodexCheck` accettano il nome del prompt).
+- RAMO worker (`run-worker.ts`): per live_music salta triage/sinossi/riferimenti
+  musicali e usa scrittore+validatore matrimonio; `processDiscoveryRequest` gestisce
+  la sentinella. Tutto `if (isLive)`/`if (!isLive)`: cinema intatto.
+- PROVATO DAL VIVO (2026-06-18, ZERO invii): ricerca → planner reali a Verona/Lago
+  di Garda/Brescia con email e complimento vero dal loro sito. `worker --once` su 2
+  planner → enrichment ha trovato le email (info@/hello@, conf 0.78), scritte 2 mail
+  ottime (offerta giusta, complimento vero, "lei" formale, firma+link giusti),
+  validate → **2/2 "Pronta"**. FIX trovato e risolto: codex bocciava "Salve Nome!"
+  come tono informale (falso allarme) → chiarito in `validator_wedding_check.md`
+  che "Salve (Nome)!" è l'apertura formale corretta → ora passa.
+- TEST RIUSABILE (no invii): `npx tsx local-worker/discovery/findWeddingPlanners.ts
+  --dry-run --target 3` (cerca e stampa, no DB); aggiungi `--write` per provare anche
+  la mail; `--insert --owner <id>` per seminare davvero le bozze.
+- LIMITE ONESTO: come per i registi, la ricerca è best-effort (trova chi ha sito/IG
+  pubblico); alcuni planner finiranno "mail mancante" se l'email non è pubblica.
+
 ## Come si avvia (PARITÀ Mac/Windows — blindata 2026-06-11)
 Due launcher GEMELLI nel repo, SOTTILI e stabili: fanno solo banner + `git pull
 --ff-only`, poi passano la mano agli script interni SEMPRE freschi dopo il pull
@@ -162,6 +204,15 @@ Ogni mail allega anche il CV PDF (comportamento attuale di gmail/send).
 - Commit chiusi con `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## Prossimo passo
+WEDDING PLANNER (2026-06-18): motore costruito e PROVATO dal vivo (2/2 Pronta,
+zero invii). DA FARE: (1) committare+pushare (il worker locale prende le novità
+al prossimo `git pull`/avvio) e fare `vercel deploy --prod --yes` perché il
+BOTTONE compaia sul sito; (2) Pietro: andare in sezione "Live Music", tenere
+ACCESO "Avvia CRM", premere "Trova 20 wedding planner", aspettare che il worker
+trovi+scriva, poi rivedere/approvare. NB: 2 bozze di prova reali (Noemi Wedding,
+Orsola Zanardelli) sono già in DB come "Pronta" — Pietro può inviarle o cancellarle
+("Elimina importati oggi"). Eventuale ritocco testo offerta: `writer_wedding_email.md`.
+
 Complimento specifico+verificato RISOLTO e provato (Federico → Pronta). Da
 committare+pushare così i worker Mac e Windows lo prendono al prossimo avvio
 (git pull). Poi: batch vero — avvia il worker ("Avvia CRM"/.bat), carica il PDF
