@@ -30,6 +30,20 @@ NOTA Windows: il PRIMO avvio dopo questo update può dare un errore strano (il
   (`.plist.disabled`): era rotto, macOS blocca i background dal Desktop (EPERM).
 - **Sito:** online su `crm-smoky-eight.vercel.app`. Deploy: `vercel deploy --prod --yes`.
 
+## RIFERIMENTI MUSICALI — ibrido AI+libreria verificata (2026-06-11, commit 09f4374)
+I 3 esempi di colonna sonona nella mail NON li sceglie più l'AI a ruota libera
+(erano dozzinali: Nomadland/Minari abusati, e rischio compositore sbagliato).
+Ora: `local-worker/musicReferences.ts` = LIBRERIA di 16 colonne sonore VERIFICATE
+(con `sourceUrl`, taggate per tono, non-cliché, **MODIFICA QUI per il tuo gusto**).
+Il codice fa una shortlist per tono (scorer con tag pesati + soglia + penalità
+energia); lo scrittore sceglie i 3 più adatti SOLO dalla shortlist (`music_ref_ids`);
+il codice VALIDA (solo dalla shortlist, compositori diversi) e li inietta, altrimenti
+fallback deterministico. Zero chiamate AI extra. Test 14/14. Provato: Federico →
+I Daniel Blake/Capernaum/All That Breathes (sociale). LIMITE ONESTO (codex): tetto
+"appropriato e professionale", NON il gusto esatto del regista (servirebbe ricerca
+per-regista, evitata). Per renderli ESATTAMENTE tuoi: aggiungi le TUE colonne sonore
+preferite nella libreria.
+
 ## Stato (2026-06-11) — REDESIGN DEFINITIVO: 5/5 registi TFF → Pronta
 PRINCIPIO NUOVO: i controlli MECCANICI li fa il CODICE (istantaneo, sicuro),
 le 2 AI (claude+codex) giudicano SOLO la veridicità del complimento. Niente più
