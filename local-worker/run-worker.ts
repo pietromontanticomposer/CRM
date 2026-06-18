@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1003,12 +1003,6 @@ const main = async () => {
 // lo stesso draft 2 volte (bug diagnosticato 2026-05-28, double validator runs).
 const LOCK_FILE = path.join(PROJECT_ROOT, ".local-worker.lock");
 
-// File "handover": quando un NUOVO worker fa takeover di uno vecchio (relaunch),
-// lo scrive PRIMA di mandare SIGTERM. Il worker che muore, vedendolo, NON svuota
-// i draft (li passa al successore). Cosi' un relaunch dopo un import NON cancella
-// per sbaglio i contatti appena importati. Solo una chiusura VERA (Ctrl-C,
-// finestra chiusa, kill) — senza successore — svuota i draft.
-const HANDOVER_FILE = path.join(PROJECT_ROOT, ".local-worker.handover");
 // Default 30 GIORNI (Pietro 2026-06-11 + codex): l'utente può metterci giorni a
 // revisionare un batch. Un TTL di poche ore cancellava il batch al riavvio. La
 // pulizia automatica tocca SOLO i veri abbandonati vecchi di un mese.
@@ -1067,7 +1061,8 @@ const terminateOtherWorkers = (): boolean => {
   // lock file da acquireLock(). Niente "pgrep"/"sleep" (non esistono su
   // Windows): il lancio piu' recente VINCE e chiude il predecessore.
   // Ritorna true se ha davvero rilevato e chiuso un worker preesistente
-  // (takeover): in quel caso i draft NON vanno svuotati, sono un handover.
+  // (takeover): in quel caso al boot NON si applica la pulizia stale, perche'
+  // eredito i draft del predecessore e sono validi.
   let previousPid: number | null = null;
   try {
     if (existsSync(LOCK_FILE)) {
@@ -1089,13 +1084,9 @@ const terminateOtherWorkers = (): boolean => {
   } catch {
     return false; // gia' morto: niente da fare
   }
-  // HANDOVER: avviso il predecessore che e' un takeover, cosi' NON svuota i
-  // draft morendo (li eredito io). Scritto PRIMA del SIGTERM.
-  try {
-    writeFileSync(HANDOVER_FILE, String(process.pid), "utf8");
-  } catch {
-    /* noop */
-  }
+  // TAKEOVER: chiudo il worker preesistente (un solo worker alla volta). La sua
+  // chiusura NON cancella i draft (vedi gracefulShutdown): il batch resta e lo
+  // eredito io.
   try {
     process.kill(previousPid, "SIGTERM");
     console.warn(`[worker] takeover: chiudo worker preesistente PID ${previousPid}`);
@@ -1122,20 +1113,11 @@ const tookOver = terminateOtherWorkers();
 if (!acquireLock()) {
   process.exit(1);
 }
-// Lock acquisito: l'eventuale handover e' stato consumato (il predecessore e'
-// gia' uscito). Lo rimuovo cosi' una chiusura FUTURA di questo worker svuota
-// davvero i draft.
-try {
-  if (existsSync(HANDOVER_FILE)) unlinkSync(HANDOVER_FILE);
-} catch {
-  /* noop */
-}
 
 const ONCE = process.argv.includes("--once");
 
-// Chiusura del worker: svuota i draft NON approvati. Async perche' fa una
-// DELETE prima di uscire. Salta lo svuotamento solo se e' un takeover
-// (handover) o in modalita' --once (usata dai test). Guard anti doppio-exit.
+// Chiusura del worker: NON cancella nulla (le bozze restano in DB). Guard
+// anti doppio-exit. (Wipe-on-close rimosso 2026-06-11, vedi commento sotto.)
 let shuttingDown = false;
 const gracefulShutdown = async (signal: string, exitCode = 0) => {
   if (shuttingDown) return;
@@ -1179,11 +1161,10 @@ const bootstrap = async () => {
 
 bootstrap().catch((error) => {
   console.error("[worker] fatal error", error);
-  // Un CRASH non e' una chiusura VOLUTA: NON cancelliamo i draft. Cosi' un crash
-  // a meta' batch non distrugge ore di lavoro gia' fatto. I draft restano in DB;
-  // al riavvio il backstop (STALE_DRAFT_HOURS) toglie solo i veri abbandonati, e
-  // una chiusura voluta (SIGINT/SIGTERM/SIGHUP) li svuota come da regola Pietro.
-  shuttingDown = true; // blocca un eventuale wipe da signal handler concorrente
+  // Né un crash né una chiusura voluta cancellano i draft: il batch resta sempre
+  // in DB. Al riavvio il backstop (STALE_DRAFT_HOURS = 30gg) toglie solo i veri
+  // abbandonati molto vecchi. Nessun wipe distruttivo da nessuna parte.
+  shuttingDown = true;
   releaseLock();
   process.exit(1);
 });
