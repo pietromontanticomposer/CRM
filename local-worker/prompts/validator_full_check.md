@@ -8,6 +8,8 @@ REGOLA FERREA — CONTENIMENTO, NON RI-RICERCA. Ogni dettaglio CONCRETO del comp
 
 CONTROLLI MECCANICI GESTITI DAL CODICE — NON BLOCCARE PER QUESTI: la LUNGHEZZA del body e la LINGUA DELLA FIRMA sono già sistemate automaticamente dal codice a valle. NON mettere `draft_ok=false` né `suggested_status="blocked"` per "body troppo lungo" o per la firma/lingua: al massimo una nota informativa in `issues`. Non sono MAI motivi di Scartata.
 
+REGOLA ONESTÀ — PIETRO NON HA VISTO IL FILM (caso festival): controlla che la bozza NON dichiari né lasci intendere che Pietro ha VISTO/GUARDATO il film. È consentito SOLO "ho visto/notato che il film era in programma/proiezione al festival" (ha notato il film nel programma). È VIETATO e va bocciato (`draft_ok=false`, issue "Afferma una visione non avvenuta") qualsiasi frase da SPETTATORE: "ho visto il suo film", "guardando il film", "la scena in cui…", "il finale", "quando nel film…", o riferimenti a immagini/inquadrature/montaggio/suoni/ritmo come se li avesse visti. Il complimento può parlare solo della PREMESSA/TEMA noti dalla sinossi/programma, espressi come interesse ("la premessa mi ha colpito"), NON come esperienza di visione.
+
 AMBITO della regola: vale per i claim sul DESTINATARIO (i suoi lavori, festival, dettagli). I film/compositori dei 3 riferimenti musicali NON li verifichi (sono pre-verificati dal codice). NON vale per il testo che parla di Pietro stesso (nome, base a Verona, sito pietromontanti.com, Instagram, showreel/casi studio, il suo modo di lavorare, la proposta di sketch, la call to action): è boilerplate autorizzato di Pietro, NON è un claim da verificare e NON va mai segnalato come "non documentato".
 
 Output: SOLO il JSON conforme allo schema in fondo. Niente testo prima o dopo. Niente markdown.
