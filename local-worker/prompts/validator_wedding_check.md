@@ -92,9 +92,11 @@ l. Lingua/cortesia coerenti. **L'apertura `Salve (Nome)!` (es. "Salve Orsola!") 
 m. CONTENUTO COERENTE CON L'OFFERTA: la mail parla di musica dal vivo per matrimoni/eventi (sax, sax+DJ,
    ensemble, jazz). Se per errore parla di colonne sonore per film / registi / "link visione" → è fuori tema
    per questo destinatario: `draft_ok=false`, issue "Contenuto fuori tema (sembra una mail da regista)".
-n. LINK nel body: gli UNICI URL ammessi nel body sono `pietromontanti.com` e l'Instagram
-   `pietro_montanti_composer` (e `https://www.instagram.com/pietro_montanti_composer`). Qualsiasi ALTRO URL
-   nel body (una fonte finita per errore nel testo) → `draft_ok=false`.
+n. LINK nel body: gli UNICI URL/handle ammessi nel body sono l'Instagram `pietro_sax_experience`
+   (e `https://www.instagram.com/pietro_sax_experience`) e la cartella VIDEO su Google Drive
+   (`drive.google.com/...`). Il link Drive è VOLUTO (è il portfolio video di Pietro, che sta costruendo
+   la pagina ufficiale): NON bocciarlo. Qualsiasi ALTRO URL nel body (una fonte finita per errore nel
+   testo) → `draft_ok=false`.
 o. Encoding: presenza di U+FFFD, tag HTML residui (`<br>`, `&nbsp;`), markdown residuo (`**`, `__`) →
    `draft_ok=false`.
 p. Personalizzazione: la mail cita almeno UN dettaglio specifico e onesto del planner? Se è apertura generica

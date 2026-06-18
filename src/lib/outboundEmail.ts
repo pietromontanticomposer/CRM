@@ -9,6 +9,26 @@ const PUBLIC_CV_PATH = path.join(process.cwd(), "public", "curriculum-pietro-mon
 const CV_NOTICE_MARKER = 'data-cv-notice="true"';
 const CV_NOTICE_HTML = `<div ${CV_NOTICE_MARKER} style="margin-top: 16px; font-family: Helvetica, Arial, sans-serif; color: #111; font-size: 14px; line-height: 1.4;">In allegato trovi il mio Curriculum Vitae (PDF).</div>`;
 
+// FIRMA EVENTI/WEDDING (sezione Live): "Multi Instrumentalist", SOLO testo, senza
+// la foto del Venice Film Festival e senza "Composer for TV & Theatre". Si applica
+// SOLO alle mail wedding, riconosciute dal link Instagram pietro_sax_experience nel
+// corpo (le mail dei registi NON lo contengono, quindi restano IDENTICHE a prima).
+const WEDDING_SIGNATURE_HTML = `
+<div style="margin-top: 22px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
+  <div style="font-weight: bold; font-size: 15px;">Pietro Montanti</div>
+  <div style="font-size: 14px;">Multi Instrumentalist</div>
+  <div style="font-size: 14px;">3515172560</div>
+  <div style="font-size: 14px;">P.IVA: 04593080239</div>
+  <div style="font-size: 14px;">Via Mulino Turri 9c, Negrar (VR)</div>
+</div>`;
+
+const WEDDING_MARKER = /pietro_sax_experience/i;
+const isWeddingContent = (...values: Array<string | null | undefined>) =>
+  values.some((v) => typeof v === "string" && WEDDING_MARKER.test(v));
+
+const appendWeddingSignature = (html: string) =>
+  html.includes(WEDDING_SIGNATURE_HTML) ? html : `${html}${WEDDING_SIGNATURE_HTML}`;
+
 type OutboundAttachment = {
   filename: string;
   path: string;
@@ -57,21 +77,29 @@ const getCvPath = () => {
 
 export const buildOutboundHtml = (html?: string | null, text?: string | null) => {
   const cleanedHtml = normalizeText(html);
-  const shouldMentionCv = Boolean(getCvPath());
+  const cleanedText = normalizeText(text);
+  // Mail wedding (sezione Live): firma "Multi Instrumentalist" senza foto festival
+  // e senza CV. Mail registi: comportamento INVARIATO (CV notice + firma classica).
+  const wedding = isWeddingContent(cleanedHtml, cleanedText);
+  const shouldMentionCv = !wedding && Boolean(getCvPath());
+
   if (cleanedHtml) {
+    if (wedding) return appendWeddingSignature(cleanedHtml);
     return shouldMentionCv ? addCvNoticeAboveSignature(cleanedHtml) : cleanedHtml;
   }
 
-  const cleanedText = normalizeText(text);
   if (!cleanedText) return undefined;
 
   const htmlBody = `<div>${escapeHtml(cleanedText).replaceAll(/\r?\n/g, "<br>")}</div>`;
+  if (wedding) return appendWeddingSignature(htmlBody);
   return shouldMentionCv ? addCvNoticeAboveSignature(htmlBody) : htmlBody;
 };
 
 export const buildOutboundAttachments = (html?: string | null) => {
   const attachments: OutboundAttachment[] = [];
-  const cvPath = getCvPath();
+  // Le mail wedding NON allegano il CV (orientato al cinema) e non hanno la foto
+  // del festival: il loro template rimanda ai video via i link. Registi invariati.
+  const cvPath = isWeddingContent(html) ? null : getCvPath();
 
   if (cvPath) {
     attachments.push({

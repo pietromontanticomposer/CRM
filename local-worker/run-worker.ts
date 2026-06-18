@@ -304,6 +304,21 @@ const FORBIDDEN_WORDS = [
   "vostra visione",
 ];
 
+// Per la sezione Live/wedding il template REALE di Pietro usa parole che per il
+// cinema sono vietate (es. "collaborazione musicale"). Qui teniamo SOLO le frasi
+// anti-IA universali, senza la blacklist cinema-specifica.
+const WEDDING_FORBIDDEN_WORDS = [
+  "I hope this email finds you well",
+  "Spero che questa email ti trovi bene",
+  "leverage",
+  "sinergia",
+  "value proposition",
+  "win-win",
+  "touch base",
+  "reaching out",
+  "trust this email finds you",
+];
+
 const TEMPLATE_RULES: Record<string, string> = {
   A: "Template A: contatto con materiale verificato. Subject specifico, body con riferimento a un'opera concreta del regista, link visione preso da allowed_links.",
   B: "Template B: contatto con materiale parziale. Body piu' generico ma comunque personalizzato, link visione preso da allowed_links se presente.",
@@ -978,7 +993,7 @@ const processContact = async (
     {
       const forbiddenHits = findForbiddenInBody(
         writerOutcome.body,
-        FORBIDDEN_WORDS
+        isLive ? WEDDING_FORBIDDEN_WORDS : FORBIDDEN_WORDS
       );
       const fbAttempts = Number(contact.ai_attempts ?? 0);
       if (forbiddenHits.length > 0 && fbAttempts < MAX_WRITER_RETRIES) {

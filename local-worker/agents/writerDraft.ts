@@ -226,6 +226,9 @@ const ALLOWED_BODY_HOSTS = new Set([
   "pietromontanti.com",
   "instagram.com",
   "soundcloud.com",
+  // Cartella video dei set dal vivo (sezione Live/wedding): link VOLUTO nel corpo,
+  // non va rimosso dal sanitizzatore. Per il cinema non compare mai.
+  "drive.google.com",
 ]);
 const hostOf = (url: string): string =>
   url

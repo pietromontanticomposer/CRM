@@ -51,6 +51,19 @@ INVARIATO (23/23 test worker ok, tsc 0, build ok, selfcheck ok).
   la mail; `--insert --owner <id>` per seminare davvero le bozze.
 - LIMITE ONESTO: come per i registi, la ricerca è best-effort (trova chi ha sito/IG
   pubblico); alcuni planner finiranno "mail mancante" se l'email non è pubblica.
+- UPDATE 2026-06-18 (template reale + firma): lo scrittore wedding ora replica il
+  TEMPLATE REALE di Pietro (letto dalle sue mail live_music già inviate): blocchi
+  FISSI (intro "musicista a Verona, sax/clarinetto/formazioni live", offerta
+  sax&DJ/clarinetto-violino-piano/duo-band jazz, "Lavoro in modo puntuale…", "Sto
+  raccogliendo su una pagina dedicata…") + SOLO il complimento personalizzato.
+  Link: IG `pietro_sax_experience` + Drive `1p0SyHbTrAP7FYz2_cysbVNf54uuHK-fS`
+  ("Pagina eventi"/"Esempi jazz ensemble"). Sbloccato "collaborazione" per Live
+  (`WEDDING_FORBIDDEN_WORDS`). FIRMA: per l'INVIO reale le mail wedding usano la
+  firma "Multi Instrumentalist" SOLO testo (niente foto festival, niente "Composer
+  for TV & Theatre", niente CV allegato), via `src/lib/outboundEmail.ts` che
+  riconosce la mail wedding dal marker `pietro_sax_experience` nel corpo; i registi
+  restano IDENTICI (firma classica + foto + CV). Verificato: wedding→Multi
+  Instrumentalist/no CV; cinema→invariato. Provato il look con mail di prova a Pietro.
 
 ## Come si avvia (PARITÀ Mac/Windows — blindata 2026-06-11)
 Due launcher GEMELLI nel repo, SOTTILI e stabili: fanno solo banner + `git pull
