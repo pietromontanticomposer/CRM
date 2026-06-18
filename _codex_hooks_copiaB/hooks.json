@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/Users/pietromontanti/.claude/crm-read-sync.sh\" SessionStart",
+            "timeout": 20,
+            "statusMessage": "Leggo il canale Codex-SYNC..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"/Users/pietromontanti/.claude/crm-state.sh\" SessionStart",
+            "timeout": 20,
+            "statusMessage": "Carico lo stato vero del progetto (CONTINUA.md)..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/Users/pietromontanti/.claude/crm-read-sync.sh\" UserPromptSubmit",
+            "timeout": 20,
+            "statusMessage": "Leggo il canale Codex-SYNC..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"/Users/pietromontanti/.claude/crm-state.sh\" UserPromptSubmit",
+            "timeout": 20,
+            "statusMessage": "Carico lo stato vero del progetto (CONTINUA.md)..."
+          }
+        ]
+      }
+    ]
+  }
+}

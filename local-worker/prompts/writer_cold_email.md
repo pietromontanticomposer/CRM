@@ -528,6 +528,7 @@ OUTPUT — SOLO JSON, NIENTE MARKDOWN, NIENTE TESTO PRIMA O DOPO
   "body": "<SOLO la mail: apertura + (eventuale complimento verificato) + BLOCCO BASE + chiusura 'Un saluto, Pietro'. NIENTE riga 'Link visione', NIENTE fonti/URL qui dentro>",
   "link_visione": "<URL valido per A; 'non disponibile' per B/C/C_TEAM> (campo separato, NON nel body)",
   "sources": ["<URL della pagina + cosa hai verificato lì, es. 'https://... — scheda festival: titolo, anno, sinossi'>", "<altra fonte aperta e letta>"],
+  "compliment_claims": [{"detail": "<un dettaglio CONCRETO che hai messo nel complimento>", "source_quote": "<la frase ESATTA, copiata PAROLA PER PAROLA dalla film_synopsis, che contiene quel dettaglio>"}],
   "director_tier": "sconosciuto" | "emergente" | "affermato" | "star",
   "director_tier_reason": "<1 frase col motivo concreto dai dati trovati>",
   "director_photo_url": "<URL diretto di una foto del regista vista su una fonte aperta e attribuita a LUI; \"\" se incerto o non trovata>",
@@ -537,6 +538,10 @@ OUTPUT — SOLO JSON, NIENTE MARKDOWN, NIENTE TESTO PRIMA O DOPO
 }
 
 REGOLA SOURCES: in `sources` elenca le pagine PUBBLICHE che hai effettivamente APERTO e letto per verificare il lavoro e il complimento (sito ufficiale, scheda festival, recensione, intervista, Vimeo/IMDb). Sono per il controllo di PIETRO, NON vengono inviate al destinatario: NON devono MAI comparire nel body. Se non hai aperto nessuna fonte (Template C/NOT_READY), `sources: []`.
+
+REGOLA COMPLIMENT_CLAIMS — AUTO-CITAZIONE OBBLIGATORIA (è la regola più importante per non farti scartare): per OGNI dettaglio CONCRETO che metti nel complimento (un luogo, una persona, una situazione, un elemento di trama, il genere, un tema specifico), devi aggiungere in `compliment_claims` un oggetto con quel `detail` e la `source_quote` = la frase ESATTA, copiata PAROLA PER PAROLA dalla `film_synopsis` che ti è stata fornita, che contiene quel dettaglio. **Un controllo automatico nel codice verifica che ogni `source_quote` sia DAVVERO dentro la `film_synopsis`: se un dettaglio del complimento non ha una citazione reale, la mail viene scartata o ti viene rimandata indietro.** Quindi: se NON riesci a copiare una frase verbatim dalla sinossi per un dettaglio, NON scrivere quel dettaglio nel complimento. Le riflessioni/opinioni generiche di Pietro ("ammiro la scelta", "secondo me funziona", "mi ha colpito") NON sono dettagli e NON servono in `compliment_claims`. I 3 riferimenti musicali NON vanno in `compliment_claims` (sono scelte di stile di Pietro, non claim sul film). Se non c'è `film_synopsis` e il complimento sta solo sul tema del titolo: `compliment_claims: []` (il tema del titolo è già consentito).
+
+REGOLA AVOID_DETAILS (riparazione): se nel packet c'è `verified_facts_json.avoid_details` (una lista), sono dettagli che in un TUO tentativo precedente NON avevano una fonte reale nella sinossi. NON includerli nel complimento, in nessuna forma: riscrivi il complimento senza di essi, restando solo su ciò che puoi citare verbatim dalla `film_synopsis` (o, se necessario, sul puro tema del titolo).
 
 REGOLA "LAVORO DOCUMENTATO ONLINE" (≠ guardabile): puoi scrivere di un lavoro specifico (Template B + complimento concreto) se ne trovi INFO documentate online e le hai aperte — scheda del festival, sinossi ufficiale, recensione, intervista. **NON serve che il film sia guardabile in streaming.** I film di festival (es. Trento Film Festival) di solito NON sono visibili online ma SONO documentati: per il complimento usa la scheda del festival / la sinossi / le recensioni. Solo se NON trovi NULLA di documentato sul lavoro scendi al tema verificato o a Template C. (Niente link di visione = Template B, NON un problema.)
 

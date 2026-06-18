@@ -1,0 +1,843 @@
+diff --git a/local-worker/README.md b/local-worker/README.md
+index e5d2067..f791904 100644
+--- a/local-worker/README.md
++++ b/local-worker/README.md
+@@ -1,13 +1,12 @@
+ # Local Worker AI Director Outreach
+ 
+-Questo worker gira solo in locale. Non usa Vercel e non usa API a consumo per i tre controlli di validazione: chiama direttamente le CLI installate `gemini`, `claude` e `codex`, poi salva gli esiti su Supabase.
++Questo worker gira solo in locale. Di default usa la modalita `OUTREACH_AI_MODE=minimal`: prima prova codice + web deterministico, scrive una bozza da template fisso e valida con controlli meccanici. Le CLI `claude` e `codex` si usano solo se riattivi la modalita completa.
+ 
+ ## Prerequisiti
+ 
+ - `SUPABASE_URL`
+ - `SUPABASE_SERVICE_ROLE_KEY`
+-- CLI disponibili nel `PATH` e gia autenticate:
+-  - `gemini`
++- CLI disponibili nel `PATH` e gia autenticate solo per `OUTREACH_AI_MODE=full`:
+   - `claude`
+   - `codex`
+ - dependencies del progetto installate con `npm install`
+@@ -33,7 +32,10 @@ npm run outreach:worker
+   Default: `10`
+ - `OUTREACH_WORKER_POLL_MS`
+   Default: `15000`
+-- `GEMINI_MODEL`
++- `OUTREACH_AI_MODE`
++  Default: `minimal`. Usa solo codice + web deterministico + template fisso.
++  Valore `full`: riattiva triage Claude, ricerca email Claude/Codex,
++  fallback sinossi Claude, writer Codex e validatori Claude/Codex.
+ - `CLAUDE_MODEL`
+ - `CODEX_MODEL`
+ 
+@@ -46,13 +48,12 @@ Il worker legge `contacts` con:
+ 
+ Per ogni contatto:
+ 
+-1. verifica che esistano `ai_email_subject` e `ai_email_body`
+-2. promuove `imported -> draft_ready` se la bozza e presente
+-3. invia lo stesso packet ai tre agenti CLI
+-4. persiste gli audit in `ai_outreach_agent_checks`
+-5. aggiorna `contacts.ai_agent_checks_json`
+-6. aggiorna `contacts.ai_validation_status`
+-7. aggiorna `contacts.ai_status`
++1. in modalita `minimal`, salta il triage AI
++2. cerca email con scanner web deterministico
++3. se l'email non e certa: `mail_mancante`, senza writer/validatori
++4. se l'email e certa: genera una bozza da template fisso, senza claim aggiunti
++5. valida con controlli meccanici e mette la bozza in `approved`
++6. in modalita `full`, usa anche Claude/Codex per writer e validazione
+ 
+ ## Packet inviato agli agenti
+ 
+diff --git a/local-worker/agents/writerDraft.ts b/local-worker/agents/writerDraft.ts
+index 72e644a..415f8ce 100644
+--- a/local-worker/agents/writerDraft.ts
++++ b/local-worker/agents/writerDraft.ts
+@@ -66,6 +66,14 @@ type AgentDraftAttempt = {
+   outcome: WriterDraftResult | WriterDraftError;
+ };
+ 
++const getAiMode = () => {
++  const mode = (process.env.OUTREACH_AI_MODE ?? "minimal").trim().toLowerCase();
++  return mode === "full" || mode === "off" ? mode : "minimal";
++};
++
++const shouldUseAiWriter = () =>
++  getAiMode() === "full" || process.env.OUTREACH_USE_AI_WRITER === "1";
++
+ // Codex (writer attivo) richiede piu' tempo: usa reasoning xhigh per default
+ // e fa web search per verificare claim. 240s e' la finestra realistica.
+ const CLAUDE_TIMEOUT_MS = 120_000;
+@@ -157,6 +165,133 @@ const normalizeSources = (value: unknown): string[] => {
+     .slice(0, 20);
+ };
+ 
++const factString = (facts: unknown, key: string): string | null => {
++  if (!isRecord(facts)) return null;
++  const value = facts[key];
++  return typeof value === "string" && value.trim() ? value.trim() : null;
++};
++
++const extractFestivalFromPrompt = (prompt: string | null | undefined) => {
++  const text = prompt?.trim() ?? "";
++  if (!text) return null;
++  const quoted = text.match(/Sono registi del "([^"]+)"/i)?.[1]?.trim();
++  if (quoted) return quoted;
++  const generic = text.match(
++    /\b((?:\d{1,3}\s*(?:°|th|st|nd|rd)?\s*)?[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.-]+(?:\s+[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.-]+){0,4}\s+Film\s+Festival(?:\s+\d{4})?)/i
++  )?.[1]?.trim();
++  return generic || null;
++};
++
++const detectDeterministicLanguage = (input: WriterInput): "it" | "en" => {
++  const explicit = input.language?.trim().toLowerCase();
++  if (explicit === "it" || explicit === "italian" || explicit === "italiano") {
++    return "it";
++  }
++  if (explicit === "en" || explicit === "english" || explicit === "inglese") {
++    return "en";
++  }
++  const text = [input.notes, input.company, JSON.stringify(input.verified_facts_json ?? {})]
++    .filter(Boolean)
++    .join(" ")
++    .toLowerCase();
++  return /\b(italia|italy|italiano|italiana|it)\b/.test(text) ? "it" : "en";
++};
++
++const firstNameOf = (name: string) =>
++  name
++    .trim()
++    .split(/\s+/)
++    .find((part) => part.length > 1)
++    ?.replace(/[,;:]+$/g, "") || name.trim();
++
++const compactSubject = (subject: string, fallback: string) =>
++  subject.length <= 80 ? subject : fallback;
++
++const runDeterministicDraft = (input: WriterInput): WriterDraftResult => {
++  const facts = isRecord(input.verified_facts_json)
++    ? input.verified_facts_json
++    : {};
++  const film = factString(facts, "film") || input.company?.trim() || null;
++  const festival =
++    factString(facts, "festival") ||
++    extractFestivalFromPrompt(input.prompt_master_rules);
++  const synopsisUrl = factString(facts, "film_synopsis_url");
++  const sources = [input.source_link, input.email_source_url, synopsisUrl]
++    .map((value) => (typeof value === "string" ? value.trim() : ""))
++    .filter(Boolean);
++  const lang = detectDeterministicLanguage(input);
++  const firstName = firstNameOf(input.name);
++
++  const subject =
++    lang === "it"
++      ? compactSubject(
++          film ? `Musica per ${film}` : "Musica per un suo progetto",
++          "Musica per un suo progetto"
++        )
++      : compactSubject(
++          film ? `Music for ${film}` : "Music for one of your projects",
++          "Music for one of your projects"
++        );
++
++  const opener =
++    film && festival
++      ? lang === "it"
++        ? `Ho visto il suo "${film}" al ${festival} e ho provato ad avvicinarla di persona, ma non ci sono riuscito.`
++        : `I saw your "${film}" at the ${festival} and tried to reach you in person, but I couldn't.`
++      : film
++      ? lang === "it"
++        ? `Le scrivo per il suo film "${film}".`
++        : `I'm writing because of your film "${film}".`
++      : lang === "it"
++      ? "Le scrivo per il suo lavoro da regista."
++      : "I'm writing because of your work as a director.";
++
++  const body =
++    lang === "it"
++      ? `Salve ${firstName},
++
++${opener}
++
++Sono Pietro Montanti, compositore per film e media a Verona. Scrivo musica originale per immagini con un processo semplice: prima capisco il tono del progetto, poi preparo uno sketch breve su una scena.
++
++Qui trova alcuni esempi del mio lavoro:
++https://pietromontanti.com
++
++Se le va, posso prepararle uno sketch musicale breve su una scena o su un estratto.
++
++Un saluto,
++Pietro Montanti`
++      : `Hi ${firstName},
++
++${opener}
++
++I'm Pietro Montanti, a film and media composer based in Verona. I write original music for picture with a direct process: first I understand the tone of the project, then I prepare a short sketch for one scene.
++
++Here are a few examples of my work:
++https://pietromontanti.com
++
++If useful, I can prepare a short musical sketch for one scene or excerpt.
++
++Best,
++Pietro Montanti`;
++
++  return {
++    subject,
++    body: lintAndFixMailBody(body),
++    link_visione: "non disponibile",
++    sources,
++    director_tier: "sconosciuto",
++    director_tier_reason:
++      "Modalita AI minima: profilo non stimato per evitare consumo e ipotesi.",
++    director_photo_url: "",
++    template_used: film ? "B" : "C",
++    risk_score: 0.1,
++    reason:
++      "Bozza deterministica: usa solo nome, film/festival importati e testo fisso di Pietro; nessun claim aggiunto da AI.",
++    raw_output: "",
++  };
++};
++
+ // HOST ammessi nel corpo (firma di Pietro). Controllo sull'HOST vero, non
+ // sottostringa: cosi' "evil.com/pietromontanti.com" NON passa.
+ const ALLOWED_BODY_HOSTS = new Set([
+@@ -576,6 +711,9 @@ export const runWriterDraft = async (
+   input: WriterInput,
+   workingDirectory: string
+ ): Promise<WriterDraftResult | WriterDraftError> => {
++  if (!shouldUseAiWriter()) {
++    return runDeterministicDraft(input);
++  }
+   // Decisione architetturale (Pietro 2026-05-28): la mail la scrive ChatGPT
+   // via Codex CLI. I validatori (Claude + Gemini + Codex) si occupano poi di
+   // controllare che ogni claim sul regista sia documentato. Voce coerente +
+diff --git a/local-worker/enrichment/findPublicEmail.ts b/local-worker/enrichment/findPublicEmail.ts
+index 5ed0fc2..09ff82b 100644
+--- a/local-worker/enrichment/findPublicEmail.ts
++++ b/local-worker/enrichment/findPublicEmail.ts
+@@ -58,6 +58,14 @@ const GEMINI_TIMEOUT_MS = 150_000;
+ const CLAUDE_TIMEOUT_MS = 180_000;
+ const CODEX_TIMEOUT_MS = 200_000;
+ 
++const getAiMode = () => {
++  const mode = (process.env.OUTREACH_AI_MODE ?? "minimal").trim().toLowerCase();
++  return mode === "full" || mode === "off" ? mode : "minimal";
++};
++
++const shouldUseAiEmailSearch = () =>
++  getAiMode() === "full" || process.env.OUTREACH_USE_AI_EMAIL === "1";
++
+ const JUNK_EMAIL_SUFFIXES = [
+   ".png",
+   ".jpg",
+@@ -855,7 +863,7 @@ const consensusFromProposals = async (
+       source_type: null,
+       confidence: 0,
+       status: "not_found",
+-      reason: `Nessuna email pubblica trovata dai 3 agenti. ${debug}`,
++      reason: `Nessuna email pubblica trovata dai cercatori attivi. ${debug}`,
+       found_at: null,
+     };
+   }
+@@ -868,14 +876,14 @@ const consensusFromProposals = async (
+   const sample = top.bucket[0];
+ 
+   if (top.count >= 2) {
+-    const confidence = top.count === 3 ? 0.95 : 0.78;
++    const confidence = top.count === proposals.length ? 0.95 : 0.78;
+     return {
+       email: sample.email,
+       source_url: sample.source_url,
+       source_type: sample.source_type ?? "consensus",
+       confidence,
+       status: "found_public",
+-      reason: `Consenso ${top.count}/3 (${top.bucket
++      reason: `Consenso ${top.count}/${proposals.length} (${top.bucket
+         .map((p) => p.agent)
+         .join("+")}). ${debug}`,
+       found_at: now,
+@@ -928,15 +936,18 @@ export const findPublicEmail = async (
+   }
+ 
+   try {
+-    // RICERCA a DUE (Pietro 2026-06-05): Claude + Codex, i due affidabili.
+-    // Tolto Gemini (free tier strozzato -> timeout, instabile, faceva perdere
+-    // tempo). Le email che esistono online vanno trovate: 2 cercatori solidi
+-    // sono meglio di 3 con uno che si pianta. Se concordano, confidence 0.78.
+-    const proposals = await Promise.all([
+-      searchByClaude(input, workingDirectory),
+-      searchByCodex(input, workingDirectory),
+-      searchByWeb(input, workingDirectory),
+-    ]);
++    // Default "minimal": niente Claude/Codex per cercare email. Prima usa solo
++    // il cercatore deterministico web: se l'email non compare su una pagina
++    // pubblica verificabile, il contatto finisce in Mail mancante. La vecchia
++    // ricerca AI si riattiva solo con OUTREACH_AI_MODE=full o
++    // OUTREACH_USE_AI_EMAIL=1.
++    const proposals = shouldUseAiEmailSearch()
++      ? await Promise.all([
++          searchByClaude(input, workingDirectory),
++          searchByCodex(input, workingDirectory),
++          searchByWeb(input, workingDirectory),
++        ])
++      : [await searchByWeb(input, workingDirectory)];
+     return await consensusFromProposals(proposals);
+   } catch (error) {
+     return {
+diff --git a/local-worker/run-worker.ts b/local-worker/run-worker.ts
+index b34cf65..a9bc1fb 100644
+--- a/local-worker/run-worker.ts
++++ b/local-worker/run-worker.ts
+@@ -30,6 +30,19 @@ const PROJECT_ROOT = path.resolve(WORKER_DIR, "..");
+ loadEnv({ path: path.join(PROJECT_ROOT, ".env.local"), override: false });
+ loadEnv({ path: path.join(PROJECT_ROOT, ".env"), override: false });
+ 
++const getAiMode = () => {
++  const mode = (process.env.OUTREACH_AI_MODE ?? "minimal").trim().toLowerCase();
++  return mode === "full" || mode === "off" ? mode : "minimal";
++};
++
++const AI_MODE = getAiMode();
++const shouldUseAiTriage = () =>
++  AI_MODE === "full" || process.env.OUTREACH_USE_AI_TRIAGE === "1";
++const shouldUseAiSynopsisFallback = () =>
++  AI_MODE === "full" || process.env.OUTREACH_USE_AI_SYNOPSIS === "1";
++const shouldUseAiValidators = () =>
++  AI_MODE === "full" || process.env.OUTREACH_USE_AI_VALIDATORS === "1";
++
+ // Il worker lavora sulla tabella outreach_drafts. I contatti non entrano in
+ // `contacts` finche' Pietro non approva (POST /api/outreach/drafts/[id]/approve).
+ type DraftQueueRow = {
+@@ -59,6 +72,7 @@ type DraftQueueRow = {
+   email_enrichment_status: string | null;
+   email_enrichment_reason: string | null;
+   ai_attempts: number | null;
++  ai_writer_reason: string | null;
+ };
+ 
+ const getRequiredEnv = (key: string) => {
+@@ -110,6 +124,10 @@ const WORKER_CONCURRENCY = Math.max(
+ const isNonEmptyString = (value: unknown): value is string =>
+   typeof value === "string" && value.trim().length > 0;
+ 
++const isValidEmailAddress = (value: string | null | undefined) =>
++  typeof value === "string" &&
++  /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value.trim());
++
+ // Estrae dal pdf_full_text una finestra di ±radius caratteri attorno al nome
+ // del destinatario. Usata SOLO per l'enrichment (ricerca email): mandare il
+ // PDF intero a 3 AI per ogni contatto e' rumore e tempo sprecato. Writer e
+@@ -387,7 +405,7 @@ const fetchQueue = async (supabase: ReturnType<typeof getSupabase>) => {
+   const { data, error } = await supabase
+     .from("outreach_drafts")
+     .select(
+-      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, ai_template_used, ai_link_visione, ai_risk_score_numeric, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason, ai_attempts"
++      "id, owner_id, name, email, company, role, notes, section, language, batch_id, batch_name, ai_status, ai_email_subject, ai_email_body, ai_template_used, ai_link_visione, ai_risk_score_numeric, verified_facts_json, source_link, prompt_master_rules, email_source_url, email_source_type, email_confidence, email_enrichment_status, email_enrichment_reason, ai_attempts, ai_writer_reason"
+     )
+     .in("ai_status", ["imported", "draft_ready", "processing"])
+     .order("updated_at", { ascending: true })
+@@ -486,6 +504,48 @@ const persistAgentAudit = async (
+   }
+ };
+ 
++const persistDeterministicValidation = async (
++  supabase: ReturnType<typeof getSupabase>,
++  contact: DraftQueueRow
++) => {
++  const subject = contact.ai_email_subject?.trim() ?? "";
++  const body = contact.ai_email_body?.trim() ?? "";
++  const forbiddenHits = findForbiddenInBody(body, FORBIDDEN_WORDS);
++  const emailCertain =
++    isValidEmailAddress(contact.email) && (contact.email_confidence ?? 0) >= 0.7;
++  const ok = Boolean(subject && body && emailCertain && forbiddenHits.length === 0);
++
++  const summary = ok
++    ? "Validazione deterministica: email certa, bozza da template fisso e nessun claim aggiunto da AI. Claude/Codex non usati."
++    : [
++        "Validazione deterministica fallita.",
++        !subject ? "Subject mancante." : "",
++        !body ? "Body mancante." : "",
++        !emailCertain ? "Email non certa." : "",
++        forbiddenHits.length
++          ? `Parole vietate: ${forbiddenHits.join(", ")}.`
++          : "",
++      ]
++        .filter(Boolean)
++        .join(" ");
++
++  const { error } = await supabase
++    .from("outreach_drafts")
++    .update({
++      ai_status: ok ? "approved" : "blocked",
++      ai_validation_status: ok ? "passed" : "blocked",
++      ai_send_allowed: ok,
++      ai_validation_summary: summary,
++      ai_agent_checks_json: {},
++    })
++    .eq("id", contact.id);
++
++  if (error) throw error;
++  console.log(
++    `${logPrefix(contact)} validazione deterministica -> ${ok ? "approved" : "blocked"}`
++  );
++};
++
+ // Controllo a DUE (Pietro 2026-06-05): tolto Gemini, era solo un peso (free
+ // tier strozzato -> timeout costanti, ~5 min sprecati a contatto, contributo
+ // nullo). Claude + Codex sono affidabili e bastano: l'aggregatore blocca se la
+@@ -548,6 +608,7 @@ const persistDraft = async (
+   contact.ai_template_used = draft.template_used;
+   contact.ai_link_visione = draft.link_visione;
+   contact.ai_risk_score_numeric = draft.risk_score;
++  contact.ai_writer_reason = draft.reason;
+ };
+ 
+ const persistEnrichment = async (
+@@ -622,7 +683,7 @@ const processContact = async (
+   // intestazioni, testo "titolo+nome" attaccato). Se non lo e', lo scartiamo
+   // PRIMA di sprecare enrichment + writer + 3 validatori. Se il nome e'
+   // sporco, lo ripuliamo. Cosi' Pietro non deve pulire niente a mano.
+-  if (wasImported) {
++  if (wasImported && shouldUseAiTriage()) {
+     const triage = await runContactTriage(
+       {
+         name: contact.name,
+@@ -662,6 +723,10 @@ const processContact = async (
+         `${logPrefix(contact)} triage non disponibile (proseguo): ${triage.error}`
+       );
+     }
++  } else if (wasImported) {
++    console.log(
++      `${logPrefix(contact)} triage AI saltato (OUTREACH_AI_MODE=${AI_MODE})`
++    );
+   }
+ 
+   if (
+@@ -749,6 +814,16 @@ const processContact = async (
+     return;
+   }
+ 
++  const draftIsDeterministic =
++    contact.ai_writer_reason?.includes("Bozza deterministica") ?? false;
++  if (draftAlreadyExists && !shouldUseAiValidators() && !draftIsDeterministic) {
++    console.log(
++      `${logPrefix(contact)} bozza precedente non deterministica: la rigenero senza AI`
++    );
++    contact.ai_email_subject = null;
++    contact.ai_email_body = null;
++  }
++
+   if (
+     !isNonEmptyString(contact.ai_email_subject) ||
+     !isNonEmptyString(contact.ai_email_body)
+@@ -766,6 +841,14 @@ const processContact = async (
+         !Array.isArray(contact.verified_facts_json)
+           ? { ...(contact.verified_facts_json as Record<string, unknown>) }
+           : {};
++      let factsChanged = false;
++      if (contact.company?.trim() && typeof facts.film !== "string") {
++        facts.film = contact.company.trim();
++        factsChanged = true;
++      }
++      if (factsChanged) {
++        contact.verified_facts_json = facts;
++      }
+       const filmTitle = typeof facts.film === "string" ? facts.film : null;
+       if (filmTitle && !facts.film_synopsis) {
+         const festivalHint =
+@@ -781,7 +864,7 @@ const processContact = async (
+           festivalHint,
+           contact.name
+         ).catch(() => null);
+-        if (!ctx) {
++        if (!ctx && shouldUseAiSynopsisFallback()) {
+           ctx = await fetchFilmSynopsisViaClaude(
+             filmTitle,
+             festivalHint,
+@@ -793,6 +876,10 @@ const processContact = async (
+               `${logPrefix(contact)} sinossi via claude (fallback web)`
+             );
+           }
++        } else if (!ctx) {
++          console.log(
++            `${logPrefix(contact)} fallback sinossi Claude saltato (OUTREACH_AI_MODE=${AI_MODE})`
++          );
+         }
+         if (ctx) {
+           facts.film_synopsis = ctx.text;
+@@ -802,6 +889,7 @@ const processContact = async (
+             .from("outreach_drafts")
+             .update({ verified_facts_json: facts })
+             .eq("id", contact.id);
++          factsChanged = false;
+           console.log(`${logPrefix(contact)} sinossi film trovata -> ${ctx.url}`);
+         } else {
+           console.log(
+@@ -809,6 +897,12 @@ const processContact = async (
+           );
+         }
+       }
++      if (factsChanged) {
++        await supabase
++          .from("outreach_drafts")
++          .update({ verified_facts_json: facts })
++          .eq("id", contact.id);
++      }
+     }
+     // BUGFIX 2026-05-28: il writer riceveva solo 5 campi e NON il PDF full
+     // text. Senza pdf_full_text il writer non aveva contesto per cercare i
+@@ -923,6 +1017,10 @@ const processContact = async (
+   if (typeof contact.ai_risk_score_numeric === "number") {
+     packet.draft_risk_score = contact.ai_risk_score_numeric;
+   }
++  if (!shouldUseAiValidators()) {
++    await persistDeterministicValidation(supabase, contact);
++    return;
++  }
+   const results = await runAllAgents(packet);
+   const aggregated = aggregateResults(results);
+ 
+@@ -1022,7 +1120,9 @@ const main = async () => {
+     return;
+   }
+ 
+-  console.log(`[worker] polling every ${WORKER_POLL_MS}ms`);
++  console.log(
++    `[worker] polling every ${WORKER_POLL_MS}ms · OUTREACH_AI_MODE=${AI_MODE}`
++  );
+   while (true) {
+     await runCycle().catch((error) => {
+       console.error("[worker] cycle failed", error);
+diff --git a/local-worker/tests/runTests.ts b/local-worker/tests/runTests.ts
+index 8fe5a91..95ba5ab 100644
+--- a/local-worker/tests/runTests.ts
++++ b/local-worker/tests/runTests.ts
+@@ -3,6 +3,8 @@ import { aggregateResults } from "../aggregateResults";
+ import type { AgentRunResult } from "../agents/shared";
+ import { parseAgentOutput } from "../agents/shared";
+ import { parseTriageOutput } from "../agents/triageContact";
++import { findForbiddenInBody, runWriterDraft } from "../agents/writerDraft";
++import { findPublicEmail } from "../enrichment/findPublicEmail";
+ import type { AiAgentName } from "../../src/lib/aiOutreach";
+ 
+ type Override = Partial<AgentRunResult>;
+@@ -37,6 +39,7 @@ const validJson = JSON.stringify({
+ });
+ 
+ let testCount = 0;
++const asyncTests: Array<() => Promise<void>> = [];
+ const run = (label: string, fn: () => void) => {
+   testCount += 1;
+   try {
+@@ -49,6 +52,22 @@ const run = (label: string, fn: () => void) => {
+   }
+ };
+ 
++const runAsync = async (label: string, fn: () => Promise<void>) => {
++  testCount += 1;
++  try {
++    await fn();
++    console.log(`ok ${testCount} - ${label}`);
++  } catch (error) {
++    console.error(`not ok ${testCount} - ${label}`);
++    console.error(error);
++    process.exitCode = 1;
++  }
++};
++
++const queueAsync = (label: string, fn: () => Promise<void>) => {
++  asyncTests.push(() => runAsync(label, fn));
++};
++
+ // --- parseAgentOutput ---
+ 
+ run("parser: JSON invalido => failed=true", () => {
+@@ -304,8 +323,143 @@ run("triage: estrae JSON da markdown fences + confidence di default", () => {
+   }
+ });
+ 
+-if (process.exitCode === 1) {
+-  console.error(`\n${testCount} test eseguiti, almeno uno fallito.`);
+-  process.exit(1);
+-}
+-console.log(`\n${testCount} test passati.`);
++// --- OUTREACH_AI_MODE=minimal ---
++
++process.env.OUTREACH_AI_MODE = "minimal";
++
++queueAsync("minimal writer: Iván Vescovo, bozza EN senza Claude/Codex", async () => {
++  const draft = await runWriterDraft(
++    {
++      name: "Iván Vescovo",
++      email: "ivan@example.com",
++      company: "3000 km en bicicleta",
++      source_link: null,
++      notes: "Argentina",
++      language: null,
++      role: "Regista",
++      section: "cinema",
++      verified_facts_json: {
++        film: "3000 km en bicicleta",
++        festival: "74° Trento Film Festival 2026",
++      },
++      email_confidence: 0.85,
++      email_enrichment_status: "found_public",
++      prompt_master_rules:
++        'Sono registi del "74° Trento Film Festival 2026".',
++    },
++    process.cwd()
++  );
++  assert.ok(!("error" in draft));
++  if (!("error" in draft)) {
++    assert.match(draft.body, /^Hi Iván,/);
++    assert.match(
++      draft.body,
++      /I saw your "3000 km en bicicleta" at the 74° Trento Film Festival 2026/
++    );
++    assert.equal(draft.sources.length, 0);
++    assert.equal(findForbiddenInBody(draft.body, ["proposta"]).length, 0);
++    assert.match(draft.reason, /Bozza deterministica/);
++  }
++});
++
++queueAsync("minimal writer: Elettra Gallone, bozza IT dal contesto Italia", async () => {
++  const draft = await runWriterDraft(
++    {
++      name: "Elettra Gallone",
++      email: "elettra@example.com",
++      company: "After the Bridge",
++      source_link: null,
++      notes: "Italia · 2024",
++      language: null,
++      role: "Regista",
++      section: "cinema",
++      verified_facts_json: {
++        film: "After the Bridge",
++        festival: "74° Trento Film Festival 2026",
++      },
++      email_confidence: 0.85,
++      email_enrichment_status: "found_public",
++      prompt_master_rules:
++        'Sono registi del "74° Trento Film Festival 2026".',
++    },
++    process.cwd()
++  );
++  assert.ok(!("error" in draft));
++  if (!("error" in draft)) {
++    assert.match(draft.body, /^Salve Elettra,/);
++    assert.match(
++      draft.body,
++      /Ho visto il suo "After the Bridge" al 74° Trento Film Festival 2026/
++    );
++    assert.match(draft.subject, /Musica per After the Bridge/);
++    assert.match(draft.reason, /nessun claim aggiunto da AI/);
++  }
++});
++
++queueAsync("minimal writer: duo Zhang & Knight resta un contatto", async () => {
++  const draft = await runWriterDraft(
++    {
++      name: "Zhang & Knight",
++      email: "duo@example.com",
++      company: "Mountain Memory",
++      source_link: null,
++      notes: "United Kingdom",
++      language: null,
++      role: "Regista",
++      section: "cinema",
++      verified_facts_json: {
++        film: "Mountain Memory",
++        festival: "74° Trento Film Festival 2026",
++      },
++      email_confidence: 0.85,
++      email_enrichment_status: "found_public",
++      prompt_master_rules:
++        'Sono registi del "74° Trento Film Festival 2026".',
++    },
++    process.cwd()
++  );
++  assert.ok(!("error" in draft));
++  if (!("error" in draft)) {
++    assert.match(draft.body, /^Hi Zhang,/);
++    assert.match(draft.body, /"Mountain Memory"/);
++    assert.match(draft.reason, /Bozza deterministica/);
++  }
++});
++
++queueAsync("minimal enrichment: usa solo web, niente Claude/Codex", async () => {
++  const previousPath = process.env.PATH;
++  process.env.PATH = "/usr/bin:/bin";
++  try {
++    const result = await findPublicEmail(
++      {
++        name: "Regista Test Senza Email Pubblica Xyzqv",
++        company: "Film Test Non Esistente Xyzqv",
++        source_link: null,
++        notes: null,
++        city: null,
++        language: null,
++        pdf_full_text:
++          "Regista Test Senza Email Pubblica Xyzqv · Film Test Non Esistente Xyzqv",
++        source_file: "test-minimal.txt",
++      },
++      process.cwd()
++    );
++    assert.match(result.reason, /\bweb:/);
++    assert.doesNotMatch(result.reason, /\bclaude:/i);
++    assert.doesNotMatch(result.reason, /\bcodex:/i);
++  } finally {
++    process.env.PATH = previousPath;
++  }
++});
++
++void (async () => {
++  for (const test of asyncTests) {
++    await test();
++  }
++
++  if (process.exitCode === 1) {
++    console.error(`\n${testCount} test eseguiti, almeno uno fallito.`);
++    process.exit(1);
++  }
++  console.log(`\n${testCount} test passati.`);
++})();
+diff --git a/src/components/CrmApp.tsx b/src/components/CrmApp.tsx
+index 7ff77c6..9ba4fad 100644
+--- a/src/components/CrmApp.tsx
++++ b/src/components/CrmApp.tsx
+@@ -3796,7 +3796,7 @@ export default function CrmApp({
+             </div>
+             <div>
+               <div className="text-base font-semibold text-[var(--ink)]">
+-                Importa PDF · 3 AI lavorano per te
++                Importa PDF · worker controllato
+               </div>
+               <div className="mt-0.5 text-xs text-[var(--muted)]">
+                 Trascina un PDF con la lista registi → cerco i contatti, controllo, scrivo le email. Tu approvi.
+diff --git a/src/components/outreach/AiOutreachImport.tsx b/src/components/outreach/AiOutreachImport.tsx
+index cce5818..1549557 100644
+--- a/src/components/outreach/AiOutreachImport.tsx
++++ b/src/components/outreach/AiOutreachImport.tsx
+@@ -238,7 +238,7 @@ export function AiOutreachImport({
+           </h3>
+           <p className="mt-1 text-xs text-[var(--muted)]">
+             Trascina uno o più file (PDF, CSV, TXT, JSON). Il worker locale
+-            cerca email mancanti su fonti pubbliche e i 3 agenti CLI validano
++            cerca email mancanti su fonti pubbliche e valida le bozze
+             ogni bozza.
+           </p>
+         </div>
+diff --git a/src/components/outreach/OutreachBatchClient.tsx b/src/components/outreach/OutreachBatchClient.tsx
+index 548e387..cc2cca6 100644
+--- a/src/components/outreach/OutreachBatchClient.tsx
++++ b/src/components/outreach/OutreachBatchClient.tsx
+@@ -54,9 +54,9 @@ const summarizeStatus = (status: string | null) => {
+     case "processing":
+       return "In lavorazione — sta cercando l'email e scrivendo la bozza";
+     case "draft_ready":
+-      return "Bozza generata — i 3 agenti la stanno controllando";
++      return "Bozza generata — controlli in corso";
+     case "approved":
+-      return "Pronto: i 3 agenti hanno approvato";
++      return "Pronto: controlli superati";
+     case "needs_review":
+       return "Serve la tua review";
+     case "blocked":
+@@ -721,7 +721,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
+             />
+             <div className="text-sm font-semibold text-[var(--ink)]">
+               {isWorking
+-                ? "Le 3 AI stanno lavorando — aggiornamento ogni 3 secondi"
++                ? "Il worker sta lavorando — aggiornamento ogni 3 secondi"
+                 : "Tutto pronto per la tua revisione"}
+             </div>
+             <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px]">
+@@ -738,7 +738,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
+               <span className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2 py-1 font-medium text-[var(--muted-strong)]">
+                 <span className="text-[var(--ink)] tabular-nums">{counts.processed}</span>
+                 <span className="text-[var(--muted)]"> / {counts.total}</span>
+-                <span className="ml-1 text-[var(--muted)]">validati dalle 3 AI</span>
++                <span className="ml-1 text-[var(--muted)]">validati</span>
+               </span>
+             </div>
+           </div>
+diff --git a/src/components/outreach/OutreachImportClient.tsx b/src/components/outreach/OutreachImportClient.tsx
+index 5fbfc04..e2932d9 100644
+--- a/src/components/outreach/OutreachImportClient.tsx
++++ b/src/components/outreach/OutreachImportClient.tsx
+@@ -254,10 +254,18 @@ export function OutreachImportClient() {
+       block.rows.forEach((row) => rowToBlock.set(row, block));
+     });
+ 
++    const f = festival.trim();
+     const contactsPayload = allRows
+       .filter((row) => row.name?.trim() || row.email?.trim())
+       .map((row) => {
+         const block = rowToBlock.get(row);
++        const verifiedFacts: Record<string, string> = {};
++        if (block?.raw_text) {
++          verifiedFacts.pdf_full_text = block.raw_text;
++          verifiedFacts.source_file = block.file_name;
++        }
++        if (row.company?.trim()) verifiedFacts.film = row.company.trim();
++        if (f) verifiedFacts.festival = f;
+         return {
+           name:
+             row.name?.trim() || row.email?.split("@")[0] || "(senza nome)",
+@@ -266,12 +274,7 @@ export function OutreachImportClient() {
+           notes: row.notes,
+           section,
+           sourceLink: row.source_link,
+-          verifiedFactsJson: block?.raw_text
+-            ? {
+-                pdf_full_text: block.raw_text,
+-                source_file: block.file_name,
+-              }
+-            : {},
++          verifiedFactsJson: verifiedFacts,
+           email_source_url: row.email_source_url,
+           email_confidence: row.email_confidence,
+           email_status: row.email_status,
+@@ -279,7 +282,6 @@ export function OutreachImportClient() {
+         };
+       });
+ 
+-    const f = festival.trim();
+     const festivalInstruction = f
+       ? `Sono registi del "${f}". Cerca info SOLO sui loro film di quel festival (scheda ufficiale, sinossi, recensioni): i film NON sono guardabili online, è normale. APERTURA OBBLIGATORIA — UNA SOLA, SOSTITUISCE "navigando online" (mai tutte e due): di' che hai visto il loro film al "${f}" e che hai provato ad avvicinarti di persona ma non ci sei riuscito. Spirito ESATTO — EN: «I saw your "(title)" at the ${f} and I tried to get close to you but I couldn't.» · IT: «Ho visto il suo "(titolo)" al ${f} e ho provato ad avvicinarla di persona, ma non ci sono riuscito.» Usa il TITOLO dal contesto e il nome ESATTO "${f}"; NON inventare numeri/edizioni del festival.`
+       : "";
+@@ -458,9 +460,9 @@ export function OutreachImportClient() {
+ 
+             <p className="mb-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[11px] leading-relaxed text-[var(--muted-strong)]">
+               Questo è solo un riepilogo di ciò che è stato letto. Non devi
+-              sistemare niente a mano: le 3 AI cercano le email, scrivono le
+-              bozze e <span className="font-medium text-[var(--ink)]">scartano
+-              da sole</span> le righe che non sono registi reali (titoli di
++              sistemare niente a mano: il worker cerca le email, scrive le
++              bozze e <span className="font-medium text-[var(--ink)]">scarta
++              automaticamente</span> le righe che non sono registi reali (titoli di
+               film, nazioni, intestazioni). Se un intero file è sbagliato puoi
+               rimuoverlo.
+             </p>
+@@ -577,7 +579,7 @@ export function OutreachImportClient() {
+               <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
+                 3
+               </span>
+-              <span>Avvia le 3 AI</span>
++              <span>Avvia il worker</span>
+             </div>
+             <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5">
+               <div className="grid gap-4 sm:grid-cols-3">
+@@ -619,8 +621,8 @@ export function OutreachImportClient() {
+                     </div>
+                     <div className="text-[var(--muted-strong)]">
+                       <span className="font-medium text-[var(--ink)]">1.</span> Il worker sul tuo Mac inizia a cercare su internet le {totals.withoutEmail} email mancanti.{" "}
+-                      <span className="font-medium text-[var(--ink)]">2.</span> Il Writer Claude scrive una bozza personalizzata per ciascun contatto.{" "}
+-                      <span className="font-medium text-[var(--ink)]">3.</span> I 3 agenti (Claude, Codex, Gemini) controllano ogni bozza.{" "}
++                      <span className="font-medium text-[var(--ink)]">2.</span> Il template sicuro scrive una bozza senza inventare dettagli.{" "}
++                      <span className="font-medium text-[var(--ink)]">3.</span> Il codice controlla email, parole vietate e campi obbligatori.{" "}
+                       <span className="font-medium text-[var(--ink)]">4.</span> Tu approvi nella prossima schermata. Nessuna email parte automaticamente.
+                     </div>
+                   </div>

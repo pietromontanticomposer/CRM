@@ -14,6 +14,7 @@ import {
   runWriterDraft,
   sanitizeMailBody,
   findForbiddenInBody,
+  unsupportedClaims,
   type WriterDraftResult,
 } from "./agents/writerDraft";
 import { runContactTriage } from "./agents/triageContact";
@@ -849,6 +850,52 @@ const processContact = async (
           `${logPrefix(contact)} writer ha usato parole vietate [${forbiddenHits.join(
             ", "
           )}] - rigenero (tentativo ${fbAttempts + 1}/${MAX_WRITER_RETRIES + 1})`
+        );
+        return;
+      }
+    }
+
+    // COMPLIMENTO A PROVA DI INVENZIONE (Pietro+codex 2026-06-11): ogni dettaglio
+    // concreto del complimento deve avere una `source_quote` copiata dalla sinossi.
+    // Qui verifichiamo DETERMINISTICAMENTE che ogni citazione sia davvero nella
+    // sinossi. Se un dettaglio non ha fonte reale, RIGENERO (riparazione) dicendo
+    // allo scrittore di NON includerlo. Cosi' le mail non vengono piu' scartate
+    // perche' lo scrittore ha aggiunto una parola di troppo: o e' documentata, o
+    // sparisce prima ancora di arrivare ai validatori.
+    {
+      const cf =
+        contact.verified_facts_json &&
+        typeof contact.verified_facts_json === "object" &&
+        !Array.isArray(contact.verified_facts_json)
+          ? (contact.verified_facts_json as Record<string, unknown>)
+          : {};
+      const synopsis =
+        typeof cf.film_synopsis === "string" ? cf.film_synopsis : null;
+      const filmTitle = typeof cf.film === "string" ? cf.film : null;
+      const bad = unsupportedClaims(
+        writerOutcome.compliment_claims ?? [],
+        synopsis,
+        filmTitle
+      );
+      const clAttempts = Number(contact.ai_attempts ?? 0);
+      if (bad.length > 0 && clAttempts < MAX_WRITER_RETRIES) {
+        const avoid = [
+          ...((Array.isArray(cf.avoid_details) ? cf.avoid_details : []) as string[]),
+          ...bad.map((c) => c.detail),
+        ];
+        const nextFacts = { ...cf, avoid_details: [...new Set(avoid)] };
+        await supabase
+          .from("outreach_drafts")
+          .update({
+            ai_status: "draft_ready",
+            ai_attempts: clAttempts + 1,
+            verified_facts_json: nextFacts,
+          })
+          .eq("id", contact.id);
+        console.warn(
+          `${logPrefix(contact)} complimento con dettagli SENZA fonte [${bad
+            .map((c) => c.detail)
+            .join(", ")}] - rigenero (tentativo ${clAttempts + 1}/${MAX_WRITER_RETRIES + 1})`
         );
         return;
       }

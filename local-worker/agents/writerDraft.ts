@@ -46,6 +46,11 @@ export type WriterDraftResult = {
   // Fonti pubbliche aperte per verificare lavoro/complimento. SOLO per la
   // revisione di Pietro: non entrano MAI nella mail inviata.
   sources: string[];
+  // AUTO-CITAZIONE (Pietro+codex 2026-06-11): per OGNI dettaglio specifico del
+  // complimento, la frase-fonte ESATTA copiata dalla sinossi/titolo che lo
+  // sostiene. Il codice verifica che ogni source_quote sia davvero nella
+  // sinossi: cosi' lo scrittore non puo' aggiungere dettagli inventati.
+  compliment_claims: Array<{ detail: string; source_quote: string }>;
   // Profilo regista (stima dal materiale trovato): livello + motivo + foto.
   director_tier: DirectorTier;
   director_tier_reason: string;
@@ -155,6 +160,53 @@ const normalizeSources = (value: unknown): string[] => {
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter((entry) => entry.length > 0)
     .slice(0, 20);
+};
+
+type ComplimentClaim = { detail: string; source_quote: string };
+const normalizeClaims = (value: unknown): ComplimentClaim[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((e) => {
+      if (!e || typeof e !== "object") return null;
+      const rec = e as Record<string, unknown>;
+      const detail = typeof rec.detail === "string" ? rec.detail.trim() : "";
+      const sq =
+        typeof rec.source_quote === "string" ? rec.source_quote.trim() : "";
+      return detail && sq ? { detail, source_quote: sq } : null;
+    })
+    .filter((x): x is ComplimentClaim => x !== null)
+    .slice(0, 12);
+};
+
+// Normalizza per il confronto: minuscolo, via accenti e punteggiatura, spazi
+// singoli. Cosi' una citazione copiata dalla sinossi combacia anche con piccole
+// differenze di formattazione.
+const normForQuote = (s: string): string =>
+  (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// VERIFICA DETERMINISTICA (Pietro+codex 2026-06-11): ogni `source_quote` del
+// complimento deve trovarsi DAVVERO nella sinossi (o nel titolo). Ritorna i
+// claim NON supportati = dettagli che lo scrittore ha aggiunto senza fonte
+// reale. Se non c'e' sinossi da confrontare, ritorna [] (non si blocca qui:
+// senza fonte il complimento e' gia' limitato al tema del titolo).
+export const unsupportedClaims = (
+  claims: ComplimentClaim[],
+  synopsis: string | null,
+  title: string | null
+): ComplimentClaim[] => {
+  const hay = normForQuote(`${synopsis ?? ""} ${title ?? ""}`);
+  if (hay.length < 20) return [];
+  return claims.filter((c) => {
+    const q = normForQuote(c.source_quote);
+    if (q.length < 6) return true; // citazione troppo corta = inaffidabile
+    return !hay.includes(q);
+  });
 };
 
 // HOST ammessi nel corpo (firma di Pietro). Controllo sull'HOST vero, non
@@ -287,6 +339,7 @@ const parseDraftOutput = (
     body: cleanedBody,
     link_visione: link_visione.trim() || "non disponibile",
     sources: normalizeSources(parsed.sources),
+    compliment_claims: normalizeClaims(parsed.compliment_claims),
     director_tier: normalizeTier(parsed.director_tier),
     director_tier_reason:
       typeof parsed.director_tier_reason === "string"
