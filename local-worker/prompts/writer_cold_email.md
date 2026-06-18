@@ -73,15 +73,10 @@ PASSAGGIO 2 — ACCESSO AL LAVORO CITATO
 * URL visione verificato e coerente?
 
 PASSAGGIO 3 — RIFERIMENTI MUSICALI
-Per ciascuno dei 3 film:
-* Il film esiste?
-* Titolo corretto?
-* Compositore corretto? (il nome che metti tra parentesi è DAVVERO il compositore della colonna sonora di QUEL film, verificato in sessione, non inventato)
-* Genere coerente col progetto?
-
-Se hai dubbio anche su UNO dei 3 film:
-* cambialo
-* oppure NON SCRIVERE la mail (resta generico nel BLOCCO BASE)
+NON è più compito tuo. I 3 riferimenti musicali li sceglie il CODICE da una
+libreria verificata e li inserisce al posto del placeholder `{{MUSICAL_REFS}}`.
+Tu nel BLOCCO BASE scrivi SOLO `{{MUSICAL_REFS}}` e NON fai nomi di film o
+compositori. (Così non si sbaglia mai un compositore e non si pescano cliché.)
 
 ═══════════════════════════════════════════
 INPUT
@@ -372,7 +367,9 @@ NON è interamente fisso: l'UNICA parte che cambia a ogni mail sono le 3 ispiraz
 ```
 Le scrivo perché mi farebbe piacere capire se potremmo essere un buon match creativo per eventuali suoi prossimi progetti.
 
-Amo aiutare i registi a raccontare la loro storia attraverso una colonna sonora originale che sostenga davvero il racconto e l'emozione del film, senza sovraccaricarlo. Il mio suono si muove tra orchestrale, ambient ed elettronico, con un approccio molto narrativo e attento al ritmo interno delle scene. Per il suo progetto, ad esempio, potrei immaginare un sound ispirato a (QUESTA è la parte VARIABILE che CAMBIA in ogni mail. Scegli 3 film coerenti col genere e col tono di QUESTO progetto e, per ciascuno, scrivi tra parentesi il nome del compositore della colonna sonora. Formato esatto nell'output: 'Titolo del film (Nome Compositore)'. I film devono essere NOTI e riconoscibili, con una colonna sonora di rilievo: vanno benissimo i titoli conosciuti del genere, anche i più classici (es. per un horror The Witch e simili). NON scegliere film oscuri o di nicchia solo per sembrare originale. Film, compositore e anno vanno VERIFICATI in sessione: se non riesci a verificare titolo + compositore, scrivi "un sound originale tarato sul tono del progetto" senza fare nomi).
+Amo aiutare i registi a raccontare la loro storia attraverso una colonna sonora originale che sostenga davvero il racconto e l'emozione del film, senza sovraccaricarlo. Il mio suono si muove tra orchestrale, ambient ed elettronico, con un approccio molto narrativo e attento al ritmo interno delle scene. Per il suo progetto, ad esempio, potrei immaginare un sound ispirato a {{MUSICAL_REFS}}.
+
+   ⚠️ I RIFERIMENTI MUSICALI NON LI SCEGLI TU. Lascia ESATTAMENTE il placeholder `{{MUSICAL_REFS}}` (così com'è, con le doppie graffe): i 3 riferimenti `Titolo (Compositore)` li sceglie e li inserisce il CODICE, da una libreria curata e verificata, in base al tono del film. **NON scrivere nomi di film o compositori nel body**: qualunque nome tu metta verrebbe ignorato o ti farebbe scartare. Tu scrivi solo `{{MUSICAL_REFS}}`.
 
 Sul mio sito trova showreel e casi studio, mentre su Instagram condivido brevi estratti dei lavori più recenti.
 
@@ -508,7 +505,7 @@ GIRO 5 — coerenza subject ↔ body:
 * Pick ONE lavoro e stai su quello. NON mischiare due lavori diversi.
 
 GIRO 6 — vincoli formali:
-* lunghezza body: OBIETTIVO ≤ 270 parole (saluto+firma inclusi). La lunghezza NON fa più bocciare la mail, quindi non sacrificare i contenuti che contano per stare corto. I 3 ESEMPI MUSICALI (`Titolo (Compositore)`) vanno SEMPRE messi quando riesci a verificarli: NON toglierli per accorciare. Se la mail è troppo lunga, accorcia il COMPLIMENTO o le frasi del BLOCCO BASE, MAI i 3 esempi. Usa la frase generica `un sound originale tarato sul tono del progetto` SOLO quando non riesci a verificare 3 film+compositore (non per questioni di lunghezza).
+* lunghezza body: OBIETTIVO ≤ 270 parole (saluto+firma inclusi). La lunghezza NON fa più bocciare la mail: se è troppo lunga accorcia il COMPLIMENTO o le frasi del BLOCCO BASE. Il placeholder `{{MUSICAL_REFS}}` resta SEMPRE (lo riempie il codice): NON toglierlo, NON sostituirlo con nomi di film/compositori.
 * il `body` è SOLO la mail e finisce con la CHIUSURA NELLA STESSA LINGUA DEL CORPO: mail in ITALIANO → `Un saluto,` poi `Pietro`; mail in INGLESE → `Best,` poi `Pietro`. **MAI** `Un saluto,` su una mail in inglese (è un ERRORE che fa bocciare la mail): se il corpo è in inglese, la chiusura DEVE essere `Best,`. **NON mettere nel body nessuna riga "Link visione" né elenchi di fonti/URL**: sono campi separati (`link_visione`, `sources`) che NON vengono spediti. Il body deve essere esattamente il testo che parte al destinatario, niente di più.
 
 GIRO 7 — niente METADATI inventati:

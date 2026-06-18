@@ -17,6 +17,7 @@ import {
   unsupportedClaims,
   type WriterDraftResult,
 } from "./agents/writerDraft";
+import { injectMusicReferences } from "./musicReferences";
 import { runContactTriage } from "./agents/triageContact";
 import {
   findPublicEmail,
@@ -828,6 +829,27 @@ const processContact = async (
         `${logPrefix(contact)} writer fallito - ${writerOutcome.error}`
       );
       return;
+    }
+
+    // RIFERIMENTI MUSICALI SCELTI DAL CODICE (Pietro+codex 2026-06-11): lo
+    // scrittore lascia il placeholder {{MUSICAL_REFS}}; qui il codice inietta i
+    // 3 riferimenti scelti DETERMINISTICAMENTE dalla libreria verificata, in base
+    // al tono del film. Zero AI, zero cliché, zero compositori inventati.
+    {
+      const mf =
+        contact.verified_facts_json &&
+        typeof contact.verified_facts_json === "object" &&
+        !Array.isArray(contact.verified_facts_json)
+          ? (contact.verified_facts_json as Record<string, unknown>)
+          : {};
+      const filmText = [
+        typeof mf.film_synopsis === "string" ? mf.film_synopsis : "",
+        typeof mf.film === "string" ? mf.film : "",
+        contact.notes ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      writerOutcome.body = injectMusicReferences(writerOutcome.body, filmText);
     }
 
     // PAROLE VIETATE (controllo meccanico DETERMINISTICO, non affidato all'AI):
