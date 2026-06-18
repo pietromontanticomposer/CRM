@@ -162,7 +162,10 @@ gira solo sulle bozze con email certa — sostenibile su batch piccoli.
 > semplice, senza compiti tecnici a me e senza chiedermi cose che puoi decidere
 > tu. Non dirmi "hai ragione" a vuoto: sii diretto, verifica prima di consegnare.
 >
-> **PROGETTO:** `crm-next` in `/Users/pietromontanti/Desktop/Progetti Vari/crm-next`.
+> **PROGETTO:** `crm-next` in `/Users/pietromontanti/crm-next` (SPOSTATO qui il
+> 2026-06-11, FUORI dal Desktop iCloud che faceva sparire la cartella; le vecchie
+> copie in `Desktop/Progetti Vari/crm-next` e `Desktop/Scrivania.../crm-next` sono
+> STALE, da cestinare). Il launcher "Avvia CRM" sul Desktop punta a `~/crm-next`.
 > CRM per cold-email a registi di festival. Io carico un PDF di registi sul sito →
 > un "worker" locale, per ogni regista, cerca l'email pubblica, scrive una mail
 > personalizzata e la fa controllare da 2 validatori → io rivedo e approvo. GitHub
