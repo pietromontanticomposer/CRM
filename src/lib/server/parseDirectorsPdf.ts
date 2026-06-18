@@ -109,15 +109,26 @@ const assignColumn = (x: number, a: ColAnchors): ColKey => {
   return best;
 };
 
-// Spezza una cella REGISTA/I in registi singoli: "A, B, C" -> 3. NON spezza
-// sull'"&": un duo come "Zhang & Knight" resta UN UNICO contatto (spezzarlo
-// produceva due righe inutili "Zhang" e "Knight", impossibili da cercare).
-// NON spezza i nomi con trattino ("Jean-Gabriel Leynaud").
-const splitDirectors = (raw: string): string[] =>
-  raw
-    .split(/\s*,\s*/)
-    .map((s) => s.replace(/\s+/g, " ").trim())
-    .filter((s) => s.length > 1 && !/^n\/?d$/i.test(s));
+// Spezza una cella REGISTA/I in registi singoli.
+// - Sempre sulla VIRGOLA: "A, B, C" -> 3.
+// - Sull'"&" SOLO se entrambi i lati sono NOMI COMPLETI (≥2 parole): cosi'
+//   "Alice Rossi & Marco Bianchi" -> 2 registi, ma un duo a cognome singolo come
+//   "Zhang & Knight" resta UN UNICO contatto (spezzarlo dava due righe inutili
+//   "Zhang"/"Knight", impossibili da cercare). (regola affinata con codex 2026-06-11)
+// - NON spezza i nomi con trattino ("Jean-Gabriel Leynaud").
+const isFullName = (s: string): boolean =>
+  s.trim().split(/\s+/).filter(Boolean).length >= 2;
+const splitDirectors = (raw: string): string[] => {
+  const out: string[] = [];
+  for (const part of raw.split(/\s*,\s*/)) {
+    const cell = part.replace(/\s+/g, " ").trim();
+    const amp = cell.split(/\s+&\s+/);
+    // splitta sull'& solo se TUTTI i pezzi sembrano nomi completi
+    if (amp.length > 1 && amp.every(isFullName)) out.push(...amp.map((s) => s.trim()));
+    else out.push(cell);
+  }
+  return out.filter((s) => s.length > 1 && !/^n\/?d$/i.test(s));
+};
 
 // Sezioni di OMAGGIO/retrospettiva: classici e registi celebri (spesso deceduti)
 // a cui il festival rende omaggio. NON sono contatti per cold outreach (es.
@@ -226,8 +237,16 @@ export const parseDirectorsPdf = async (
             .trim();
         const title = colJoin("title");
         const section = colJoin("section");
-        // Salta gli OMAGGIO/retrospettive: non sono registi da contattare.
-        if (HOMAGE_SECTION.test(section)) continue;
+        // Salta gli OMAGGIO/retrospettive SOLO se il film è anche VECCHIO
+        // (≥15 anni fa): così si scartano i classici (Pollack 1979, Redford 1998)
+        // ma si TIENE un eventuale omaggio a un regista vivo con un film recente
+        // — che è contattabile. (regola affinata con codex 2026-06-11)
+        const filmYear = parseInt(colJoin("year").replace(/[^0-9]/g, "").slice(0, 4), 10);
+        const isOldFilm =
+          Number.isFinite(filmYear) &&
+          filmYear > 1900 &&
+          filmYear < new Date().getFullYear() - 15;
+        if (HOMAGE_SECTION.test(section) && isOldFilm) continue;
         const director = colJoin("director");
         const names = splitDirectors(director);
         if (names.length === 0) continue;
