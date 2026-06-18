@@ -184,45 +184,13 @@ const deleteDraftRow = async (id: string) => {
   });
 };
 
-// Pietro 2026-06-05: outreach_drafts e' uno SPAZIO DI LAVORO TEMPORANEO. Quando
-// Pietro APPROVA una bozza, questa viene SPOSTATA in `contacts` (permanente, via
-// /api/outreach/drafts/[id]/approve) e cancellata da qui. Quindi TUTTO cio' che
-// resta in outreach_drafts e' roba NON approvata da lui e NON deve sopravvivere
-// alla sessione: si svuota alla chiusura del worker. ATTENZIONE: i contatti
-// approvati sono al sicuro in `contacts`, qui non si perde NULLA di approvato.
-const wipeAllDrafts = async (reason: string): Promise<number> => {
-  const url = process.env.SUPABASE_URL?.trim();
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) return 0;
-  try {
-    const res = await retryingFetch(
-      `${url}/rest/v1/outreach_drafts?id=not.is.null`,
-      {
-        method: "DELETE",
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-          Prefer: "return=representation",
-        },
-      }
-    );
-    if (!res.ok) {
-      console.warn(
-        `[worker] PULIZIA (${reason}) FALLITA: HTTP ${res.status}. I draft non approvati potrebbero essere RIMASTI.`
-      );
-      return 0;
-    }
-    const body = (await res.json().catch(() => [])) as unknown[];
-    const n = Array.isArray(body) ? body.length : 0;
-    console.warn(
-      `[worker] PULIZIA (${reason}): cancellati ${n} draft NON approvati.`
-    );
-    return n;
-  } catch (error) {
-    console.warn(`[worker] PULIZIA (${reason}) fallita:`, error);
-    return 0;
-  }
-};
+// outreach_drafts e' uno SPAZIO DI LAVORO. Quando Pietro APPROVA una bozza, viene
+// SPOSTATA in `contacts` (permanente, via /api/outreach/drafts/[id]/approve) e
+// cancellata da qui. Le bozze NON approvate RESTANO finche' Pietro non le approva,
+// le scarta a mano, o invecchiano oltre il TTL (vedi wipeStaleDrafts). NIENTE
+// svuotamento alla chiusura del worker (vedi gracefulShutdown): chiudere la
+// finestra NON deve mai distruggere un batch. [Wipe-on-close rimosso 2026-06-11
+// dopo che un SIGHUP cancello' un intero batch di 123 registi.]
 
 // Backstop all'avvio: ripulisce SOLO i draft "vecchi" — leftover di una sessione
 // morta male (crash o kill -9, senza shutdown pulito) — senza toccare gli import
@@ -1041,22 +1009,13 @@ const LOCK_FILE = path.join(PROJECT_ROOT, ".local-worker.lock");
 // per sbaglio i contatti appena importati. Solo una chiusura VERA (Ctrl-C,
 // finestra chiusa, kill) — senza successore — svuota i draft.
 const HANDOVER_FILE = path.join(PROJECT_ROOT, ".local-worker.handover");
+// Default 30 GIORNI (Pietro 2026-06-11 + codex): l'utente può metterci giorni a
+// revisionare un batch. Un TTL di poche ore cancellava il batch al riavvio. La
+// pulizia automatica tocca SOLO i veri abbandonati vecchi di un mese.
 const STALE_DRAFT_HOURS = Math.max(
   0.25,
-  Number(process.env.OUTREACH_DRAFT_STALE_HOURS) || 2
+  Number(process.env.OUTREACH_DRAFT_STALE_HOURS) || 24 * 30
 );
-const isHandoverInProgress = (): boolean => {
-  try {
-    if (!existsSync(HANDOVER_FILE)) return false;
-    const ageMs = Date.now() - statSync(HANDOVER_FILE).mtimeMs;
-    if (ageMs > 20_000) return false; // handover stantio: ignoralo
-    const pid = Number.parseInt(readFileSync(HANDOVER_FILE, "utf8").trim(), 10);
-    return Number.isFinite(pid) && pid !== process.pid;
-  } catch {
-    return false;
-  }
-};
-
 const acquireLock = (): boolean => {
   if (existsSync(LOCK_FILE)) {
     try {
@@ -1182,15 +1141,15 @@ const gracefulShutdown = async (signal: string, exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
   try {
-    if (ONCE) {
-      /* modalita' test: non toccare il DB */
-    } else if (isHandoverInProgress()) {
-      console.warn(
-        `[worker] ${signal}: takeover in corso, passo i draft al nuovo worker (NON svuoto).`
-      );
-    } else {
-      await wipeAllDrafts(`worker chiuso: ${signal}`);
-    }
+    // CHIUSURA NON DISTRUTTIVA (Pietro 2026-06-11 + codex): chiudere il worker —
+    // anche solo SIGHUP (finestra del Terminale chiusa), o un deploy, o lo sleep
+    // del Mac — NON deve MAI cancellare il batch. Le bozze NON approvate RESTANO
+    // in DB: al riavvio il worker le riprende. La pulizia avviene solo (a) allo
+    // start per i veri abbandonati >30gg, (b) su azione esplicita dell'utente.
+    // [INCIDENTE 2026-06-11: un SIGHUP cancellò un intero batch di 123 registi.]
+    console.warn(
+      `[worker] ${signal}: chiusura. Le bozze NON approvate RESTANO in DB (nessun wipe).`
+    );
   } finally {
     releaseLock();
     process.exit(exitCode);
@@ -1204,13 +1163,15 @@ process.on("SIGHUP", () => void gracefulShutdown("SIGHUP"));
 process.on("exit", releaseLock);
 
 const bootstrap = async () => {
-  // Backstop avvio: ripulisce i leftover di una sessione morta male (crash/-9)
-  // senza toccare import freschi. Non in --once (test), non su takeover (i
-  // draft del predecessore sono validi e li sto ereditando).
+  // Backstop avvio: ripulisce SOLO i leftover VECCHI (>30gg). I draft rimasti
+  // "processing" da un worker morto a meta' NON serve resettarli: la coda di
+  // lavoro (fetch) include gia' lo stato "processing", quindi vengono RIPRESI e
+  // rilavorati da soli. Non in --once (test), non su takeover (i draft del
+  // predecessore sono validi e li sto ereditando).
   if (!ONCE && !tookOver) {
     await wipeStaleDrafts(
       STALE_DRAFT_HOURS,
-      "leftover di sessione precedente"
+      "leftover di sessione precedente (>30gg)"
     );
   }
   await main();

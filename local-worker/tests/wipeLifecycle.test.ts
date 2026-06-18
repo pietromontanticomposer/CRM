@@ -1,23 +1,24 @@
 /**
- * TEST DI INTEGRAZIONE — Pietro 2026-06-05.
+ * TEST DI INTEGRAZIONE — ciclo-vita delle bozze.
  *
- * Requisito assoluto: "SE LA FINESTRA O IL WORKER SI CHIUDE SI DEVONO ELIMINARE
- * DAL DATABASE [i contatti] SE NON LI HO APPROVATI IO".
+ * REQUISITO NUOVO (Pietro 2026-06-11, dopo l'incidente: un SIGHUP cancellò un
+ * intero batch di 123 registi). La chiusura del worker — SIGTERM, SIGHUP
+ * (finestra del Terminale chiusa), deploy, sleep del Mac — NON deve MAI
+ * cancellare le bozze. outreach_drafts è lo spazio di lavoro: gli APPROVATI
+ * vengono spostati in `contacts`; i NON approvati RESTANO finché Pietro non li
+ * approva, li scarta a mano, o invecchiano oltre il TTL (30 giorni).
  *
- * outreach_drafts e' lo spazio di lavoro TEMPORANEO: tutto cio' che ci sta
- * dentro e' NON approvato (gli approvati vengono spostati in `contacts`). Questo
- * test lancia il WORKER VERO (processo reale + segnali reali + DB reale) e
- * verifica:
- *   1. SIGTERM (kill / stop)            -> svuota i draft non approvati
- *   2. SIGHUP  (finestra Terminale chiusa) -> svuota i draft non approvati
- *   3. Takeover (relaunch del worker)   -> NON svuota (handover al successore):
- *      un relaunch dopo un import non deve cancellare i contatti importati
- *   4. Backstop avvio                   -> ripulisce i leftover VECCHI (sessione
- *      morta per crash/-9) senza toccare gli import freschi
+ * Questo test lancia il WORKER VERO (processo reale + segnali reali + DB reale):
+ *   1. SIGTERM (kill / stop)              -> le bozze RESTANO
+ *   2. SIGHUP  (finestra Terminale chiusa) -> le bozze RESTANO
+ *   3. Takeover (relaunch del worker)     -> le bozze RESTANO (anche dopo che il
+ *      successore viene fermato)
+ *   4. Backstop avvio                     -> rimuove SOLO i leftover VECCHI
+ *      (>30 giorni) senza toccare gli import freschi
  *
- * Seminiamo in stato "needs_review" (in attesa di approvazione): la coda del
- * worker NON li pesca (pesca imported/draft_ready/processing), quindi restano
- * fermi nel DB ed e' lo svuotamento — non l'elaborazione — a essere testato.
+ * Seminiamo in stato "needs_review": la coda del worker NON li pesca (pesca
+ * imported/draft_ready/processing), quindi restano fermi nel DB e NON consumano
+ * AI: è il ciclo-vita (persistenza/pulizia), non l'elaborazione, a essere testato.
  */
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -82,9 +83,6 @@ const seed = async (rows: SeedRow[]) => {
 const startWorker = (
   label: string
 ): Promise<{ child: ChildProcessWithoutNullStreams; out: () => string }> => {
-  // Lanciamo il worker DIRETTAMENTE con node (loader tsx), non via "npx": cosi'
-  // il processo figlio E' il worker e riceve i segnali (incluso SIGHUP) senza
-  // wrapper che non li inoltrano.
   const child = spawn(
     process.execPath,
     ["--import", "tsx", "local-worker/run-worker.ts"],
@@ -119,7 +117,6 @@ const stopWorker = (
   new Promise((resolve) => {
     child.on("exit", () => resolve());
     child.kill(signal);
-    // fallback se non muore
     setTimeout(() => {
       try {
         child.kill("SIGKILL");
@@ -135,19 +132,19 @@ const main = async () => {
   console.log(`owner_id usato per il seed: ${ownerId ?? "(null)"}`);
   await wipeAll();
 
-  // --- TEST 1: SIGTERM svuota ---
+  // --- TEST 1: SIGTERM NON cancella ---
   await seed([{ name: "Test Alpha" }, { name: "Test Beta" }, { name: "Test Gamma" }]);
   check("setup 1: 3 draft seminati", (await countDrafts()) === 3);
   {
     const { child } = await startWorker("sigterm");
     await sleep(1000);
-    check("1: draft ancora presenti col worker vivo", (await countDrafts()) === 3);
+    check("1: draft presenti col worker vivo", (await countDrafts()) === 3);
     await stopWorker(child, "SIGTERM");
     await sleep(500);
-    check("1: SIGTERM (stop) -> draft SVUOTATI", (await countDrafts()) === 0);
+    check("1: SIGTERM (stop) -> le bozze RESTANO", (await countDrafts()) === 3);
   }
 
-  // --- TEST 2: SIGHUP (finestra chiusa) svuota ---
+  // --- TEST 2: SIGHUP (finestra chiusa) NON cancella ---
   await wipeAll();
   await seed([{ name: "Hup Uno" }, { name: "Hup Due" }]);
   {
@@ -155,10 +152,10 @@ const main = async () => {
     await sleep(1000);
     await stopWorker(child, "SIGHUP");
     await sleep(500);
-    check("2: SIGHUP (finestra chiusa) -> draft SVUOTATI", (await countDrafts()) === 0);
+    check("2: SIGHUP (finestra chiusa) -> le bozze RESTANO", (await countDrafts()) === 2);
   }
 
-  // --- TEST 3: takeover (relaunch) NON svuota (handover) ---
+  // --- TEST 3: takeover (relaunch) NON cancella, nemmeno fermando il successore ---
   await wipeAll();
   await seed([{ name: "Keep Uno" }, { name: "Keep Due" }, { name: "Keep Tre" }]);
   {
@@ -166,19 +163,16 @@ const main = async () => {
     await sleep(800);
     const b = await startWorker("B"); // fa takeover di A
     await sleep(800);
-    const afterTakeover = await countDrafts();
     check(
-      "3: relaunch (takeover) -> draft NON cancellati (handover)",
-      afterTakeover === 3
+      "3: relaunch (takeover) -> bozze NON cancellate",
+      (await countDrafts()) === 3
     );
-    check(
-      "3: il worker vecchio logga l'handover (NON svuoto)",
-      /NON svuoto|takeover in corso/.test(a.out())
-    );
-    // chiusura vera del successore -> ora svuota
     await stopWorker(b.child, "SIGTERM");
     await sleep(500);
-    check("3: stop del successore -> draft SVUOTATI", (await countDrafts()) === 0);
+    check(
+      "3: stop del successore -> bozze ANCORA presenti",
+      (await countDrafts()) === 3
+    );
     try {
       a.child.kill("SIGKILL");
     } catch {
@@ -186,14 +180,16 @@ const main = async () => {
     }
   }
 
-  // --- TEST 4: backstop avvio (leftover vecchi vs import freschi) ---
+  // --- TEST 4: backstop avvio (leftover VECCHI >30gg vs import freschi) ---
   await wipeAll();
-  const threeHoursAgo = new Date(Date.now() - 3 * 3600_000).toISOString();
+  const thirtyOneDaysAgo = new Date(
+    Date.now() - 31 * 24 * 3600_000
+  ).toISOString();
   await seed([
-    { name: "Vecchio Leftover", createdAtIso: threeHoursAgo },
+    { name: "Vecchio Leftover", createdAtIso: thirtyOneDaysAgo },
     { name: "Import Fresco" },
   ]);
-  check("setup 4: 2 draft (1 vecchio, 1 fresco)", (await countDrafts()) === 2);
+  check("setup 4: 2 draft (1 vecchio >30gg, 1 fresco)", (await countDrafts()) === 2);
   {
     const { child } = await startWorker("backstop");
     await sleep(1200);
@@ -203,21 +199,17 @@ const main = async () => {
       .order("name");
     const names = (remaining.data ?? []).map((r) => r.name as string);
     check(
-      "4: avvio rimuove il leftover VECCHIO (>2h)",
+      "4: avvio rimuove il leftover VECCHIO (>30gg)",
       !names.includes("Vecchio Leftover")
     );
-    check(
-      "4: avvio NON tocca l'import FRESCO",
-      names.includes("Import Fresco")
-    );
+    check("4: avvio NON tocca l'import FRESCO", names.includes("Import Fresco"));
     await stopWorker(child, "SIGTERM");
     await sleep(500);
   }
 
   // pulizia finale
   await wipeAll();
-  const final = await countDrafts();
-  check("cleanup finale: database vuoto", final === 0);
+  check("cleanup finale: database vuoto", (await countDrafts()) === 0);
 
   console.log(
     failures === 0
