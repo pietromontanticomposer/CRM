@@ -73,6 +73,21 @@ OSSERVAZIONE 1° BATCH REALE: il collo di bottiglia NON è il contenuto (che è
 risolto) ma l'EMAIL: molti registi non hanno email pubblica (verificato: Iván
 Vescovo → solo produzione/Instagram). Tante "mail mancante" sono fisiologiche,
 non un bug. Pronte = solo chi ha email pubblica trovabile.
+
+INCIDENTE + FIX PERSISTENZA (2026-06-11, commit 1166c25, con codex, test 10/10):
+- La cartella LOCALE del progetto si è svuotata (sync iCloud: DUE "Progetti Vari"
+  sul Mac — attiva `Desktop/Progetti Vari/crm-next`, iCloud `Desktop/Scrivania -
+  MacBook Pro di Pietro/Progetti Vari/crm-next`). Il worker è morto e la sua
+  "pulizia alla chiusura" (`wipeAllDrafts` su SIGTERM/SIGHUP) ha CANCELLATO da
+  Supabase l'intero batch di 123 registi.
+- FIX DEFINITIVO: la chiusura del worker NON cancella più NULLA (rimosso
+  wipeAllDrafts; SIGINT/SIGTERM/SIGHUP/deploy/sleep lasciano le bozze). TTL
+  pulizia 2h → 30gg. Orfani "processing" ripresi dalla coda. Verificato dal test.
+- RECUPERO fatto: codice ri-clonato da GitHub, `.env.local` ripreso dalla copia iCloud.
+- DA FARE PIETRO: (1) ri-caricare il PDF sul sito per ricostruire il batch (import
+  gratis, ora con TUTTI i fix: niente nomi spezzati, niente OMAGGIO, bozze che
+  PERSISTONO); (2) spostare il progetto FUORI dal Desktop iCloud (o disattivare
+  "Ottimizza spazio Mac") per non far più sparire la cartella.
 CAVEAT ONESTI (non ancora blindati): (a) il sistema è STOCASTICO, non ho misurato
 la stabilità su molte ripetizioni (prima dei fix Iván/Sayaka oscillavano); (b) se
 un film non ha NESSUNA trama trovabile online, il complimento resta sul titolo o
