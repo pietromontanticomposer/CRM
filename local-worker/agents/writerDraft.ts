@@ -27,6 +27,14 @@ export type WriterInput = {
   // Istruzioni di personalizzazione di Pietro per questo import (es. frase Trento
   // Film Festival). Hanno priorita' sul template base.
   prompt_master_rules?: string | null;
+  // Shortlist VERIFICATA di riferimenti musicali (dal codice): lo scrittore ne
+  // sceglie 3 SOLO da qui, restituendo i loro `id` in `music_ref_ids`.
+  music_shortlist?: Array<{
+    id: string;
+    title: string;
+    composer: string;
+    tags: string[];
+  }>;
 };
 
 export type WriterTemplate = "A" | "B" | "C" | "C_TEAM" | "NOT_READY";
@@ -51,6 +59,9 @@ export type WriterDraftResult = {
   // sostiene. Il codice verifica che ogni source_quote sia davvero nella
   // sinossi: cosi' lo scrittore non puo' aggiungere dettagli inventati.
   compliment_claims: Array<{ detail: string; source_quote: string }>;
+  // id dei 3 riferimenti musicali scelti dallo scrittore DALLA shortlist
+  // verificata. Il codice li valida (solo dalla lista) e li inietta.
+  music_ref_ids: string[];
   // Profilo regista (stima dal materiale trovato): livello + motivo + foto.
   director_tier: DirectorTier;
   director_tier_reason: string;
@@ -340,6 +351,11 @@ const parseDraftOutput = (
     link_visione: link_visione.trim() || "non disponibile",
     sources: normalizeSources(parsed.sources),
     compliment_claims: normalizeClaims(parsed.compliment_claims),
+    music_ref_ids: Array.isArray(parsed.music_ref_ids)
+      ? parsed.music_ref_ids
+          .filter((x: unknown): x is string => typeof x === "string")
+          .slice(0, 10) // cap di sicurezza; se ≠3 distinti -> fallback (non troncare a 3)
+      : [],
     director_tier: normalizeTier(parsed.director_tier),
     director_tier_reason:
       typeof parsed.director_tier_reason === "string"

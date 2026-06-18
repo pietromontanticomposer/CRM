@@ -17,7 +17,14 @@ import {
   unsupportedClaims,
   type WriterDraftResult,
 } from "./agents/writerDraft";
-import { injectMusicReferences } from "./musicReferences";
+import {
+  shortlistMusicReferences,
+  resolveRefsByIds,
+  pickMusicReferences,
+  formatMusicReferences,
+  injectRefsString,
+  refIdOf,
+} from "./musicReferences";
 import { runContactTriage } from "./agents/triageContact";
 import {
   findPublicEmail,
@@ -784,6 +791,31 @@ const processContact = async (
     // text. Senza pdf_full_text il writer non aveva contesto per cercare i
     // lavori del regista -> finiva sempre in NOT_READY anche se l'enrichment
     // aveva trovato l'email. Passo tutto il contesto.
+    // Testo del film (sinossi+titolo+note) per scegliere i riferimenti musicali.
+    const filmTextForRefs = (() => {
+      const f =
+        contact.verified_facts_json &&
+        typeof contact.verified_facts_json === "object" &&
+        !Array.isArray(contact.verified_facts_json)
+          ? (contact.verified_facts_json as Record<string, unknown>)
+          : {};
+      return [
+        typeof f.film_synopsis === "string" ? f.film_synopsis : "",
+        typeof f.film === "string" ? f.film : "",
+        contact.notes ?? "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    })();
+    // Shortlist VERIFICATA per lo scrittore (ne sceglie 3, solo da qui).
+    const shortlistRefs = shortlistMusicReferences(filmTextForRefs, 8);
+    const musicShortlist = shortlistRefs.map((m) => ({
+      id: refIdOf(m),
+      title: m.title,
+      composer: m.composer,
+      tags: m.tags,
+    }));
+
     const writerOutcome = await runWriterDraft(
       {
         name: contact.name,
@@ -799,6 +831,7 @@ const processContact = async (
         email_confidence: contact.email_confidence,
         email_enrichment_status: contact.email_enrichment_status,
         prompt_master_rules: contact.prompt_master_rules,
+        music_shortlist: musicShortlist,
       },
       PROJECT_ROOT
     );
@@ -831,25 +864,27 @@ const processContact = async (
       return;
     }
 
-    // RIFERIMENTI MUSICALI SCELTI DAL CODICE (Pietro+codex 2026-06-11): lo
-    // scrittore lascia il placeholder {{MUSICAL_REFS}}; qui il codice inietta i
-    // 3 riferimenti scelti DETERMINISTICAMENTE dalla libreria verificata, in base
-    // al tono del film. Zero AI, zero cliché, zero compositori inventati.
+    // RIFERIMENTI MUSICALI — IBRIDO (Pietro+codex 2026-06-11): lo scrittore
+    // sceglie i 3 piu' adatti DALLA shortlist verificata (music_ref_ids); il
+    // codice VALIDA che siano davvero nella libreria (mai un compositore
+    // sbagliato, mai cliché) e li inietta. Se la scelta dello scrittore non e'
+    // valida (fuori lista / non 3), si usa la scelta deterministica del codice.
     {
-      const mf =
-        contact.verified_facts_json &&
-        typeof contact.verified_facts_json === "object" &&
-        !Array.isArray(contact.verified_facts_json)
-          ? (contact.verified_facts_json as Record<string, unknown>)
-          : {};
-      const filmText = [
-        typeof mf.film_synopsis === "string" ? mf.film_synopsis : "",
-        typeof mf.film === "string" ? mf.film : "",
-        contact.notes ?? "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      writerOutcome.body = injectMusicReferences(writerOutcome.body, filmText);
+      const fromWriter = resolveRefsByIds(
+        writerOutcome.music_ref_ids,
+        shortlistRefs
+      );
+      const chosen = fromWriter ?? pickMusicReferences(filmTextForRefs);
+      const valid = fromWriter !== null;
+      writerOutcome.body = injectRefsString(
+        writerOutcome.body,
+        formatMusicReferences(chosen)
+      );
+      console.log(
+        `${logPrefix(contact)} riferimenti musicali: ${
+          valid ? "scelti dallo scrittore" : "deterministici (fallback)"
+        } -> ${formatMusicReferences(chosen)}`
+      );
     }
 
     // PAROLE VIETATE (controllo meccanico DETERMINISTICO, non affidato all'AI):

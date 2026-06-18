@@ -369,7 +369,7 @@ Le scrivo perché mi farebbe piacere capire se potremmo essere un buon match cre
 
 Amo aiutare i registi a raccontare la loro storia attraverso una colonna sonora originale che sostenga davvero il racconto e l'emozione del film, senza sovraccaricarlo. Il mio suono si muove tra orchestrale, ambient ed elettronico, con un approccio molto narrativo e attento al ritmo interno delle scene. Per il suo progetto, ad esempio, potrei immaginare un sound ispirato a {{MUSICAL_REFS}}.
 
-   ⚠️ I RIFERIMENTI MUSICALI NON LI SCEGLI TU. Lascia ESATTAMENTE il placeholder `{{MUSICAL_REFS}}` (così com'è, con le doppie graffe): i 3 riferimenti `Titolo (Compositore)` li sceglie e li inserisce il CODICE, da una libreria curata e verificata, in base al tono del film. **NON scrivere nomi di film o compositori nel body**: qualunque nome tu metta verrebbe ignorato o ti farebbe scartare. Tu scrivi solo `{{MUSICAL_REFS}}`.
+   ⚠️ RIFERIMENTI MUSICALI — scegli, ma SOLO dalla lista fornita. Nel packet hai `music_shortlist`: una lista di colonne sonore GIÀ verificate (id, titolo, compositore, tag). Scegli i **3 che si adattano MEGLIO a QUESTO film** (tono, tema, atmosfera) e metti i loro `id` (ESATTI, copiati dalla lista) in `music_ref_ids` (esattamente 3, id diversi). **NON inventare film o compositori, NON sceglierne fuori da `music_shortlist`**: il codice accetta SOLO id della lista, altrimenti usa una scelta automatica. Nel BODY lascia ESATTAMENTE il placeholder `{{MUSICAL_REFS}}` (con le doppie graffe): il codice inserirà lì i 3 che hai scelto. NON scrivere nomi di film/compositori nel body.
 
 Sul mio sito trova showreel e casi studio, mentre su Instagram condivido brevi estratti dei lavori più recenti.
 
@@ -526,6 +526,7 @@ OUTPUT — SOLO JSON, NIENTE MARKDOWN, NIENTE TESTO PRIMA O DOPO
   "link_visione": "<URL valido per A; 'non disponibile' per B/C/C_TEAM> (campo separato, NON nel body)",
   "sources": ["<URL della pagina + cosa hai verificato lì, es. 'https://... — scheda festival: titolo, anno, sinossi'>", "<altra fonte aperta e letta>"],
   "compliment_claims": [{"detail": "<un dettaglio CONCRETO che hai messo nel complimento>", "source_quote": "<la frase ESATTA, copiata PAROLA PER PAROLA dalla film_synopsis, che contiene quel dettaglio>"}],
+  "music_ref_ids": ["<id dalla music_shortlist>", "<id>", "<id>"],
   "director_tier": "sconosciuto" | "emergente" | "affermato" | "star",
   "director_tier_reason": "<1 frase col motivo concreto dai dati trovati>",
   "director_photo_url": "<URL diretto di una foto del regista vista su una fonte aperta e attribuita a LUI; \"\" se incerto o non trovata>",

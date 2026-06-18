@@ -7,6 +7,9 @@ import {
   pickMusicReferences,
   formatMusicReferences,
   injectMusicReferences,
+  shortlistMusicReferences,
+  resolveRefsByIds,
+  refIdOf,
 } from "../musicReferences";
 
 let failures = 0;
@@ -74,6 +77,28 @@ check("fallback: sostituisce la lista dopo 'ispirato a'", !/Tizio \(Caio\)/.test
 const body3 = "un sound ispirato a Tizio (Caio), X (Y)";
 const injected3 = injectMusicReferences(body3, "montagna, scalata");
 check("fallback senza punto finale: sostituisce comunque", !/Tizio \(Caio\)/.test(injected3) && /ispirato a .+\(/.test(injected3));
+
+// 7) IBRIDO — shortlist verificata (≤8) e id risolvibili
+const sl = shortlistMusicReferences("scalata estrema in montagna", 8);
+check("shortlist: ≤8 voci, tutte dalla libreria", sl.length > 0 && sl.length <= 8 && sl.every((m) => MUSIC_LIBRARY.includes(m)));
+
+// 8) resolveRefsByIds: 3 id validi DALLA shortlist -> 3 refs verificate
+const goodIds = [refIdOf(sl[0]), refIdOf(sl[1]), refIdOf(sl[2])];
+const resolved = resolveRefsByIds(goodIds, sl);
+check("3 id dalla shortlist -> 3 refs verificate", resolved !== null && resolved.length === 3);
+
+// 9) CASO CRITICO (codex): id valido in libreria ma FUORI shortlist -> null
+const outside = MUSIC_LIBRARY.find((m) => !sl.includes(m))!;
+check("id in libreria ma FUORI shortlist -> null", resolveRefsByIds([refIdOf(outside), refIdOf(sl[0]), refIdOf(sl[1])], sl) === null);
+
+// 10) id inventato / meno di 3 / duplicati -> null
+check("id inventato -> null", resolveRefsByIds(["nonexistent-x", refIdOf(sl[0]), refIdOf(sl[1])], sl) === null);
+check("meno di 3 id -> null", resolveRefsByIds([refIdOf(sl[0])], sl) === null);
+check("id duplicati -> null", resolveRefsByIds([refIdOf(sl[0]), refIdOf(sl[0]), refIdOf(sl[1])], sl) === null);
+
+// 11) slug `refIdOf` UNICI su tutta la libreria
+const slugs = MUSIC_LIBRARY.map((m) => refIdOf(m));
+check("slug refIdOf unici (no collisioni)", new Set(slugs).size === slugs.length && slugs.every((s) => s.length > 0));
 
 console.log(
   failures === 0 ? "\nTUTTI I TEST LIBRERIA MUSICALE PASSATI." : `\n${failures} TEST FALLITI.`
