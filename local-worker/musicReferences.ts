@@ -55,6 +55,11 @@ export const MUSIC_LIBRARY: MusicRef[] = [
   { title: "The Motorcycle Diaries", composer: "Gustavo Santaolalla", tags: ["viaggio", "strada", "identita", "avventura", "sociale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/The_Motorcycle_Diaries_(soundtrack)", verifiedAt: "2026-06-11" },
   // — spirituale / morale / alpino —
   { title: "A Hidden Life", composer: "James Newton Howard", tags: ["spirituale", "morale", "montagna", "rurale", "resistenza"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/A_Hidden_Life_(soundtrack)", verifiedAt: "2026-06-11" },
+  // — storico / epico / antichità / mito (aggiunti 2026-06-26: la libreria non copriva i doc storici) —
+  { title: "The Northman", composer: "Robin Carolan & Sebastian Gainsborough", tags: ["storia", "epico", "mito", "antichita", "arcaico", "tensione"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Northman", verifiedAt: "2026-06-26" },
+  { title: "1492: Conquest of Paradise", composer: "Vangelis", tags: ["storia", "epico", "viaggio", "esplorazione", "spirituale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/1492:_Conquest_of_Paradise_(album)", verifiedAt: "2026-06-26" },
+  { title: "Agora", composer: "Dario Marianelli", tags: ["storia", "antichita", "contemplativo", "morale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Agora_(film)", verifiedAt: "2026-06-26" },
+  { title: "The Mission", composer: "Ennio Morricone", tags: ["storia", "epico", "sacro", "morale", "spirituale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/The_Mission_(soundtrack)", verifiedAt: "2026-06-26" },
 ];
 
 // Set di FALLBACK elegante (codex): se il film non matcha bene nessun tono,
@@ -86,6 +91,9 @@ const TAG_RULES: Array<{ tag: string; re: RegExp }> = [
   { tag: "morale", re: /moral|coscienz|etic|resist|sacrific|conscience|moral|resistance|dignit/i },
   { tag: "osservativo", re: /senza parole|silenz|contemplat|osserva|lento|wordless|silent|contemplat|observational|meditative|slow cinema/i },
   { tag: "identita", re: /identit|chi è|chi sono|ritrovar|identity|self|who he is|who she is|coming of age/i },
+  { tag: "storia", re: /stori[ac]|antichit|antico|antichi|epoca|secol|millenni|medioev|romaniz|impero|civilt|reperto|archeolog|veneti|etrusch|histor|ancient|medieval|empire|civili[sz]ation|archaeolog/i },
+  { tag: "epico", re: /epico|epopea|mito|mitolog|leggend|saga|eroe|epic|myth|legend|heroic/i },
+  { tag: "antichita", re: /antichit|antico|antichi|veneti|etrusch|roman|greco|celt|ancient|etruscan|tribe|tribù/i },
 ];
 
 const detectTags = (filmText: string): Set<string> => {
@@ -103,6 +111,7 @@ const detectTags = (filmText: string): Set<string> => {
 const STRONG_TAGS = new Set([
   "scalata", "sopravvivenza", "oceano", "infanzia", "lutto", "migrazione",
   "scienza", "viaggio", "spirituale", "resistenza", "rurale", "tradizione",
+  "storia", "epico", "antichita", "mito",
 ]);
 
 // Energia di una voce (dedotta dai tag) e del film (dal testo): una colonna
