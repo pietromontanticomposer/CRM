@@ -30,7 +30,7 @@ import {
   loadExistingNames,
 } from "./discovery/findWeddingPlanners";
 import {
-  shortlistMusicReferences,
+  MUSIC_LIBRARY,
   resolveRefsByIds,
   pickMusicReferences,
   formatMusicReferences,
@@ -902,8 +902,12 @@ const processContact = async (
         .filter(Boolean)
         .join(" ");
     })();
-    // Shortlist VERIFICATA per lo scrittore (ne sceglie 3, solo da qui).
-    const shortlistRefs = shortlistMusicReferences(filmTextForRefs, 8);
+    // LIBRERIA VERIFICATA COMPLETA: lo scrittore (AI) sceglie i 3 piu' adatti al
+    // GENERE/tono del film — l'AI capisce il genere meglio di un match a regole.
+    // I compositori restano quelli VERIFICATI della libreria (mai sbagliati). Il
+    // regex resta solo per il fallback deterministico (pickMusicReferences) se l'AI
+    // non restituisce 3 id validi.
+    const shortlistRefs = MUSIC_LIBRARY.filter((m) => !m.disabled);
     const musicShortlist = shortlistRefs.map((m) => ({
       id: refIdOf(m),
       title: m.title,

@@ -30,9 +30,11 @@ export type MusicRef = {
   disabled?: boolean; // true = mai usare
 };
 
-// 23 colonne sonore RICONOSCIBILI (film/serie noti) con compositori verificati,
-// taggate per tono. Aggiornata 2026-06-26 (confronto con codex + web): i registi
-// devono RICONOSCERE i riferimenti, restando di gusto (no nicchia, no cheesy).
+// 49 colonne sonore RICONOSCIBILI (film/serie noti) con compositori verificati,
+// taggate per GENERE e tono. Aggiornata 2026-06-26 (confronto con codex + web):
+// i registi devono RICONOSCERE i riferimenti, restando di gusto (no nicchia, no cheesy).
+// Copertura generi: intimo, sociale, natura/doc, montagna, storico/epico, horror,
+// fantascienza, guerra, romantico, fantasy, coming-of-age, commedia, animazione, thriller, serie.
 export const MUSIC_LIBRARY: MusicRef[] = [
   // — intimo / memoria / lutto / famiglia —
   { title: "Moonlight", composer: "Nicholas Britell", tags: ["intimo", "identita", "memoria", "urbano"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Moonlight_(soundtrack)", verifiedAt: "2026-06-26" },
@@ -64,6 +66,41 @@ export const MUSIC_LIBRARY: MusicRef[] = [
   // — serie TV note —
   { title: "Chernobyl", composer: "Hildur Guðnadóttir", tags: ["tensione", "scienza", "storia", "sociale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Chernobyl_(soundtrack)", verifiedAt: "2026-06-26" },
   { title: "Succession", composer: "Nicholas Britell", tags: ["sociale", "lavoro", "morale", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Succession_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — horror / soprannaturale / inquietante —
+  { title: "Hereditary", composer: "Colin Stetson", tags: ["horror", "tensione", "lutto", "famiglia"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Hereditary_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Under the Skin", composer: "Mica Levi", tags: ["horror", "fantascienza", "tensione", "identita"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Under_the_Skin_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "It Follows", composer: "Disasterpeace", tags: ["horror", "tensione", "infanzia"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/It_Follows_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — fantascienza / sci-fi —
+  { title: "Arrival", composer: "Jóhann Jóhannsson", tags: ["fantascienza", "scienza", "contemplativo", "memoria"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Arrival_(film)", verifiedAt: "2026-06-26" },
+  { title: "Blade Runner 2049", composer: "Hans Zimmer & Benjamin Wallfisch", tags: ["fantascienza", "tensione", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Blade_Runner_2049_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Ex Machina", composer: "Ben Salisbury & Geoff Barrow", tags: ["fantascienza", "scienza", "tensione", "intimo"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Ex_Machina_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — guerra / conflitto —
+  { title: "1917", composer: "Thomas Newman", tags: ["guerra", "tensione", "morale", "viaggio"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/1917_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Dunkirk", composer: "Hans Zimmer", tags: ["guerra", "tensione", "sopravvivenza"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Dunkirk_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Come and See", composer: "Oleg Yanchenko", tags: ["guerra", "morale", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Come_and_See", verifiedAt: "2026-06-26" },
+  // — romantico / amore —
+  { title: "Atonement", composer: "Dario Marianelli", tags: ["romantico", "memoria", "lutto", "morale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Atonement_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "In the Mood for Love", composer: "Shigeru Umebayashi", tags: ["romantico", "memoria", "intimo", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/In_the_Mood_for_Love", verifiedAt: "2026-06-26" },
+  { title: "Portrait of a Lady on Fire", composer: "Para One & Arthur Simonini", tags: ["romantico", "intimo", "memoria", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Portrait_of_a_Lady_on_Fire", verifiedAt: "2026-06-26" },
+  // — fantasy / fiaba / mito —
+  { title: "Pan's Labyrinth", composer: "Javier Navarrete", tags: ["fantasy", "infanzia", "guerra", "epico"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Pan's_Labyrinth", verifiedAt: "2026-06-26" },
+  { title: "The Shape of Water", composer: "Alexandre Desplat", tags: ["fantasy", "romantico", "intimo"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Shape_of_Water", verifiedAt: "2026-06-26" },
+  { title: "The Green Knight", composer: "Daniel Hart", tags: ["fantasy", "epico", "mito", "spirituale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/The_Green_Knight_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — coming-of-age / adolescenza —
+  { title: "Lady Bird", composer: "Jon Brion", tags: ["infanzia", "identita", "famiglia", "intimo"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Lady_Bird_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Eighth Grade", composer: "Anna Meredith", tags: ["infanzia", "identita", "intimo"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Eighth_Grade_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — commedia / leggero di gusto —
+  { title: "The Grand Budapest Hotel", composer: "Alexandre Desplat", tags: ["commedia", "viaggio", "identita"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/The_Grand_Budapest_Hotel_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Punch-Drunk Love", composer: "Jon Brion", tags: ["commedia", "romantico", "intimo"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Punch-Drunk_Love_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Birdman", composer: "Antonio Sánchez", tags: ["commedia", "identita", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Birdman_(film)", verifiedAt: "2026-06-26" },
+  // — animazione —
+  { title: "Spirited Away", composer: "Joe Hisaishi", tags: ["animazione", "fantasy", "infanzia", "viaggio"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Music_of_Spirited_Away", verifiedAt: "2026-06-26" },
+  { title: "Up", composer: "Michael Giacchino", tags: ["animazione", "viaggio", "memoria", "famiglia"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Up_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "WALL-E", composer: "Thomas Newman", tags: ["animazione", "fantascienza", "ambiente", "contemplativo"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/WALL-E", verifiedAt: "2026-06-26" },
+  // — thriller / crime extra —
+  { title: "Gone Girl", composer: "Trent Reznor & Atticus Ross", tags: ["tensione", "intimo", "famiglia"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Gone_Girl_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Prisoners", composer: "Jóhann Jóhannsson", tags: ["tensione", "morale", "famiglia"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Prisoners_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Zodiac", composer: "David Shire", tags: ["tensione", "storia"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Zodiac_(film)", verifiedAt: "2026-06-26" },
 ];
 
 // Set di FALLBACK elegante (codex): se il film non matcha bene nessun tono,
@@ -95,9 +132,16 @@ const TAG_RULES: Array<{ tag: string; re: RegExp }> = [
   { tag: "morale", re: /moral|coscienz|etic|resist|sacrific|conscience|moral|resistance|dignit/i },
   { tag: "osservativo", re: /senza parole|silenz|contemplat|osserva|lento|wordless|silent|contemplat|observational|meditative|slow cinema/i },
   { tag: "identita", re: /identit|chi è|chi sono|ritrovar|identity|self|who he is|who she is|coming of age/i },
-  { tag: "storia", re: /stori[ac]|antichit|antico|antichi|epoca|secol|millenni|medioev|romaniz|impero|civilt|reperto|archeolog|veneti|etrusch|histor|ancient|medieval|empire|civili[sz]ation|archaeolog/i },
+  { tag: "storia", re: /storic|\bantic|epoca|secol|millenni|medioev|romaniz|\bimpero|civilt|reperto|archeolog|veneti|etrusch|histor|ancient|medieval|empire|civili[sz]ation|archaeolog/i },
   { tag: "epico", re: /epico|epopea|mito|mitolog|leggend|saga|eroe|epic|myth|legend|heroic/i },
-  { tag: "antichita", re: /antichit|antico|antichi|veneti|etrusch|roman|greco|celt|ancient|etruscan|tribe|tribù/i },
+  { tag: "antichita", re: /\bantic|veneti|etrusch|romaniz|\broman[oiae]\b|greco|celt|ancient|etruscan|tribe|tribù/i },
+  { tag: "horror", re: /horror|orror|spaventos|inquietant|terrore|incub|soprannatural|spettral|demoni|maledizion|esorcis|slasher|macabro|raccapricci|haunt|nightmare|supernatural|occult|possession|witch|ghost|scary|dread/i },
+  { tag: "fantascienza", re: /fantascienz|sci-?fi|distop|alien|extraterrestr|robot|androide|intelligenza artificiale|cyber|spazial|astronave|dystop|spaceship|space\b|time travel|viaggio nel tempo|futuristic/i },
+  { tag: "guerra", re: /guerra|bellic|soldat|trincea|battagli|conflitto|war\b|battle|soldier|trench|wartime|military|front line|prima guerra|seconda guerra/i },
+  { tag: "romantico", re: /romantic|innamora|storia d'amore|relazione amorosa|amanti|passione amorosa|love story|romance|lovers|affair|coppia di innamorati/i },
+  { tag: "fantasy", re: /fantasy|fiab|favol|magia|magic|incantesim|creatura fantastic|fairy tale|mythic|enchant|stregon|drago|elfi/i },
+  { tag: "commedia", re: /commedia|comic|umoris|satir|comedy|humou?r|farsa|demenzial|brillante/i },
+  { tag: "animazione", re: /animazion|cartone animat|cartoon|animation|animated|stop[- ]motion|anime\b|disegni animati/i },
 ];
 
 const detectTags = (filmText: string): Set<string> => {
@@ -116,6 +160,7 @@ const STRONG_TAGS = new Set([
   "scalata", "sopravvivenza", "oceano", "infanzia", "lutto", "migrazione",
   "scienza", "viaggio", "spirituale", "resistenza", "rurale", "tradizione",
   "storia", "epico", "antichita", "mito",
+  "horror", "fantascienza", "guerra", "romantico", "fantasy", "commedia", "animazione",
 ]);
 
 // Energia di una voce (dedotta dai tag) e del film (dal testo): una colonna
@@ -127,8 +172,8 @@ const entryEnergy = (m: MusicRef): "teso" | "calmo" | "neutro" => {
     return "calmo";
   return "neutro";
 };
-const TENSE_RE = /tension|estrem|pericol|sopravviv|thriller|adrenalin|vertic|mortale|survival|danger|extreme|race against|al limite/i;
-const CALM_RE = /contemplat|silenz|senza parole|lento|intim|delicat|quiet|wordless|meditative|slow|tender|poetic/i;
+const TENSE_RE = /tension|estrem|pericol|sopravviv|thriller|adrenalin|vertic|mortale|survival|danger|extreme|race against|al limite|horror|incub|spavent|inquietant|terrore|soprannatural|guerra|bellic/i;
+const CALM_RE = /contemplat|silenz|senza parole|\blent|intim[oaià]|intimit|delicat|\bquiet|wordless|meditative|\bslow|\btender|poetic/i;
 const detectFilmEnergy = (t: string): "teso" | "calmo" | "neutro" =>
   CALM_RE.test(t) ? "calmo" : TENSE_RE.test(t) ? "teso" : "neutro";
 
@@ -274,3 +319,4 @@ export const injectMusicReferences = (
   filmText: string
 ): string =>
   injectRefsString(body, formatMusicReferences(pickMusicReferences(filmText)));
+

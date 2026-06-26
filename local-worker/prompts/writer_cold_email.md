@@ -83,13 +83,15 @@ PASSAGGIO 2 — ACCESSO AL LAVORO CITATO
 * URL visione verificato e coerente?
 
 PASSAGGIO 3 — RIFERIMENTI MUSICALI
-NON è più compito tuo. Il CODICE sceglie da una libreria verificata 3 film CON i
-rispettivi COMPOSITORI — formato esatto "Titolo (Compositore)", es. "Aftersun
-(Oliver Coates), The Quiet Girl (Stephen Rennicks), A Hidden Life (James Newton
-Howard)" — tarati sullo STILE/tono del lavoro del destinatario, e li inserisce al
-posto del placeholder `{{MUSICAL_REFS}}`. Tu nel BLOCCO BASE scrivi SOLO
-`{{MUSICAL_REFS}}` e NON fai nomi di film o compositori. (Così non si sbaglia mai
-un compositore e non si pescano cliché.)
+Nel packet hai `music_shortlist`: la LIBRERIA VERIFICATA completa (id, titolo,
+compositore, tag). SCEGLI TU i 3 piu' adatti al GENERE e al tono del film del
+destinatario — un horror vuole riferimenti horror, un doc naturalistico
+riferimenti da natura, un romantico riferimenti romantici, ecc. — e metti i loro
+`id` ESATTI in `music_ref_ids` (esattamente 3, compositori diversi). Nel BLOCCO
+BASE scrivi SOLO `{{MUSICAL_REFS}}` e NON fai nomi di film/compositori: il codice
+inietta lì i 3 che hai scelto, formato "Titolo (Compositore)" (es. "Hereditary
+(Colin Stetson)"), coi compositori VERIFICATI della libreria (così non si sbaglia
+mai un compositore). Se non scegli 3 id validi, il codice ne sceglie 3 in automatico.
 
 ═══════════════════════════════════════════
 INPUT
@@ -383,7 +385,7 @@ Le scrivo perché mi farebbe piacere capire se potremmo essere un buon match cre
 
 Amo aiutare i registi a raccontare la loro storia attraverso una colonna sonora originale che sostenga davvero il racconto e l'emozione del film, senza sovraccaricarlo. Il mio suono si muove tra orchestrale, ambient ed elettronico, con un approccio molto narrativo e attento al ritmo interno delle scene. Per il suo progetto, ad esempio, potrei immaginare un sound ispirato a {{MUSICAL_REFS}}.
 
-   ⚠️ RIFERIMENTI MUSICALI — scegli, ma SOLO dalla lista fornita. Nel packet hai `music_shortlist`: una lista di colonne sonore GIÀ verificate (id, titolo, compositore, tag). Scegli i **3 che si adattano MEGLIO a QUESTO film** (tono, tema, atmosfera) e metti i loro `id` (ESATTI, copiati dalla lista) in `music_ref_ids` (esattamente 3, id diversi). **NON inventare film o compositori, NON sceglierne fuori da `music_shortlist`**: il codice accetta SOLO id della lista, altrimenti usa una scelta automatica. Nel BODY lascia ESATTAMENTE il placeholder `{{MUSICAL_REFS}}` (con le doppie graffe): il codice inserirà lì i 3 che hai scelto. NON scrivere nomi di film/compositori nel body.
+   ⚠️ RIFERIMENTI MUSICALI — scegli, ma SOLO dalla lista fornita. Nel packet hai `music_shortlist`: una lista di colonne sonore GIÀ verificate (id, titolo, compositore, tag). Scegli i **3 che si adattano MEGLIO a QUESTO film** (PRIMA il GENERE: horror→riferimenti horror, sci-fi→sci-fi, romantico→romantico, ecc.; poi tono, tema, atmosfera) e metti i loro `id` (ESATTI, copiati dalla lista) in `music_ref_ids` (esattamente 3, id diversi). **NON inventare film o compositori, NON sceglierne fuori da `music_shortlist`**: il codice accetta SOLO id della lista, altrimenti usa una scelta automatica. Nel BODY lascia ESATTAMENTE il placeholder `{{MUSICAL_REFS}}` (con le doppie graffe): il codice inserirà lì i 3 che hai scelto. NON scrivere nomi di film/compositori nel body.
 
 Sul mio sito trova showreel e casi studio, mentre su Instagram condivido brevi estratti dei lavori più recenti.
 
