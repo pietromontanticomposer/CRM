@@ -100,6 +100,22 @@ check("id duplicati -> null", resolveRefsByIds([refIdOf(sl[0]), refIdOf(sl[0]), 
 const slugs = MUSIC_LIBRARY.map((m) => refIdOf(m));
 check("slug refIdOf unici (no collisioni)", new Set(slugs).size === slugs.length && slugs.every((s) => s.length > 0));
 
+// 12) COPERTURA GENERI (regressione): la libreria DEVE avere >=2 voci per ogni
+//     genere chiave, cosi' l'AI ha sempre riferimenti riconoscibili da scegliere.
+//     Guarda il vero punto di rottura: il buco "horror -> documentari natura" non
+//     deve piu' ripetersi. Se aggiungi un genere nuovo, mettilo qui.
+const GENERI_CHIAVE = [
+  "sociale", "natura", "montagna", "intimo", "storia", "viaggio", "tensione",
+  "horror", "fantascienza", "guerra", "romantico", "fantasy", "commedia", "animazione",
+];
+const gapGeneri = GENERI_CHIAVE.filter(
+  (g) => MUSIC_LIBRARY.filter((m) => m.tags.includes(g)).length < 2
+);
+check(
+  `copertura: >=2 voci per ogni genere chiave${gapGeneri.length ? ` (BUCHI: ${gapGeneri.join(", ")})` : ""}`,
+  gapGeneri.length === 0
+);
+
 console.log(
   failures === 0 ? "\nTUTTI I TEST LIBRERIA MUSICALE PASSATI." : `\n${failures} TEST FALLITI.`
 );

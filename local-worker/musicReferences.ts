@@ -51,7 +51,7 @@ export const MUSIC_LIBRARY: MusicRef[] = [
   { title: "The Tree of Life", composer: "Alexandre Desplat", tags: ["natura", "spirituale", "memoria", "contemplativo"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Tree_of_Life_(soundtrack)", verifiedAt: "2026-06-26" },
   // — montagna / avventura / sopravvivenza —
   { title: "The Revenant", composer: "Ryuichi Sakamoto, Alva Noto & Bryce Dessner", tags: ["sopravvivenza", "natura", "montagna", "tensione"], weight: 1.3, sourceUrl: "https://en.wikipedia.org/wiki/The_Revenant_(soundtrack)", verifiedAt: "2026-06-26" },
-  { title: "Free Solo", composer: "Marco Beltrami", tags: ["montagna", "scalata", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Free_Solo_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Free Solo", composer: "Marco Beltrami & Brandon Roberts", tags: ["montagna", "scalata", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Free_Solo_(soundtrack)", verifiedAt: "2026-06-26" },
   { title: "Into the Wild", composer: "Michael Brook, Kaki King & Eddie Vedder", tags: ["viaggio", "natura", "identita", "rurale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Into_the_Wild_(film)", verifiedAt: "2026-06-26" },
   { title: "Everest", composer: "Dario Marianelli", tags: ["montagna", "scalata", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Everest_(2015_film)", verifiedAt: "2026-06-26" },
   // — storico / epico / mito / antichità —
@@ -80,7 +80,7 @@ export const MUSIC_LIBRARY: MusicRef[] = [
   { title: "Come and See", composer: "Oleg Yanchenko", tags: ["guerra", "morale", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Come_and_See", verifiedAt: "2026-06-26" },
   // — romantico / amore —
   { title: "Atonement", composer: "Dario Marianelli", tags: ["romantico", "memoria", "lutto", "morale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Atonement_(soundtrack)", verifiedAt: "2026-06-26" },
-  { title: "In the Mood for Love", composer: "Shigeru Umebayashi", tags: ["romantico", "memoria", "intimo", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/In_the_Mood_for_Love", verifiedAt: "2026-06-26" },
+  { title: "In the Mood for Love", composer: "Michael Galasso & Shigeru Umebayashi", tags: ["romantico", "memoria", "intimo", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/In_the_Mood_for_Love", verifiedAt: "2026-06-26" },
   { title: "Portrait of a Lady on Fire", composer: "Para One & Arthur Simonini", tags: ["romantico", "intimo", "memoria", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Portrait_of_a_Lady_on_Fire", verifiedAt: "2026-06-26" },
   // — fantasy / fiaba / mito —
   { title: "Pan's Labyrinth", composer: "Javier Navarrete", tags: ["fantasy", "infanzia", "guerra", "epico"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Pan's_Labyrinth", verifiedAt: "2026-06-26" },
