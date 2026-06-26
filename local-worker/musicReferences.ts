@@ -30,41 +30,45 @@ export type MusicRef = {
   disabled?: boolean; // true = mai usare
 };
 
-// 16 voci verificate a mano via web (2026-06-11), non-cliché, pesate su film
-// tipo-Trento (montagna, natura, ambiente, sociale, intimo, viaggio).
+// 23 colonne sonore RICONOSCIBILI (film/serie noti) con compositori verificati,
+// taggate per tono. Aggiornata 2026-06-26 (confronto con codex + web): i registi
+// devono RICONOSCERE i riferimenti, restando di gusto (no nicchia, no cheesy).
 export const MUSIC_LIBRARY: MusicRef[] = [
-  // — natura / fauna / ambiente / osservazione —
-  { title: "The Velvet Queen", composer: "Warren Ellis & Nick Cave", tags: ["natura", "fauna", "montagna", "contemplativo", "osservativo"], weight: 1.3, sourceUrl: "https://en.wikipedia.org/wiki/The_Velvet_Queen", verifiedAt: "2026-06-11" },
-  { title: "Fire of Love", composer: "Nicolas Godin", tags: ["natura", "scienza", "ambiente", "poetico", "avventura", "passione"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Fire_of_Love_(2022_film)", verifiedAt: "2026-06-11" },
-  { title: "All That Breathes", composer: "Roger Goula", tags: ["natura", "fauna", "ambiente", "urbano", "sociale", "osservativo"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/All_That_Breathes", verifiedAt: "2026-06-11" },
-  { title: "Cave of Forgotten Dreams", composer: "Ernst Reijseger", tags: ["natura", "sacro", "contemplativo", "montagna", "corale", "archeologia"], weight: 1.3, sourceUrl: "https://en.wikipedia.org/wiki/Cave_of_Forgotten_Dreams", verifiedAt: "2026-06-11" },
-  { title: "My Octopus Teacher", composer: "Kevin Smuts", tags: ["natura", "fauna", "oceano", "intimo", "contemplativo"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/My_Octopus_Teacher", verifiedAt: "2026-06-11" },
-  { title: "Honeyland", composer: "Foltin", tags: ["natura", "rurale", "ambiente", "osservativo", "intimo", "tradizione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Honeyland", verifiedAt: "2026-06-11" },
-  // — montagna / scalata / sopravvivenza / avventura —
-  { title: "Free Solo", composer: "Marco Beltrami", tags: ["montagna", "scalata", "sopravvivenza", "avventura", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Free_Solo_(soundtrack)", verifiedAt: "2026-06-11" },
-  { title: "Touching the Void", composer: "Alex Heffes", tags: ["montagna", "scalata", "sopravvivenza", "avventura", "tensione"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Touching_the_Void_(film)", verifiedAt: "2026-06-11" },
-  // — sociale / povertà / lavoro / diritti —
-  { title: "I, Daniel Blake", composer: "George Fenton", tags: ["sociale", "poverta", "lavoro", "dignita", "urbano", "intimo"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/I,_Daniel_Blake", verifiedAt: "2026-06-11" },
-  { title: "Capernaum", composer: "Khaled Mouzanar", tags: ["sociale", "poverta", "infanzia", "migrazione", "urbano"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Capernaum_(film)", verifiedAt: "2026-06-11" },
   // — intimo / memoria / lutto / famiglia —
-  { title: "Aftersun", composer: "Oliver Coates", tags: ["intimo", "memoria", "famiglia", "lutto", "contemplativo"], weight: 1.3, sourceUrl: "https://en.wikipedia.org/wiki/Aftersun", verifiedAt: "2026-06-11" },
-  { title: "The Quiet Girl", composer: "Stephen Rennicks", tags: ["intimo", "infanzia", "rurale", "famiglia", "tenero"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Quiet_Girl", verifiedAt: "2026-06-11" },
-  { title: "Drive My Car", composer: "Eiko Ishibashi", tags: ["intimo", "lutto", "guarigione", "contemplativo", "viaggio"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Drive_My_Car_(film)", verifiedAt: "2026-06-11" },
-  { title: "The Rider", composer: "Nathan Halpern", tags: ["intimo", "rurale", "identita", "recupero", "essenziale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Rider_(film)", verifiedAt: "2026-06-11" },
-  // — viaggio / strada / identità —
-  { title: "The Motorcycle Diaries", composer: "Gustavo Santaolalla", tags: ["viaggio", "strada", "identita", "avventura", "sociale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/The_Motorcycle_Diaries_(soundtrack)", verifiedAt: "2026-06-11" },
-  // — spirituale / morale / alpino —
-  { title: "A Hidden Life", composer: "James Newton Howard", tags: ["spirituale", "morale", "montagna", "rurale", "resistenza"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/A_Hidden_Life_(soundtrack)", verifiedAt: "2026-06-11" },
-  // — storico / epico / antichità / mito (aggiunti 2026-06-26: la libreria non copriva i doc storici) —
-  { title: "The Northman", composer: "Robin Carolan & Sebastian Gainsborough", tags: ["storia", "epico", "mito", "antichita", "arcaico", "tensione"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Northman", verifiedAt: "2026-06-26" },
-  { title: "1492: Conquest of Paradise", composer: "Vangelis", tags: ["storia", "epico", "viaggio", "esplorazione", "spirituale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/1492:_Conquest_of_Paradise_(album)", verifiedAt: "2026-06-26" },
-  { title: "Agora", composer: "Dario Marianelli", tags: ["storia", "antichita", "contemplativo", "morale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Agora_(film)", verifiedAt: "2026-06-26" },
-  { title: "The Mission", composer: "Ennio Morricone", tags: ["storia", "epico", "sacro", "morale", "spirituale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/The_Mission_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Moonlight", composer: "Nicholas Britell", tags: ["intimo", "identita", "memoria", "urbano"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Moonlight_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "The Hours", composer: "Philip Glass", tags: ["intimo", "memoria", "lutto", "contemplativo"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Hours_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Aftersun", composer: "Oliver Coates", tags: ["intimo", "memoria", "famiglia", "lutto", "contemplativo"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Aftersun", verifiedAt: "2026-06-26" },
+  { title: "Minari", composer: "Emile Mosseri", tags: ["famiglia", "rurale", "intimo", "identita"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Minari_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — sociale / realista / urbano —
+  { title: "Parasite", composer: "Jung Jae-il", tags: ["sociale", "famiglia", "tensione", "morale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Parasite_(2019_film)", verifiedAt: "2026-06-26" },
+  { title: "Nomadland", composer: "Ludovico Einaudi", tags: ["sociale", "viaggio", "intimo", "identita"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Nomadland", verifiedAt: "2026-06-26" },
+  { title: "The Social Network", composer: "Trent Reznor & Atticus Ross", tags: ["sociale", "lavoro", "identita", "tensione"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/The_Social_Network_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — natura / documentario / paesaggio —
+  { title: "Planet Earth II", composer: "Hans Zimmer, Jacob Shea & Jasha Klebe", tags: ["natura", "ambiente", "osservativo", "montagna"], weight: 1.3, sourceUrl: "https://en.wikipedia.org/wiki/Planet_Earth_II", verifiedAt: "2026-06-26" },
+  { title: "Our Planet", composer: "Steven Price", tags: ["natura", "ambiente", "osservativo"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Our_Planet", verifiedAt: "2026-06-26" },
+  { title: "The Tree of Life", composer: "Alexandre Desplat", tags: ["natura", "spirituale", "memoria", "contemplativo"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/The_Tree_of_Life_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — montagna / avventura / sopravvivenza —
+  { title: "The Revenant", composer: "Ryuichi Sakamoto, Alva Noto & Bryce Dessner", tags: ["sopravvivenza", "natura", "montagna", "tensione"], weight: 1.3, sourceUrl: "https://en.wikipedia.org/wiki/The_Revenant_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Free Solo", composer: "Marco Beltrami", tags: ["montagna", "scalata", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Free_Solo_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Into the Wild", composer: "Michael Brook, Kaki King & Eddie Vedder", tags: ["viaggio", "natura", "identita", "rurale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Into_the_Wild_(film)", verifiedAt: "2026-06-26" },
+  { title: "Everest", composer: "Dario Marianelli", tags: ["montagna", "scalata", "sopravvivenza", "tensione"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/Everest_(2015_film)", verifiedAt: "2026-06-26" },
+  // — storico / epico / mito / antichità —
+  { title: "Gladiator", composer: "Hans Zimmer & Lisa Gerrard", tags: ["storia", "epico", "antichita", "morale", "tensione"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Gladiator_(2000_soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "The Last Emperor", composer: "Ryuichi Sakamoto, David Byrne & Cong Su", tags: ["storia", "antichita", "memoria", "morale"], weight: 1.0, sourceUrl: "https://en.wikipedia.org/wiki/The_Last_Emperor_(album)", verifiedAt: "2026-06-26" },
+  { title: "The Mission", composer: "Ennio Morricone", tags: ["storia", "epico", "sacro", "spirituale", "morale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/The_Mission_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "1492: Conquest of Paradise", composer: "Vangelis", tags: ["storia", "epico", "viaggio", "spirituale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/1492:_Conquest_of_Paradise_(album)", verifiedAt: "2026-06-26" },
+  // — tensione / thriller / crime —
+  { title: "Sicario", composer: "Jóhann Jóhannsson", tags: ["tensione", "sopravvivenza", "sociale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Sicario_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "There Will Be Blood", composer: "Jonny Greenwood", tags: ["tensione", "storia", "morale", "rurale"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/There_Will_Be_Blood_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Oppenheimer", composer: "Ludwig Göransson", tags: ["storia", "scienza", "tensione", "morale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Oppenheimer_(soundtrack)", verifiedAt: "2026-06-26" },
+  // — serie TV note —
+  { title: "Chernobyl", composer: "Hildur Guðnadóttir", tags: ["tensione", "scienza", "storia", "sociale"], weight: 1.2, sourceUrl: "https://en.wikipedia.org/wiki/Chernobyl_(soundtrack)", verifiedAt: "2026-06-26" },
+  { title: "Succession", composer: "Nicholas Britell", tags: ["sociale", "lavoro", "morale", "identita"], weight: 1.1, sourceUrl: "https://en.wikipedia.org/wiki/Succession_(soundtrack)", verifiedAt: "2026-06-26" },
 ];
 
 // Set di FALLBACK elegante (codex): se il film non matcha bene nessun tono,
 // meglio 3 riferimenti eleganti e versatili che 3 "precisi" fuori tono.
-const FALLBACK_TITLES = ["Aftersun", "The Quiet Girl", "A Hidden Life"];
+const FALLBACK_TITLES = ["Moonlight", "The Tree of Life", "The Hours"];
 
 // ── Rilevamento tono dal testo del film (sinossi+titolo+note), bilingue ──
 const TAG_RULES: Array<{ tag: string; re: RegExp }> = [
