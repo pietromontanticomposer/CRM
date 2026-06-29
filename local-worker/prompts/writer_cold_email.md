@@ -256,7 +256,7 @@ L'apertura DEVE essere nella STESSA lingua del resto della mail:
 Mai: Ciao, Buongiorno, Gentile, Dear, To whom it may concern.
 
 RIGA "COME TI HO TROVATO" (quella subito dopo "Mi chiamo Pietro Montanti…"):
-* Default: `Mi sono imbattuto nel suo lavoro "(titolo)" navigando online`.
+* Default: `Mi sono imbattuto nel suo lavoro "(titolo)" navigando online e mi è venuta voglia di scriverle`. **OBBLIGATORIO**: la riga deve SEMPRE chiudersi con "e mi è venuta voglia di scriverle" (vale per Template A e B e per il caso senza film; solo il caso FESTIVAL qui sotto ha una chiusura diversa). EN: "...and I felt like writing to you".
 * MA se `prompt_master_rules` dice che sono registi di un FESTIVAL: l'apertura è UNA SOLA, quella del festival, e SOSTITUISCE "navigando online" (MAI tutte e due). **IMPORTANTE — ONESTÀ: Pietro NON ha visto il film. Era al festival e ha NOTATO che il film era IN PROGRAMMA, e ha provato a cercare il regista di persona senza trovarlo.** NON scrivere MAI "ho visto il suo film/lavoro" (sarebbe una bugia). Es. IT: `Giravo per il (nome festival) e ho visto che il suo film "(titolo)" era in programma; ho provato a cercarla di persona, ma non ci sono riuscito.` · EN: `I was at the (festival) and saw that your film "(title)" was in the programme; I tried to reach you in person, but I couldn't.` Usa il TITOLO dal contesto/PDF.
   - **NOME DEL FESTIVAL**: prendilo ESATTO dall'intestazione del PDF (o da `prompt_master_rules`), es. "74° Trento Film Festival 2026". Il nome in `prompt_master_rules` è un suggerimento: se non combacia col PDF o hai il minimo dubbio, **VERIFICALO ONLINE** (hai WebSearch/WebFetch) e usa il nome ufficiale corretto. **NON inventare numeri/edizioni** ("30th", "30°"…). Se proprio non riesci a confermare un nome preciso, scrivi solo "al festival" senza numero. Meglio confermare che indovinare: un festival sbagliato è un claim falso = VIETATO.
 
@@ -413,7 +413,7 @@ Oggetto: `(nome lavoro)`
 ```
 Salve (Nome)!
 
-Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona. Mi sono imbattuto nel suo lavoro "(nome lavoro)" navigando online e sono andato a vederlo su (piattaforma).
+Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona. Mi sono imbattuto nel suo lavoro "(nome lavoro)" navigando online, sono andato a vederlo su (piattaforma) e mi è venuta voglia di scriverle.
 
 Ammiro davvero il modo in cui (elemento VERIFICATO che hai visto nel film: scena, scelta narrativa, momento preciso). Secondo me funziona perché (motivazione coerente e concreta basata su ciò che hai visto).
 
@@ -431,7 +431,7 @@ Oggetto: `(nome lavoro)`
 ```
 Salve (Nome)!
 
-Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona. Mi sono imbattuto nel suo lavoro "(nome lavoro)" navigando online.
+Mi chiamo Pietro Montanti e sono un compositore di colonne sonore con base a Verona. Mi sono imbattuto nel suo lavoro "(nome lavoro)" navigando online e mi è venuta voglia di scriverle.
 
 (COMPLIMENTO sulla PREMESSA/scelta registica VERIFICATA, secondo la sezione COMPLIMENTO: una riflessione onesta sul tema di fondo del lavoro, dichiarata come tua impressione. NIENTE scene/immagini/tecnica/metadati inventati.)
 
