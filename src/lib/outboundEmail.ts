@@ -9,14 +9,14 @@ const PUBLIC_CV_PATH = path.join(process.cwd(), "public", "curriculum-pietro-mon
 const CV_NOTICE_MARKER = 'data-cv-notice="true"';
 const CV_NOTICE_HTML = `<div ${CV_NOTICE_MARKER} style="margin-top: 16px; font-family: Helvetica, Arial, sans-serif; color: #111; font-size: 14px; line-height: 1.4;">In allegato trovi il mio Curriculum Vitae (PDF).</div>`;
 
-// FIRMA EVENTI/WEDDING (sezione Live): "Multi Instrumentalist", SOLO testo, senza
+// FIRMA EVENTI/WEDDING (sezione Live): "Wedding Saxophonist & Clarinetist", SOLO testo, senza
 // la foto del Venice Film Festival e senza "Composer for TV & Theatre". Si applica
 // SOLO alle mail wedding, riconosciute dal link Instagram pietro_sax_experience nel
 // corpo (le mail dei registi NON lo contengono, quindi restano IDENTICHE a prima).
 const WEDDING_SIGNATURE_HTML = `
 <div style="margin-top: 22px; font-family: Helvetica, Arial, sans-serif; color: #111; line-height: 1.4;">
   <div style="font-weight: bold; font-size: 15px;">Pietro Montanti</div>
-  <div style="font-size: 14px;">Multi Instrumentalist</div>
+  <div style="font-size: 14px;">Wedding Saxophonist &amp; Clarinetist</div>
   <div style="font-size: 14px;">3515172560</div>
   <div style="font-size: 14px;">P.IVA: 04593080239</div>
   <div style="font-size: 14px;">Via Mulino Turri 9c, Negrar (VR)</div>
