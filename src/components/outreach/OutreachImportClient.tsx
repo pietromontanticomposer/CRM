@@ -315,8 +315,22 @@ export function OutreachImportClient() {
       return;
     }
     const payload = (await response.json()) as {
-      batch?: { id?: string };
+      batch?: { id?: string; total_contacts?: number; skipped_duplicates?: number };
     };
+    const added = payload.batch?.total_contacts ?? 0;
+    const skipped = payload.batch?.skipped_duplicates ?? 0;
+    // Se NON è stato aggiunto nessun registo (erano tutti già importati: dedup per
+    // nome), NON mandare l'utente su un batch VUOTO — sarebbe il famigerato
+    // "Nessun contatto trovato per questo batch". Diglielo chiaro e resta qui.
+    if (added === 0) {
+      setError(
+        skipped > 0
+          ? `Tutti i ${skipped} registi erano già importati in precedenza: nessuno di nuovo da aggiungere. Li trovi nei batch già presenti (apri la lista dei batch). Per reimportarli da zero, elimina prima i vecchi import.`
+          : "Nessun registo da importare."
+      );
+      setImporting(false);
+      return;
+    }
     if (payload.batch?.id) {
       router.push(`/crm/outreach/${payload.batch.id}`);
     } else {
