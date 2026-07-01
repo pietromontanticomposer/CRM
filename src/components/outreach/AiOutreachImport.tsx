@@ -238,7 +238,7 @@ export function AiOutreachImport({
           </h3>
           <p className="mt-1 text-xs text-[var(--muted)]">
             Trascina uno o più file (PDF, CSV, TXT, JSON). Il worker locale
-            cerca email mancanti su fonti pubbliche e i 3 agenti CLI validano
+            cerca email mancanti su fonti pubbliche e i 2 agenti CLI validano
             ogni bozza.
           </p>
         </div>

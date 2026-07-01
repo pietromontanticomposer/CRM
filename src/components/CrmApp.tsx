@@ -3798,7 +3798,7 @@ export default function CrmApp({
             </div>
             <div>
               <div className="text-base font-semibold text-[var(--ink)]">
-                Importa PDF · 3 AI lavorano per te
+                Importa PDF · 2 AI lavorano per te
               </div>
               <div className="mt-0.5 text-xs text-[var(--muted)]">
                 Trascina un PDF con la lista registi → cerco i contatti, controllo, scrivo le email. Tu approvi.

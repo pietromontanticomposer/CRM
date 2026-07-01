@@ -54,9 +54,9 @@ const summarizeStatus = (status: string | null) => {
     case "processing":
       return "In lavorazione — sta cercando l'email e scrivendo la bozza";
     case "draft_ready":
-      return "Bozza generata — i 3 agenti la stanno controllando";
+      return "Bozza generata — i 2 agenti la stanno controllando";
     case "approved":
-      return "Pronto: i 3 agenti hanno approvato";
+      return "Pronto: i 2 agenti hanno approvato";
     case "needs_review":
       return "Serve la tua review";
     case "blocked":
@@ -142,7 +142,7 @@ const SOURCE_TYPE_LABEL: Record<string, string> = {
   vimeo: "Vimeo",
   filmfreeway: "FilmFreeway",
   file_import: "file importato",
-  consensus: "3 AI concordi",
+  consensus: "2 AI concordi",
   single_agent: "1 AI",
   unverified: "non verificata",
 };
@@ -721,7 +721,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
             />
             <div className="text-sm font-semibold text-[var(--ink)]">
               {isWorking
-                ? "Le 3 AI stanno lavorando — aggiornamento ogni 3 secondi"
+                ? "Le 2 AI stanno lavorando — aggiornamento ogni 3 secondi"
                 : "Tutto pronto per la tua revisione"}
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -738,7 +738,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
               <span className="rounded-md border border-[var(--line)] bg-[var(--panel)] px-2 py-1 font-medium text-[var(--muted-strong)]">
                 <span className="text-[var(--ink)] tabular-nums">{counts.processed}</span>
                 <span className="text-[var(--muted)]"> / {counts.total}</span>
-                <span className="ml-1 text-[var(--muted)]">validati dalle 3 AI</span>
+                <span className="ml-1 text-[var(--muted)]">validati dalle 2 AI</span>
               </span>
             </div>
           </div>

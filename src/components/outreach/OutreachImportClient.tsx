@@ -472,7 +472,7 @@ export function OutreachImportClient() {
 
             <p className="mb-3 rounded-lg border border-[var(--line)] bg-[var(--panel)] px-3 py-2 text-[11px] leading-relaxed text-[var(--muted-strong)]">
               Questo è solo un riepilogo di ciò che è stato letto. Non devi
-              sistemare niente a mano: le 3 AI cercano le email, scrivono le
+              sistemare niente a mano: le 2 AI cercano le email, scrivono le
               bozze e <span className="font-medium text-[var(--ink)]">scartano
               da sole</span> le righe che non sono registi reali (titoli di
               film, nazioni, intestazioni). Se un intero file è sbagliato puoi
@@ -591,7 +591,7 @@ export function OutreachImportClient() {
               <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--accent)] text-[10px] font-bold text-white">
                 3
               </span>
-              <span>Avvia le 3 AI</span>
+              <span>Avvia le 2 AI</span>
             </div>
             <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)] p-5">
               <div className="grid gap-4 sm:grid-cols-3">
@@ -634,7 +634,7 @@ export function OutreachImportClient() {
                     <div className="text-[var(--muted-strong)]">
                       <span className="font-medium text-[var(--ink)]">1.</span> Il worker sul tuo Mac inizia a cercare su internet le {totals.withoutEmail} email mancanti.{" "}
                       <span className="font-medium text-[var(--ink)]">2.</span> Il Writer Claude scrive una bozza personalizzata per ciascun contatto.{" "}
-                      <span className="font-medium text-[var(--ink)]">3.</span> I 3 agenti (Claude, Codex, Gemini) controllano ogni bozza.{" "}
+                      <span className="font-medium text-[var(--ink)]">3.</span> I 2 agenti (Claude, Codex) controllano ogni bozza.{" "}
                       <span className="font-medium text-[var(--ink)]">4.</span> Tu approvi nella prossima schermata. Nessuna email parte automaticamente.
                     </div>
                   </div>
