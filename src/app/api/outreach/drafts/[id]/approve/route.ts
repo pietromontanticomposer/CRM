@@ -105,6 +105,57 @@ export async function POST(_request: Request, context: RouteContext) {
       }
     }
 
+    // CLAIM ATOMICO: prima di inserire il contatto "prenoto" la bozza con un
+    // UPDATE CONDIZIONATO sullo stato appena letto (compare-and-swap). Se 0 righe
+    // vengono aggiornate, un'altra richiesta (doppio-click / due tab / retry di
+    // rete) ha GIA' preso questa bozza -> esco SENZA inserire, cosi' NON si crea
+    // un contatto doppio e quindi NON parte una seconda MAIL allo stesso regista.
+    // NB IMPORTANTE: NON esiste un vincolo unique su contacts(owner,email), quindi
+    // questo claim e' l'UNICA barriera reale contro il doppio invio.
+    const currentStatus =
+      typeof draft.ai_status === "string" ? draft.ai_status : "";
+    const claimResponse = await fetch(
+      `${cfg.url}/rest/v1/outreach_drafts?id=eq.${id}&owner_id=eq.${user.id}&ai_status=eq.${encodeURIComponent(
+        currentStatus
+      )}`,
+      {
+        method: "PATCH",
+        headers: {
+          apikey: cfg.key,
+          Authorization: `Bearer ${cfg.key}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({ ai_status: "approving" }),
+      }
+    ).catch(() => null);
+    const claimedRows =
+      claimResponse && claimResponse.ok
+        ? ((await claimResponse.json().catch(() => [])) as unknown[])
+        : [];
+    if (!Array.isArray(claimedRows) || claimedRows.length === 0) {
+      return NextResponse.json(
+        { error: "Bozza già in approvazione o già approvata." },
+        { status: 409 }
+      );
+    }
+    // Se l'INSERT fallisce, rimetto la bozza nello stato di prima (annullo il
+    // claim) cosi' resta approvabile e non si perde il lavoro dello scrittore.
+    const revertClaim = async () => {
+      await fetch(
+        `${cfg.url}/rest/v1/outreach_drafts?id=eq.${id}&owner_id=eq.${user.id}&ai_status=eq.approving`,
+        {
+          method: "PATCH",
+          headers: {
+            apikey: cfg.key,
+            Authorization: `Bearer ${cfg.key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ai_status: currentStatus }),
+        }
+      ).catch(() => null);
+    };
+
     // 2. INSERT nel contacts. Mappa i campi della draft sulle colonne contacts.
     const contactPayload = {
       owner_id: user.id,
@@ -151,7 +202,9 @@ export async function POST(_request: Request, context: RouteContext) {
     });
     if (!insertResponse.ok) {
       const text = await insertResponse.text();
-      // Vincolo unico DB (owner + email): doppione rifiutato a prova di bomba.
+      // INSERT fallito: annullo il claim (la bozza torna approvabile).
+      await revertClaim();
+      // Doppione lato DB (se in futuro si aggiunge un unique su contacts).
       if (insertResponse.status === 409 || /23505/.test(text)) {
         return NextResponse.json(
           { error: "Esiste già un contatto con questa email." },

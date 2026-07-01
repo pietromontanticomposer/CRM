@@ -22,6 +22,12 @@ const supabaseRest = () => {
 // parallelo per lo stesso utente: la seconda torna 409 -> "gia' in corso".
 const SENTINEL_NAME = "Ricerca wedding planner";
 
+// Se la sentinella esiste da piu' di questo tempo la consideriamo ORFANA (worker
+// crashato/spento prima di cancellarla) e la sovrascriviamo. Una ricerca reale
+// dura pochi minuti: 30' e' un margine ampio che NON interrompe una ricerca
+// legittima ma sblocca il caso "409 per giorni" dopo un crash.
+const SENTINEL_TTL_MINUTES = 30;
+
 // POST /api/outreach/discover  body: { target?: number }
 // Avvia una ricerca di N wedding planner (default 20) entro ~2h da Verona. NON
 // cerca qui (il sito su Vercel non ha le AI): mette il SEGNALE che il worker
@@ -60,19 +66,67 @@ export async function POST(request: Request) {
       ai_send_allowed: false,
     };
 
-    const res = await fetch(`${cfg.url}/rest/v1/outreach_drafts`, {
-      method: "POST",
-      headers: {
-        apikey: cfg.key,
-        Authorization: `Bearer ${cfg.key}`,
-        "Content-Type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(payload),
-    });
+    const insertSentinel = () =>
+      fetch(`${cfg.url}/rest/v1/outreach_drafts`, {
+        method: "POST",
+        headers: {
+          apikey: cfg.key,
+          Authorization: `Bearer ${cfg.key}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(payload),
+      });
+
+    let res = await insertSentinel();
 
     if (res.status === 409) {
-      // Sentinella gia' presente: una ricerca e' gia' in coda/in corso.
+      // Sentinella gia' presente. Puo' essere una ricerca DAVVERO in corso, oppure
+      // una sentinella ORFANA lasciata da un worker crashato/ucciso prima di
+      // cancellarla. Guardo da quanto esiste: se supera il TTL la considero orfana,
+      // la rimuovo e riprovo UNA volta; altrimenti rispondo "gia' in corso".
+      const staleCutoffIso = new Date(
+        Date.now() - SENTINEL_TTL_MINUTES * 60 * 1000
+      ).toISOString();
+      const existingRes = await fetch(
+        `${cfg.url}/rest/v1/outreach_drafts?owner_id=eq.${user.id}&role=eq.__discovery__&name=eq.${encodeURIComponent(
+          SENTINEL_NAME
+        )}&select=id,created_at&order=created_at.asc&limit=1`,
+        { headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` } }
+      ).catch(() => null);
+      const existing =
+        existingRes && existingRes.ok
+          ? ((await existingRes.json().catch(() => [])) as Array<{
+              id?: string;
+              created_at?: string;
+            }>)
+          : [];
+      const orphan = existing[0];
+      const isStale =
+        typeof orphan?.created_at === "string" &&
+        orphan.created_at < staleCutoffIso;
+      if (orphan?.id && isStale) {
+        await fetch(
+          `${cfg.url}/rest/v1/outreach_drafts?id=eq.${orphan.id}&owner_id=eq.${user.id}`,
+          {
+            method: "DELETE",
+            headers: { apikey: cfg.key, Authorization: `Bearer ${cfg.key}` },
+          }
+        ).catch(() => null);
+        res = await insertSentinel(); // riprovo dopo aver tolto l'orfana
+      } else {
+        return NextResponse.json(
+          {
+            pending: true,
+            message:
+              "Una ricerca è già in corso. Aspetta che finisca prima di avviarne un'altra.",
+          },
+          { status: 200 }
+        );
+      }
+    }
+    // Ancora 409 dopo il retry (gara con un'altra richiesta): tratto come pending.
+    if (res.status === 409) {
       return NextResponse.json(
         {
           pending: true,

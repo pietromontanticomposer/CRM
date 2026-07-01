@@ -736,9 +736,15 @@ export async function POST(request: Request) {
       // creare copie. Salto i registi gia' presenti in outreach_drafts (stesso
       // owner, per nome) e i doppioni dentro lo stesso import.
       const existingNames = new Set<string>();
+      // name(normalizzato) -> batch in cui quel registo e' GIA' presente. Serve a
+      // dare all'utente un link cliccabile quando reimporta solo doppioni.
+      const existingByName = new Map<
+        string,
+        { id: string; name: string | null }
+      >();
       try {
         const existingRes = await fetch(
-          `${supabaseUrl}/rest/v1/outreach_drafts?owner_id=eq.${user.id}&select=name&limit=100000`,
+          `${supabaseUrl}/rest/v1/outreach_drafts?owner_id=eq.${user.id}&select=name,batch_id,batch_name&limit=100000`,
           {
             headers: {
               apikey: supabaseKey,
@@ -747,10 +753,21 @@ export async function POST(request: Request) {
           }
         );
         if (existingRes.ok) {
-          const existing = (await existingRes.json()) as { name?: string }[];
+          const existing = (await existingRes.json()) as {
+            name?: string;
+            batch_id?: string;
+            batch_name?: string | null;
+          }[];
           for (const e of existing) {
             if (typeof e.name === "string" && e.name.trim()) {
-              existingNames.add(e.name.trim().toLowerCase());
+              const key = e.name.trim().toLowerCase();
+              existingNames.add(key);
+              if (!existingByName.has(key) && typeof e.batch_id === "string") {
+                existingByName.set(key, {
+                  id: e.batch_id,
+                  name: typeof e.batch_name === "string" ? e.batch_name : null,
+                });
+              }
             }
           }
         }
@@ -758,6 +775,9 @@ export async function POST(request: Request) {
         // se il check fallisce proseguo senza dedup: meglio importare che bloccare
       }
       let skippedDuplicates = 0;
+      // Se l'import e' tutto doppioni, il primo batch trovato dove stanno gia' i
+      // registi: lo restituiamo cosi' il client puo' linkarlo.
+      let existingBatch: { id: string; name: string | null } | null = null;
 
       // Costruisco TUTTE le payload in memoria e poi le inserisco in UN UNICO
       // batch (una sola richiesta a Supabase). Prima era una fetch per regista
@@ -768,6 +788,7 @@ export async function POST(request: Request) {
         const dupKey = row.name.trim().toLowerCase();
         if (dupKey && existingNames.has(dupKey)) {
           skippedDuplicates += 1;
+          if (!existingBatch) existingBatch = existingByName.get(dupKey) ?? null;
           continue;
         }
         if (dupKey) existingNames.add(dupKey);
@@ -871,6 +892,7 @@ export async function POST(request: Request) {
             name: importPayload.batchName,
             total_contacts: drafts.length,
             skipped_duplicates: skippedDuplicates,
+            existing_batch: existingBatch,
           },
           drafts,
         },

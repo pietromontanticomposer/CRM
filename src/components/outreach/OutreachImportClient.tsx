@@ -142,6 +142,11 @@ export function OutreachImportClient() {
   const importingRef = useRef(false);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Se l'import e' tutto doppioni: batch dove i registi gia' stanno, per il link.
+  const [existingBatchLink, setExistingBatchLink] = useState<{
+    id: string;
+    name: string | null;
+  } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   // Festival del batch (se sono registi di un festival): se compilato, ogni mail
   // apre con "ho visto il tuo film al (festival)…" invece di "navigando online".
@@ -238,6 +243,7 @@ export function OutreachImportClient() {
   const resetAll = () => {
     setFiles([]);
     setError(null);
+    setExistingBatchLink(null);
   };
 
   const handleImport = async () => {
@@ -248,6 +254,7 @@ export function OutreachImportClient() {
     importingRef.current = true;
     setImporting(true);
     setError(null);
+    setExistingBatchLink(null);
     // navigating=true solo se partiamo davvero verso il batch: in quel caso teniamo
     // lo spinner; in TUTTI gli altri casi il finally sblocca sempre il bottone.
     let navigating = false;
@@ -321,17 +328,29 @@ export function OutreachImportClient() {
       return;
     }
     const payload = (await response.json().catch(() => ({}))) as {
-      batch?: { id?: string; total_contacts?: number; skipped_duplicates?: number };
+      batch?: {
+        id?: string;
+        total_contacts?: number;
+        skipped_duplicates?: number;
+        existing_batch?: { id: string; name: string | null } | null;
+      };
     };
     const added = payload.batch?.total_contacts ?? 0;
     const skipped = payload.batch?.skipped_duplicates ?? 0;
+    const existing = payload.batch?.existing_batch ?? null;
     // Se NON è stato aggiunto nessun registo (erano tutti già importati: dedup per
     // nome), NON mandare l'utente su un batch VUOTO — sarebbe il famigerato
-    // "Nessun contatto trovato per questo batch". Diglielo chiaro e resta qui.
+    // "Nessun contatto trovato per questo batch". Diglielo chiaro e resta qui; se
+    // so DOVE stanno già, offro un link cliccabile per aprire quel batch.
     if (added === 0) {
+      if (existing?.id) setExistingBatchLink(existing);
       setError(
         skipped > 0
-          ? `Tutti i ${skipped} registi erano già importati in precedenza: nessuno di nuovo da aggiungere. Li trovi nei batch già presenti (apri la lista dei batch). Per reimportarli da zero, elimina prima i vecchi import.`
+          ? `Tutti i ${skipped} registi erano già importati in precedenza: nessuno di nuovo da aggiungere.${
+              existing?.id
+                ? " Apri il batch dove stanno già, qui sotto."
+                : " Per reimportarli da zero, elimina prima i vecchi import."
+            }`
           : "Nessun registo da importare."
       );
       return;
@@ -461,6 +480,19 @@ export function OutreachImportClient() {
             <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
               {error}
             </div>
+          )}
+          {existingBatchLink?.id && (
+            <button
+              type="button"
+              onClick={() =>
+                router.push(`/crm/outreach/${existingBatchLink.id}`)
+              }
+              className="mt-2 inline-flex items-center gap-2 rounded-md border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-3 py-2 text-xs font-semibold text-[var(--accent)] transition hover:bg-[var(--accent)]/20"
+            >
+              Apri il batch dove stanno già
+              {existingBatchLink.name ? ` («${existingBatchLink.name}»)` : ""}
+              <span aria-hidden>→</span>
+            </button>
           )}
         </section>
 

@@ -13,14 +13,15 @@ const supabaseRest = () => {
   return { url, key };
 };
 
+// SOLO i campi che l'utente modifica davvero dalla UI (oggetto, testo, anagrafica).
+// ai_status / ai_send_allowed / ai_validation_status / ai_template_used /
+// ai_link_visione sono di ESCLUSIVA competenza del worker: se la UI potesse
+// scriverli, un salvataggio dell'utente potrebbe sovrascrivere lo stato mentre il
+// worker sta lavorando (e viceversa). Verificato: l'unico PATCH della UI manda
+// solo ai_email_subject/ai_email_body; batch-add-line manda solo ai_email_body.
 const PATCHABLE_FIELDS = new Set([
   "ai_email_subject",
   "ai_email_body",
-  "ai_status",
-  "ai_validation_status",
-  "ai_send_allowed",
-  "ai_template_used",
-  "ai_link_visione",
   "notes",
   "name",
   "email",

@@ -51,10 +51,14 @@ export async function POST() {
       );
     }
     const cutoff = startOfTodayRomeIso();
+    // NON cancellare le bozze che il worker sta lavorando in questo momento:
+    // 'processing' (email/scrittura in corso) e 'draft_ready' (scritta, in attesa
+    // dei validatori — il worker la ri-pesca). Cancellarle interromperebbe il
+    // lavoro. Due filtri neq sullo stesso campo = AND in PostgREST.
     const response = await fetch(
       `${cfg.url}/rest/v1/outreach_drafts?owner_id=eq.${user.id}&created_at=gte.${encodeURIComponent(
         cutoff
-      )}`,
+      )}&ai_status=neq.processing&ai_status=neq.draft_ready`,
       {
         method: "DELETE",
         headers: {
