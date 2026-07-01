@@ -10,6 +10,9 @@ import { isLegacySchemaError } from "@/lib/server/supabaseSchema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Import registi: se cade nel fallback sequenziale (raro) do' piu' tempo alla
+// funzione per non tagliare l'import a meta' (default Vercel troppo corto).
+export const maxDuration = 60;
 
 type ContactRow = {
   id: string;
@@ -756,6 +759,11 @@ export async function POST(request: Request) {
       }
       let skippedDuplicates = 0;
 
+      // Costruisco TUTTE le payload in memoria e poi le inserisco in UN UNICO
+      // batch (una sola richiesta a Supabase). Prima era una fetch per regista
+      // (loop sequenziale): con 100+ registi la funzione Vercel sforava il timeout
+      // a intermittenza -> "Avvia ricerca email" andava una volta ogni tre.
+      const draftPayloads: Record<string, unknown>[] = [];
       for (const row of importPayload.contacts) {
         const dupKey = row.name.trim().toLowerCase();
         if (dupKey && existingNames.has(dupKey)) {
@@ -763,7 +771,7 @@ export async function POST(request: Request) {
           continue;
         }
         if (dupKey) existingNames.add(dupKey);
-        const draftPayload = {
+        draftPayloads.push({
           owner_id: user.id,
           batch_id: batchId,
           batch_name: importPayload.batchName,
@@ -790,47 +798,70 @@ export async function POST(request: Request) {
           email_enrichment_status:
             row.email_enrichment_status ?? (row.email ? "present" : null),
           email_found_at: row.email ? new Date().toISOString() : null,
-        };
+        });
+      }
 
-        const response = await fetch(
-          `${supabaseUrl}/rest/v1/outreach_drafts`,
-          {
-            method: "POST",
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`,
-              "Content-Type": "application/json",
-              Prefer: "return=representation",
-            },
-            body: JSON.stringify(draftPayload),
-          }
-        );
-        if (!response.ok) {
-          const errPayload = await response
+      const insertDraftsUrl = `${supabaseUrl}/rest/v1/outreach_drafts`;
+      const insertHeaders = {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      };
+
+      if (draftPayloads.length > 0) {
+        // 1) VELOCE: un solo insert in blocco con tutti i registi (una richiesta).
+        const batchRes = await fetch(insertDraftsUrl, {
+          method: "POST",
+          headers: insertHeaders,
+          body: JSON.stringify(draftPayloads),
+        }).catch(() => null);
+
+        if (batchRes && batchRes.ok) {
+          const batchData = (await batchRes
             .json()
-            .catch(() => ({ message: response.statusText }));
-          // BLINDATURA ANTI-DOPPIONI: la regola UNIQUE del DB (owner_id + nome
-          // normalizzato) rifiuta i doppioni con 409 / codice 23505. NON e' un
-          // errore: e' la rete di sicurezza. Salto la riga e proseguo invece di
-          // interrompere tutto l'import.
-          const errCode = (errPayload as { code?: string })?.code;
-          if (response.status === 409 || errCode === "23505") {
-            skippedDuplicates += 1;
-            continue;
+            .catch(() => [])) as Record<string, unknown>[];
+          drafts.push(...batchData);
+        } else {
+          // 2) FALLBACK ROBUSTO (raro): se il batch fallisce - es. un doppione
+          // sfuggito per una gara con un import concorrente (409/23505) - inserisco
+          // uno alla volta saltando i doppioni, senza interrompere tutto l'import.
+          for (const draftPayload of draftPayloads) {
+            const response = await fetch(insertDraftsUrl, {
+              method: "POST",
+              headers: insertHeaders,
+              body: JSON.stringify(draftPayload),
+            });
+            if (!response.ok) {
+              const errPayload = await response
+                .json()
+                .catch(() => ({ message: response.statusText }));
+              // BLINDATURA ANTI-DOPPIONI: la regola UNIQUE del DB (owner_id + nome
+              // normalizzato) rifiuta i doppioni con 409 / codice 23505. NON e' un
+              // errore: e' la rete di sicurezza. Salto la riga e proseguo.
+              const errCode = (errPayload as { code?: string })?.code;
+              if (response.status === 409 || errCode === "23505") {
+                skippedDuplicates += 1;
+                continue;
+              }
+              console.error(
+                "POST /api/contacts outreach draft insert failed",
+                errPayload
+              );
+              return NextResponse.json(
+                {
+                  error: getErrorMessage(
+                    errPayload,
+                    "Impossibile creare le draft outreach."
+                  ),
+                },
+                { status: 500 }
+              );
+            }
+            const data = (await response.json()) as Record<string, unknown>[];
+            if (data[0]) drafts.push(data[0]);
           }
-          console.error("POST /api/contacts outreach draft insert failed", errPayload);
-          return NextResponse.json(
-            {
-              error: getErrorMessage(
-                errPayload,
-                "Impossibile creare le draft outreach."
-              ),
-            },
-            { status: 500 }
-          );
         }
-        const data = (await response.json()) as Record<string, unknown>[];
-        if (data[0]) drafts.push(data[0]);
       }
 
       return NextResponse.json(

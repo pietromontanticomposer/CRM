@@ -187,6 +187,10 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
   const [editSubject, setEditSubject] = useState("");
   const [editBody, setEditBody] = useState("");
   const requestIdRef = useRef(0);
+  // Lock SINCRONO per le azioni di massa: `bulkPending` (stato React) si aggiorna
+  // in ritardo, quindi un doppio-click veloce potrebbe far partire due volte un
+  // bulk (es. inviare le stesse mail due volte). Questo ref blocca all'istante.
+  const bulkBusyRef = useRef(false);
 
   const loadBatch = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -231,6 +235,9 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
     );
     if (!stillProcessing) return;
     const id = window.setInterval(() => {
+      // Non ricaricare mentre un'azione di massa e' in corso: il poll potrebbe
+      // sovrascrivere la lista con dati vecchi a meta' operazione.
+      if (bulkBusyRef.current) return;
       void loadBatch({ silent: true });
     }, 1000);
     return () => window.clearInterval(id);
@@ -485,6 +492,8 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       )
       .map((contact) => contact.id);
     if (!readyIds.length) return;
+    if (bulkBusyRef.current) return;
+    bulkBusyRef.current = true;
     setBulkPending("approve");
     try {
       for (const id of readyIds) {
@@ -492,6 +501,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       }
       await loadBatch({ silent: true });
     } finally {
+      bulkBusyRef.current = false;
       setBulkPending(null);
     }
   };
@@ -501,6 +511,8 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       .filter((contact) => contact.ai_status === "blocked")
       .map((contact) => contact.id);
     if (!ids.length) return;
+    if (bulkBusyRef.current) return;
+    bulkBusyRef.current = true;
     setBulkPending("reject");
     try {
       for (const id of ids) {
@@ -508,6 +520,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       }
       await loadBatch({ silent: true });
     } finally {
+      bulkBusyRef.current = false;
       setBulkPending(null);
     }
   };
@@ -521,6 +534,8 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       `Cancello ${ids.length} contatti non approvati dal database. Procedo?`
     );
     if (!confirmed) return;
+    if (bulkBusyRef.current) return;
+    bulkBusyRef.current = true;
     setBulkPending("reject");
     try {
       for (const id of ids) {
@@ -528,6 +543,7 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       }
       await loadBatch({ silent: true });
     } finally {
+      bulkBusyRef.current = false;
       setBulkPending(null);
     }
   };
@@ -539,11 +555,17 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       "Elimino dal database TUTTE le bozze importate OGGI (non approvate), così non restano doppioni. I contatti già approvati restano intatti. Procedo?"
     );
     if (!confirmed) return;
+    if (bulkBusyRef.current) return;
+    bulkBusyRef.current = true;
     setBulkPending("reject");
     try {
       const response = await fetch("/api/outreach/drafts/cleanup-today", {
         method: "POST",
-      });
+      }).catch(() => null);
+      if (!response) {
+        window.alert("Server non raggiungibile. Riprova.");
+        return;
+      }
       const data = (await response.json().catch(() => ({}))) as {
         deleted?: number;
         error?: string;
@@ -554,7 +576,12 @@ export function OutreachBatchClient({ batchId }: { batchId: string }) {
       }
       window.alert(`Eliminate ${data.deleted ?? 0} bozze importate oggi.`);
       await loadBatch({ silent: true });
+    } catch (err) {
+      window.alert(
+        `Errore: ${err instanceof Error ? err.message : "imprevisto"}`
+      );
     } finally {
+      bulkBusyRef.current = false;
       setBulkPending(null);
     }
   };

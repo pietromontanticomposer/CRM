@@ -137,6 +137,9 @@ export function OutreachImportClient() {
   const router = useRouter();
   const [files, setFiles] = useState<FileBlock[]>([]);
   const [importing, setImporting] = useState(false);
+  // Lock SINCRONO: `disabled` React si aggiorna in ritardo, un doppio-click veloce
+  // puo' lanciare due import. Questo ref blocca il secondo click all'istante.
+  const importingRef = useRef(false);
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -238,12 +241,17 @@ export function OutreachImportClient() {
   };
 
   const handleImport = async () => {
+    if (importingRef.current) return; // gia' in corso: ignora il click
     const allRows = files.flatMap((b) => b.rows);
     if (!allRows.length) return;
 
+    importingRef.current = true;
     setImporting(true);
     setError(null);
-
+    // navigating=true solo se partiamo davvero verso il batch: in quel caso teniamo
+    // lo spinner; in TUTTI gli altri casi il finally sblocca sempre il bottone.
+    let navigating = false;
+    try {
     const section =
       typeof window !== "undefined"
         ? window.localStorage.getItem(SECTION_STORAGE_KEY) || "cinema"
@@ -305,16 +313,14 @@ export function OutreachImportClient() {
     }).catch(() => null);
 
     if (!response) {
-      setError("Server non raggiungibile.");
-      setImporting(false);
+      setError("Server non raggiungibile. Riprova.");
       return;
     }
     if (!response.ok) {
       setError(await readApiError(response, "Import fallito."));
-      setImporting(false);
       return;
     }
-    const payload = (await response.json()) as {
+    const payload = (await response.json().catch(() => ({}))) as {
       batch?: { id?: string; total_contacts?: number; skipped_duplicates?: number };
     };
     const added = payload.batch?.total_contacts ?? 0;
@@ -328,13 +334,24 @@ export function OutreachImportClient() {
           ? `Tutti i ${skipped} registi erano già importati in precedenza: nessuno di nuovo da aggiungere. Li trovi nei batch già presenti (apri la lista dei batch). Per reimportarli da zero, elimina prima i vecchi import.`
           : "Nessun registo da importare."
       );
-      setImporting(false);
       return;
     }
     if (payload.batch?.id) {
+      navigating = true;
       router.push(`/crm/outreach/${payload.batch.id}`);
-    } else {
-      setImporting(false);
+    }
+    } catch (err) {
+      setError(
+        `Import fallito: ${
+          err instanceof Error ? err.message : "errore imprevisto"
+        }. Riprova.`
+      );
+    } finally {
+      // Se non stiamo navigando via, SBLOCCA sempre il bottone (mai piu' bloccato).
+      if (!navigating) {
+        importingRef.current = false;
+        setImporting(false);
+      }
     }
   };
 
